@@ -22,24 +22,27 @@ export default function Composer({ onSend, disabled = false }: ComposerProps) {
 
   return (
     <form className="composer" data-testid="composer" onSubmit={handleSubmit}>
-      <input
-        className="composer__input"
-        data-testid="composer-input"
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Ask a Pokémon question…"
-        aria-label="Ask a Pokémon question"
-        disabled={disabled}
-      />
-      <button
-        className="composer__send"
-        data-testid="composer-send"
-        type="submit"
-        disabled={disabled || value.trim().length === 0}
-      >
-        Send
-      </button>
+      <div className="composer__field">
+        <span className="composer__leading" aria-hidden="true" />
+        <input
+          className="composer__input"
+          data-testid="composer-input"
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Ask a Pokémon question…"
+          aria-label="Ask a Pokémon question"
+          disabled={disabled}
+        />
+        <button
+          className="composer__send"
+          data-testid="composer-send"
+          type="submit"
+          disabled={disabled || value.trim().length === 0}
+        >
+          Send
+        </button>
+      </div>
     </form>
   );
 }
