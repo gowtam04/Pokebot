@@ -1,0 +1,24 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: pokebot-dev
+    init: true                 # clean SIGINT/SIGTERM shutdown of next dev
+    ports:
+      - "3000:3000"
+    environment:
+      - WATCHPACK_POLLING=true   # mandatory for HMR through macOS bind mount (webpack)
+      - CHOKIDAR_USEPOLLING=true # belt-and-suspenders for any chokidar watcher
+      - NODE_ENV=development
+      - ANTHROPIC_API_KEY        # bare = pass through from host shell if exported (wins over env_file)
+    env_file:
+      # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does
+      # not auto-load .env). required:false keeps `up` working if the file is absent.
+      - path: .env.local
+        required: false
+    volumes:
+      - .:/app                 # live source → hot reload
+      - /app/node_modules      # MASK host macOS node_modules; use container's Linux build (mandatory)
+      - /app/.next             # keep build cache off the bind mount
+    command: ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]

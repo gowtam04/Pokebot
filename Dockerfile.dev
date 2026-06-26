@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+
+# glibc Debian (NOT alpine): better-sqlite3 v12 ships prebuilt binaries for
+# linux glibc x64/arm64 but not musl, so bookworm installs a ready .node with
+# no compile. Matches the Node 20 pin (.nvmrc / engines >=20).
+FROM node:20-bookworm-slim
+
+# Compile fallback for better-sqlite3 if a prebuilt binary is ever unavailable
+# (offline / GitHub rate limit). Cheap insurance in a dev image.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=development
+WORKDIR /app
+
+# Dependency layer is cached independently of source edits.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Source arrives via the compose bind mount in dev; the image only needs to own
+# the Linux-built /app/node_modules from `npm ci` above.
+
+EXPOSE 3000
+
+# -H 0.0.0.0 so the published port is reachable from the macOS host (don't rely
+# on next dev's default bind host). `--` forwards flags through npm to next.
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]
