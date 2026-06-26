@@ -51,7 +51,7 @@ import {
   type SseEventName,
 } from "@/lib/sse-types";
 
-// Node runtime (better-sqlite3 + the Anthropic SDK need it) and never cached /
+// Node runtime (node-postgres + the Anthropic SDK need it) and never cached /
 // statically optimized — this is a live streaming handler.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

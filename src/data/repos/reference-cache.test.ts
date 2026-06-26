@@ -9,18 +9,12 @@
  *   - table missing → { found:false, suggestions: [] }.
  * Everything is scoped to the active `format`.
  *
- * Exercised against a fresh in-memory SQLite DB built from the committed Drizzle
- * migrations (real schema), with the fixture handle injected — no live network,
- * no @/data/db singleton.
+ * Exercised against a fresh, migrated Postgres schema (Testcontainers) with the
+ * fixture handle injected directly — no live network, no @/data/db singleton.
  */
 
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import Database from "better-sqlite3";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { sql } from "drizzle-orm";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // reference-cache.ts statically `import "server-only"` (it throws under the node
 // test env). Neutralize it; we inject our own DB handle so @/data/db is never
@@ -28,7 +22,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { PokebotDb } from "@/data/db";
-import * as schema from "@/data/schema";
 import { reference_cache, searchable_names } from "@/data/schema";
 import { getReference } from "@/data/repos/reference-cache";
 import type {
@@ -37,27 +30,26 @@ import type {
   EvolutionChainDetail,
 } from "@/agent/schemas";
 
+import { createPgSchema, type PgFixture } from "../../../test/support/pg";
+
 const SV = "scarlet-violet";
 const CH = "champions";
 
-const MIGRATIONS_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "drizzle",
-);
-
 // ---------------------------------------------------------------------------
-// In-memory fixture DB (real migrated schema)
+// Fresh, migrated Postgres schema per test (tests mutate / drop tables).
 // ---------------------------------------------------------------------------
 
-function makeDb(): { sqlite: Database.Database; db: PokebotDb } {
-  const sqlite = new Database(":memory:");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  return { sqlite, db };
-}
+let fix: PgFixture;
+let db: PokebotDb;
+
+beforeEach(async () => {
+  fix = await createPgSchema({ seed: "none" });
+  db = fix.db;
+}, 60_000);
+
+afterEach(async () => {
+  await fix?.cleanup();
+});
 
 // --- Normalized payloads (the exact tool-output shapes the cache stores) -----
 
@@ -102,36 +94,34 @@ const EEVEE_CHAIN: EvolutionChainDetail = {
 };
 
 /** Seed a reference_cache row for a format. */
-function seedRef(
-  db: PokebotDb,
+async function seedRef(
+  database: PokebotDb,
   format: string,
   key: string,
   kind: string,
   payload: unknown,
-): void {
-  db.insert(reference_cache)
-    .values({
-      format,
-      resource_key: key,
-      resource_kind: kind,
-      payload: JSON.stringify(payload),
-      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
-      fetched_at: 0,
-    })
-    .run();
+): Promise<void> {
+  await database.insert(reference_cache).values({
+    format,
+    resource_key: key,
+    resource_kind: kind,
+    payload: JSON.stringify(payload),
+    endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+    fetched_at: 0,
+  });
 }
 
 /** Seed a searchable_names row for a format (backs miss suggestions). */
-function seedName(
-  db: PokebotDb,
+async function seedName(
+  database: PokebotDb,
   format: string,
   kind: string,
   slug: string,
   display: string,
-): void {
-  db.insert(searchable_names)
-    .values({ format, kind, slug, display_name: display })
-    .run();
+): Promise<void> {
+  await database
+    .insert(searchable_names)
+    .values({ format, kind, slug, display_name: display });
 }
 
 // ---------------------------------------------------------------------------
@@ -139,14 +129,8 @@ function seedName(
 // ---------------------------------------------------------------------------
 
 describe("getReference — pure DB read", () => {
-  let db: PokebotDb;
-
-  beforeEach(() => {
-    db = makeDb().db;
-  });
-
   it("HIT: returns the parsed normalized payload for (format, key)", async () => {
-    seedRef(db, SV, "move/fake-out", "move", FAKE_OUT);
+    await seedRef(db, SV, "move/fake-out", "move", FAKE_OUT);
 
     const result = (await getReference("move", "fake-out", SV, {
       db,
@@ -156,7 +140,7 @@ describe("getReference — pure DB read", () => {
   });
 
   it("MISS: returns { found:false, suggestions } from the format's searchable_names", async () => {
-    seedName(db, SV, "move", "fake-out", "Fake Out");
+    await seedName(db, SV, "move", "fake-out", "Fake Out");
 
     const result = await getReference("move", "fake", SV, { db });
 
@@ -169,7 +153,7 @@ describe("getReference — pure DB read", () => {
   });
 
   it("TYPE: returns the stored matchup profile (Flying immune to Ground, BR-5/G11)", async () => {
-    seedRef(db, SV, "type/ground", "type", GROUND);
+    await seedRef(db, SV, "type/ground", "type", GROUND);
 
     const result = (await getReference("type", "ground", SV, {
       db,
@@ -181,7 +165,7 @@ describe("getReference — pure DB read", () => {
   });
 
   it("EVOLUTION: keys off evolution-chain/<species> and returns the chain", async () => {
-    seedRef(db, SV, "evolution-chain/eevee", "evolution", EEVEE_CHAIN);
+    await seedRef(db, SV, "evolution-chain/eevee", "evolution", EEVEE_CHAIN);
 
     const result = (await getReference("evolution", "eevee", SV, {
       db,
@@ -192,7 +176,7 @@ describe("getReference — pure DB read", () => {
   });
 
   it("EVOLUTION miss: suggestions come from the pokemon name set", async () => {
-    seedName(db, SV, "pokemon", "eevee", "Eevee");
+    await seedName(db, SV, "pokemon", "eevee", "Eevee");
 
     const result = await getReference("evolution", "eeve", SV, { db });
 
@@ -201,43 +185,35 @@ describe("getReference — pure DB read", () => {
 
   it("a corrupt stored payload falls through to a miss (with suggestions)", async () => {
     // Insert a row whose payload is not valid JSON for the detail shape.
-    db.insert(reference_cache)
-      .values({
-        format: SV,
-        resource_key: "move/garbage",
-        resource_kind: "move",
-        payload: "{not json",
-        endpoint_url: "@pkmn/dex (Pokémon Showdown)",
-        fetched_at: 0,
-      })
-      .run();
-    seedName(db, SV, "move", "garbage", "Garbage");
+    await db.insert(reference_cache).values({
+      format: SV,
+      resource_key: "move/garbage",
+      resource_kind: "move",
+      payload: "{not json",
+      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+      fetched_at: 0,
+    });
+    await seedName(db, SV, "move", "garbage", "Garbage");
 
     const result = await getReference("move", "garbage", SV, { db });
     expect(result).toEqual({ found: false, suggestions: ["garbage"] });
   });
 
   it("table missing (migrations not applied) → { found:false, suggestions: [] }", async () => {
-    const { sqlite, db: freshDb } = makeDb();
-    sqlite.exec("DROP TABLE reference_cache");
+    // Drop the table in this test's own schema (search_path-pinned).
+    await db.execute(sql`DROP TABLE reference_cache`);
 
-    const result = await getReference("move", "fake-out", SV, { db: freshDb });
+    const result = await getReference("move", "fake-out", SV, { db });
     expect(result).toEqual({ found: false, suggestions: [] });
   });
 });
 
 describe("getReference — format scoping", () => {
-  let db: PokebotDb;
-
-  beforeEach(() => {
-    db = makeDb().db;
-  });
-
   it("a row stored under one format is NOT returned for another format", async () => {
     // Same key, different payloads per format.
-    seedRef(db, SV, "move/fake-out", "move", FAKE_OUT);
+    await seedRef(db, SV, "move/fake-out", "move", FAKE_OUT);
     const championsFakeOut: MoveDetail = { ...FAKE_OUT, pp: 5 };
-    seedRef(db, CH, "move/fake-out", "move", championsFakeOut);
+    await seedRef(db, CH, "move/fake-out", "move", championsFakeOut);
 
     const sv = (await getReference("move", "fake-out", SV, { db })) as MoveDetail;
     const ch = (await getReference("move", "fake-out", CH, { db })) as MoveDetail;
@@ -248,17 +224,17 @@ describe("getReference — format scoping", () => {
 
   it("misses do not leak a row that only exists in the other format", async () => {
     // The hit exists only in champions; a scarlet-violet read must miss.
-    seedRef(db, CH, "move/fake-out", "move", FAKE_OUT);
-    seedName(db, SV, "move", "tackle", "Tackle"); // unrelated SV name
+    await seedRef(db, CH, "move/fake-out", "move", FAKE_OUT);
+    await seedName(db, SV, "move", "tackle", "Tackle"); // unrelated SV name
 
     const sv = await getReference("move", "fake-out", SV, { db });
     expect(sv).toEqual({ found: false, suggestions: [] });
   });
 
   it("suggestions are scoped to the requested format", async () => {
-    seedName(db, SV, "move", "fake-out", "Fake Out");
-    seedName(db, CH, "move", "fake-out", "Fake Out");
-    seedName(db, CH, "move", "fakeout-champ", "Fakeout Champ");
+    await seedName(db, SV, "move", "fake-out", "Fake Out");
+    await seedName(db, CH, "move", "fake-out", "Fake Out");
+    await seedName(db, CH, "move", "fakeout-champ", "Fakeout Champ");
 
     const sv = await getReference("move", "fake", SV, { db });
     // Only the SV row matches; the champions-only "fakeout-champ" must not appear.

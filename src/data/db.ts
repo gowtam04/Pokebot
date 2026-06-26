@@ -1,23 +1,23 @@
 /**
- * better-sqlite3 connection + Drizzle ORM instance — the single SQLite handle
- * for the whole process (design.md § File Structure: src/data/db.ts).
+ * node-postgres connection pool + Drizzle ORM instance — the single Postgres
+ * handle for the whole Next server process.
  *
  * Wiring rules (RISK DIRECTIVES + design.md):
  *   - `import "server-only"` so this can never be pulled into a client bundle.
- *   - DEFAULT-import `Database` from better-sqlite3 (it is a CommonJS native
- *     module; `next.config.ts` lists it under top-level serverExternalPackages).
- *   - The connection + Drizzle instance are memoized on `globalThis` so Next's
- *     dev hot-reload / route re-evaluation reuses ONE handle (no fd leak, no
- *     "database is locked" from many WAL writers).
- *   - POKEBOT_DB_PATH is resolved to an ABSOLUTE path relative to this module
- *     (import.meta.url), so it does not depend on process.cwd() — the ingest
- *     CLI, the Next server, and vitest all hit the same file.
- *   - `PRAGMA journal_mode=WAL` for concurrent reader/writer access.
- *   - The drizzle-orm/better-sqlite3 migrator is wired here (idempotent) so the
- *     physical schema always exists before any read; the ingest pipeline writes
- *     rows in-place into these tables.
+ *   - One `pg.Pool` over DATABASE_URL, wrapped by Drizzle. `next.config.ts`
+ *     lists `pg` under top-level serverExternalPackages so Next does not bundle
+ *     its optional native bits.
+ *   - The pool + Drizzle instance are memoized on `globalThis` so Next's dev
+ *     hot-reload / route re-evaluation reuses ONE pool (no connection leak), and
+ *     so tests can pre-install a fixture bundle on `globalThis.__pokebotDb`
+ *     before this module is first imported.
  *
- * better-sqlite3 is SYNCHRONOUS — nothing here is (or may be) awaited.
+ * Unlike the old better-sqlite3 handle, node-postgres is ASYNC. Constructing the
+ * pool is synchronous and lazy (it does not connect until the first query), so
+ * the `db` export is still a plain synchronous binding — repos that
+ * `import { db }` (e.g. resolve-index.ts) keep working. Migrations, however, are
+ * async and are NO LONGER run implicitly at module load: apply them out-of-band
+ * via `npm run db:migrate`, the ingest CLI, or `runMigrations()` below.
  *
  * Repos receive their Drizzle handle via the per-request DbCtx assembled in
  * src/agent/context.ts; they import `db` from here, never construct their own.
@@ -25,32 +25,28 @@
 
 import "server-only";
 
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import Database from "better-sqlite3";
-import {
-  drizzle,
-  type BetterSQLite3Database,
-} from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { Pool } from "pg";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { env } from "@/env";
 import * as schema from "@/data/schema";
 
 /** Drizzle handle typed over the full Pokebot schema. */
-export type PokebotDb = BetterSQLite3Database<typeof schema>;
+export type PokebotDb = NodePgDatabase<typeof schema>;
 
-/** The raw synchronous better-sqlite3 connection. */
-export type PokebotSqlite = Database.Database;
+/** The underlying node-postgres connection pool. */
+export type PokebotPool = Pool;
 
-type DbBundle = {
-  sqlite: PokebotSqlite;
+export type DbBundle = {
+  pool: PokebotPool;
   db: PokebotDb;
 };
 
-// --- Absolute path resolution (independent of process.cwd) -----------------
+// --- Migrations folder (absolute, independent of process.cwd) --------------
 // This module lives at <root>/src/data/db.ts, so the project root is two
 // directories up. The committed migrations live in <root>/drizzle (the
 // drizzle.config.ts `out` folder).
@@ -58,36 +54,17 @@ const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..", "..");
 const MIGRATIONS_DIR = path.resolve(PROJECT_ROOT, "drizzle");
 
-/** Absolute on-disk location of the SQLite index + reference cache. */
-export const DB_PATH: string = path.isAbsolute(env.POKEBOT_DB_PATH)
-  ? env.POKEBOT_DB_PATH
-  : path.resolve(PROJECT_ROOT, env.POKEBOT_DB_PATH);
-
 // --- globalThis memoization ------------------------------------------------
 const globalForDb = globalThis as typeof globalThis & {
   __pokebotDb?: DbBundle;
 };
 
 function createBundle(): DbBundle {
-  // Ensure the parent directory exists — better-sqlite3 creates the file but
-  // not intermediate directories (e.g. the gitignored ./data folder).
-  mkdirSync(path.dirname(DB_PATH), { recursive: true });
-
-  const sqlite = new Database(DB_PATH);
-  // WAL: concurrent reads while the ingest pipeline writes; NORMAL sync is the
-  // standard safe pairing for WAL.
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("synchronous = NORMAL");
-  sqlite.pragma("foreign_keys = ON");
-
-  const db = drizzle(sqlite, { schema });
-
-  // Apply any pending migrations once at connection time. migrate() is
-  // idempotent (drizzle tracks applied hashes in __drizzle_migrations), so a
-  // freshly-built DB gets its tables and an already-ingested DB is a no-op.
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-
-  return { sqlite, db };
+  // Lazy pool — no socket is opened until the first query. Nothing here is
+  // awaited, so the synchronous `db` export below is safe.
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const db = drizzle(pool, { schema });
+  return { pool, db };
 }
 
 function getBundle(): DbBundle {
@@ -98,21 +75,23 @@ function getBundle(): DbBundle {
 }
 
 /**
- * The memoized Drizzle instance — the sole entry point for SQLite reads/writes.
- * Created lazily on first access and cached on globalThis for the process
- * lifetime.
+ * The memoized Drizzle instance — the sole entry point for Postgres reads/writes
+ * in the Next server. Created lazily on first access and cached on globalThis
+ * for the process lifetime.
  */
 export const db: PokebotDb = getBundle().db;
 
-/** The underlying raw better-sqlite3 connection (for PRAGMA/transaction use). */
-export const sqlite: PokebotSqlite = getBundle().sqlite;
+/** The underlying node-postgres pool (for direct/raw use, e.g. health checks). */
+export const pool: PokebotPool = getBundle().pool;
 
 /**
- * Run pending Drizzle migrations against the singleton connection. Safe to call
- * repeatedly (idempotent). Exposed for the ingest CLI to invoke explicitly
- * before building the index; it also runs implicitly when the connection is
- * first created.
+ * Apply pending Drizzle migrations against the singleton pool. Safe to call
+ * repeatedly (idempotent — drizzle tracks applied hashes in
+ * `__drizzle_migrations`). Async because node-postgres migrations are async;
+ * unlike the old SQLite handle this is NOT run at module load. Prefer
+ * `npm run db:migrate` for the standalone case (it avoids the server-only
+ * boundary); this export exists for in-process callers.
  */
-export function runMigrations(): void {
-  migrate(getBundle().db, { migrationsFolder: MIGRATIONS_DIR });
+export async function runMigrations(): Promise<void> {
+  await migrate(getBundle().db, { migrationsFolder: MIGRATIONS_DIR });
 }

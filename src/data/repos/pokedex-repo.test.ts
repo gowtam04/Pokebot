@@ -1,22 +1,18 @@
 /**
  * Unit tests for PokedexRepo (queryPokedex / getPokemon).
  *
- * Run against a REAL throwaway in-memory SQLite DB built from the committed
- * Drizzle migrations (design.md: "repos against a real fixture SQLite DB"), so
- * the dynamic filter/sort/threshold SQL, the Gen-9 learnset intersection, and
- * the row → tool-shape mappers are all exercised end-to-end. No mocks, no
- * on-disk index, no network.
+ * Run against a REAL throwaway Postgres schema built from the committed Drizzle
+ * migrations (Testcontainers), so the dynamic filter/sort/threshold SQL, the
+ * Gen-9 learnset intersection, and the row → tool-shape mappers are all
+ * exercised end-to-end. No mocks, no live PokeAPI, no network.
+ *
+ * The read-only filter/sort/shape describes share ONE seeded schema; the tests
+ * that need a different DB shape (empty index, both formats) provision their own
+ * isolated schema so the per-format ingest_meta expectations don't collide.
  */
 
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { beforeEach, describe, expect, it } from "vitest";
-
-import * as schema from "@/data/schema";
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
 import type { PokebotDb } from "@/data/db";
 import {
@@ -25,6 +21,8 @@ import {
   type PokedexFilters,
 } from "./pokedex-repo";
 
+import { createPgSchema, type PgFixture } from "../../../test/support/pg";
+
 // All of these tests exercise the standard (Scarlet-Violet) scope. Bind that
 // format here so the call sites stay focused on filters/slugs; the format
 // threading itself is covered by the format-scoping checks below.
@@ -32,14 +30,6 @@ const SV = "scarlet-violet" as const;
 const queryPokedex = (f: PokedexFilters, db: PokebotDb) =>
   queryPokedexRaw(f, SV, db);
 const getPokemon = (slug: string, db: PokebotDb) => getPokemonRaw(slug, SV, db);
-
-const MIGRATIONS_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "drizzle",
-);
 
 type MonInput = Partial<typeof pokemon.$inferSelect> &
   Pick<
@@ -58,14 +48,7 @@ type MonInput = Partial<typeof pokemon.$inferSelect> &
     | "stat_speed"
   >;
 
-function makeDb(): PokebotDb {
-  const sqlite = new Database(":memory:");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  return db;
-}
-
-function insertMon(db: PokebotDb, mon: MonInput): void {
+async function insertMon(db: PokebotDb, mon: MonInput): Promise<void> {
   const bst =
     mon.base_stat_total ??
     mon.stat_hp +
@@ -74,27 +57,25 @@ function insertMon(db: PokebotDb, mon: MonInput): void {
       mon.stat_special_attack +
       mon.stat_special_defense +
       mon.stat_speed;
-  db.insert(pokemon)
-    .values({
-      format: SV,
-      form_name: null,
-      type2: null,
-      ability_slot2: null,
-      ability_hidden: null,
-      sprite_url: `https://img/${mon.id}.png`,
-      artwork_url: `https://img/${mon.id}_official.png`,
-      generation: "gen-9",
-      is_gen9_native: 1,
-      source_generation: null,
-      base_stat_total: bst,
-      ...mon,
-    })
-    .run();
+  await db.insert(pokemon).values({
+    format: SV,
+    form_name: null,
+    type2: null,
+    ability_slot2: null,
+    ability_hidden: null,
+    sprite_url: `https://img/${mon.id}.png`,
+    artwork_url: `https://img/${mon.id}_official.png`,
+    generation: "gen-9",
+    is_gen9_native: 1,
+    source_generation: null,
+    base_stat_total: bst,
+    ...mon,
+  });
 }
 
 /** Seed a small, fully-controlled fixture index + an ingest_meta marker. */
-function seed(db: PokebotDb): void {
-  insertMon(db, {
+async function seed(db: PokebotDb): Promise<void> {
+  await insertMon(db, {
     id: "garchomp",
     species_name: "garchomp",
     display_name: "Garchomp",
@@ -110,7 +91,7 @@ function seed(db: PokebotDb): void {
     stat_special_defense: 85,
     stat_speed: 102,
   });
-  insertMon(db, {
+  await insertMon(db, {
     id: "dragapult",
     species_name: "dragapult",
     display_name: "Dragapult",
@@ -127,7 +108,7 @@ function seed(db: PokebotDb): void {
     stat_special_defense: 75,
     stat_speed: 142,
   });
-  insertMon(db, {
+  await insertMon(db, {
     id: "talonflame",
     species_name: "talonflame",
     display_name: "Talonflame",
@@ -143,7 +124,7 @@ function seed(db: PokebotDb): void {
     stat_special_defense: 69,
     stat_speed: 126,
   });
-  insertMon(db, {
+  await insertMon(db, {
     id: "ninetales",
     species_name: "ninetales",
     display_name: "Ninetales",
@@ -159,7 +140,7 @@ function seed(db: PokebotDb): void {
     stat_speed: 100,
   });
   // A non-native fallback form (BR-1) to verify the flags pass through.
-  insertMon(db, {
+  await insertMon(db, {
     id: "incineroar",
     species_name: "incineroar",
     display_name: "Incineroar",
@@ -189,47 +170,58 @@ function seed(db: PokebotDb): void {
     { p: "talonflame", m: "brave-bird" },
     { p: "talonflame", m: "will-o-wisp" },
   ];
-  db.insert(learnset)
-    .values(
-      moves.map((x) => ({
-        pokemon_id: x.p,
-        move_slug: x.m,
-        format: SV,
-        method: "level-up",
-      })),
-    )
-    .run();
-
-  db.insert(ingest_meta)
-    .values({
+  await db.insert(learnset).values(
+    moves.map((x) => ({
+      pokemon_id: x.p,
+      move_slug: x.m,
       format: SV,
-      last_success_at: 0,
-      pokemon_count: 5,
-      learnset_count: moves.length,
-      names_count: 0,
-      schema_version: "2",
-    })
-    .run();
+      method: "level-up",
+    })),
+  );
+
+  await db.insert(ingest_meta).values({
+    format: SV,
+    last_success_at: 0,
+    pokemon_count: 5,
+    learnset_count: moves.length,
+    names_count: 0,
+    schema_version: "2",
+  });
 }
 
 // ---------------------------------------------------------------------------
+// Shared, seeded, read-only fixture for the filter/sort/shape describes.
+// ---------------------------------------------------------------------------
+
+let sharedFix: PgFixture;
+let db: PokebotDb;
+
+beforeAll(async () => {
+  sharedFix = await createPgSchema({ seed: "none" });
+  db = sharedFix.db;
+  await seed(db);
+}, 60_000);
+
+afterAll(async () => {
+  await sharedFix?.cleanup();
+});
 
 describe("queryPokedex — index availability", () => {
-  it("returns index_unavailable when ingest_meta has no row", () => {
-    const db = makeDb(); // migrated but empty (no ingest_meta marker)
-    expect(queryPokedex({}, db)).toEqual({ error: "index_unavailable" });
-  });
+  it("returns index_unavailable when ingest_meta has no row", async () => {
+    const fix = await createPgSchema({ seed: "none" }); // migrated but empty
+    try {
+      expect(await queryPokedex({}, fix.db)).toEqual({
+        error: "index_unavailable",
+      });
+    } finally {
+      await fix.cleanup();
+    }
+  }, 60_000);
 });
 
 describe("queryPokedex — filters", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("types are ANDed: ['dragon'] matches both dragons", () => {
-    const r = queryPokedex({ types: ["dragon"] }, db);
+  it("types are ANDed: ['dragon'] matches both dragons", async () => {
+    const r = await queryPokedex({ types: ["dragon"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.total_count).toBe(2);
     expect(r.results.map((x) => x.display_name).sort()).toEqual([
@@ -238,15 +230,15 @@ describe("queryPokedex — filters", () => {
     ]);
   });
 
-  it("types are ANDed: ['dragon','ground'] matches only Garchomp", () => {
-    const r = queryPokedex({ types: ["dragon", "ground"] }, db);
+  it("types are ANDed: ['dragon','ground'] matches only Garchomp", async () => {
+    const r = await queryPokedex({ types: ["dragon", "ground"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.total_count).toBe(1);
     expect(r.results[0].display_name).toBe("Garchomp");
   });
 
-  it("abilities are ORed across slots (slot1 + hidden)", () => {
-    const r = queryPokedex({ abilities: ["flash-fire", "gale-wings"] }, db);
+  it("abilities are ORed across slots (slot1 + hidden)", async () => {
+    const r = await queryPokedex({ abilities: ["flash-fire", "gale-wings"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.results.map((x) => x.display_name).sort()).toEqual([
       "Ninetales", // flash-fire (slot1)
@@ -254,8 +246,8 @@ describe("queryPokedex — filters", () => {
     ]);
   });
 
-  it("stat_filters are ANDed (speed > 120) and sortable", () => {
-    const r = queryPokedex(
+  it("stat_filters are ANDed (speed > 120) and sortable", async () => {
+    const r = await queryPokedex(
       { statFilters: [{ stat: "speed", op: ">", value: 120 }] },
       db,
     );
@@ -268,50 +260,38 @@ describe("queryPokedex — filters", () => {
 });
 
 describe("queryPokedex — sort / limit / truncation", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("sorts by speed desc (superlative 'fastest')", () => {
-    const r = queryPokedex({ sortBy: "speed", order: "desc", limit: 1 }, db);
+  it("sorts by speed desc (superlative 'fastest')", async () => {
+    const r = await queryPokedex({ sortBy: "speed", order: "desc", limit: 1 }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.results[0].display_name).toBe("Dragapult"); // 142
     expect(r.sort).toBe("speed desc");
   });
 
-  it("reports total_count over the full match set and truncates the page", () => {
-    const r = queryPokedex({ types: ["dragon"], limit: 1 }, db);
+  it("reports total_count over the full match set and truncates the page", async () => {
+    const r = await queryPokedex({ types: ["dragon"], limit: 1 }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.total_count).toBe(2);
     expect(r.results).toHaveLength(1);
     expect(r.truncated).toBe(true);
   });
 
-  it("sort is null when no sort_by is given", () => {
-    const r = queryPokedex({ types: ["fire"] }, db);
+  it("sort is null when no sort_by is given", async () => {
+    const r = await queryPokedex({ types: ["fire"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.sort).toBeNull();
   });
 });
 
 describe("queryPokedex — multi-move Gen-9 intersection (BR-7)", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("returns only Pokémon that learn ALL listed moves", () => {
-    const r = queryPokedex({ moveIds: ["earthquake", "dragon-claw"] }, db);
+  it("returns only Pokémon that learn ALL listed moves", async () => {
+    const r = await queryPokedex({ moveIds: ["earthquake", "dragon-claw"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.total_count).toBe(1);
     expect(r.results[0].display_name).toBe("Garchomp");
   });
 
-  it("a single move matches every learner (Dragapult learns dragon-claw too)", () => {
-    const r = queryPokedex({ moveIds: ["dragon-claw"] }, db);
+  it("a single move matches every learner (Dragapult learns dragon-claw too)", async () => {
+    const r = await queryPokedex({ moveIds: ["dragon-claw"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.results.map((x) => x.display_name).sort()).toEqual([
       "Dragapult",
@@ -319,8 +299,8 @@ describe("queryPokedex — multi-move Gen-9 intersection (BR-7)", () => {
     ]);
   });
 
-  it("an empty intersection is total_count 0 (NOT an error)", () => {
-    const r = queryPokedex({ moveIds: ["earthquake", "will-o-wisp"] }, db);
+  it("an empty intersection is total_count 0 (NOT an error)", async () => {
+    const r = await queryPokedex({ moveIds: ["earthquake", "will-o-wisp"] }, db);
     expect(r).toEqual({
       total_count: 0,
       truncated: false,
@@ -329,8 +309,8 @@ describe("queryPokedex — multi-move Gen-9 intersection (BR-7)", () => {
     });
   });
 
-  it("intersects with other filters (dragon AND learns dragon-claw)", () => {
-    const r = queryPokedex(
+  it("intersects with other filters (dragon AND learns dragon-claw)", async () => {
+    const r = await queryPokedex(
       { types: ["dragon"], moveIds: ["dragon-claw"] },
       db,
     );
@@ -343,40 +323,34 @@ describe("queryPokedex — multi-move Gen-9 intersection (BR-7)", () => {
 });
 
 describe("queryPokedex — unresolved slugs", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("flags an unknown type", () => {
-    expect(queryPokedex({ types: ["draagon"] }, db)).toEqual({
+  it("flags an unknown type", async () => {
+    expect(await queryPokedex({ types: ["draagon"] }, db)).toEqual({
       unresolved: ["draagon"],
     });
   });
 
-  it("flags an unknown ability", () => {
-    expect(queryPokedex({ abilities: ["levitation"] }, db)).toEqual({
+  it("flags an unknown ability", async () => {
+    expect(await queryPokedex({ abilities: ["levitation"] }, db)).toEqual({
       unresolved: ["levitation"],
     });
   });
 
-  it("flags an unknown move", () => {
-    expect(queryPokedex({ moveIds: ["trik-room"] }, db)).toEqual({
+  it("flags an unknown move", async () => {
+    expect(await queryPokedex({ moveIds: ["trik-room"] }, db)).toEqual({
       unresolved: ["trik-room"],
     });
   });
 
-  it("collects multiple unresolved slugs in input order", () => {
-    const r = queryPokedex(
+  it("collects multiple unresolved slugs in input order", async () => {
+    const r = await queryPokedex(
       { types: ["draagon"], abilities: ["levitation"], moveIds: ["trik-room"] },
       db,
     );
     expect(r).toEqual({ unresolved: ["draagon", "levitation", "trik-room"] });
   });
 
-  it("does not flag valid slugs", () => {
-    const r = queryPokedex(
+  it("does not flag valid slugs", async () => {
+    const r = await queryPokedex(
       { types: ["dragon"], abilities: ["sand-veil"], moveIds: ["earthquake"] },
       db,
     );
@@ -385,14 +359,8 @@ describe("queryPokedex — unresolved slugs", () => {
 });
 
 describe("queryPokedex — row shape (tools.md T2)", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("maps a row to the exact T2 shape (abilities omit absent slots)", () => {
-    const r = queryPokedex({ types: ["dragon", "ground"] }, db);
+  it("maps a row to the exact T2 shape (abilities omit absent slots)", async () => {
+    const r = await queryPokedex({ types: ["dragon", "ground"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.results[0]).toEqual({
       display_name: "Garchomp",
@@ -414,8 +382,8 @@ describe("queryPokedex — row shape (tools.md T2)", () => {
     });
   });
 
-  it("surfaces the Gen-9 fallback flags for a non-native form (BR-1)", () => {
-    const r = queryPokedex({ types: ["fire", "dark"] }, db);
+  it("surfaces the Gen-9 fallback flags for a non-native form (BR-1)", async () => {
+    const r = await queryPokedex({ types: ["fire", "dark"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     const row = r.results.find((x) => x.display_name === "Incineroar");
     expect(row?.is_gen9_native).toBe(false);
@@ -426,14 +394,8 @@ describe("queryPokedex — row shape (tools.md T2)", () => {
 // ---------------------------------------------------------------------------
 
 describe("getPokemon — T3", () => {
-  let db: PokebotDb;
-  beforeEach(() => {
-    db = makeDb();
-    seed(db);
-  });
-
-  it("returns the full profile for an exact slug", () => {
-    const r = getPokemon("garchomp", db);
+  it("returns the full profile for an exact slug", async () => {
+    const r = await getPokemon("garchomp", db);
     expect(r.found).toBe(true);
     if (!r.found) return;
     expect(r.display_name).toBe("Garchomp");
@@ -446,20 +408,20 @@ describe("getPokemon — T3", () => {
     expect(r.is_gen9_native).toBe(true);
   });
 
-  it("is case-insensitive on the name", () => {
-    const r = getPokemon("  GARCHOMP ", db);
+  it("is case-insensitive on the name", async () => {
+    const r = await getPokemon("  GARCHOMP ", db);
     expect(r.found).toBe(true);
   });
 
-  it("returns found:false with substring suggestions on a near miss", () => {
-    const r = getPokemon("garchom", db);
+  it("returns found:false with substring suggestions on a near miss", async () => {
+    const r = await getPokemon("garchom", db);
     expect(r.found).toBe(false);
     if (r.found) return;
     expect(r.suggestions).toContain("garchomp");
   });
 
-  it("returns found:false with empty suggestions when nothing is close", () => {
-    const r = getPokemon("zzzznope", db);
+  it("returns found:false with empty suggestions when nothing is close", async () => {
+    const r = await getPokemon("zzzznope", db);
     expect(r).toEqual({ found: false, suggestions: [] });
   });
 });
@@ -470,92 +432,100 @@ describe("format scoping (standard vs champions)", () => {
   /**
    * The same dex slug exists in both formats with different data; every read
    * must stay inside the requested format. We seed one row + meta per format and
-   * confirm each format only ever sees its own row.
+   * confirm each format only ever sees its own row. Each test provisions its own
+   * isolated schema because the per-format ingest_meta expectations differ.
    */
-  function seedBothFormats(db: PokebotDb): void {
+  async function seedBothFormats(database: PokebotDb): Promise<void> {
     // A champions-only build of "garchomp" with a deliberately different type so
     // a leak across formats would be obvious.
-    db.insert(pokemon)
-      .values({
-        format: "champions",
-        id: "garchomp",
-        species_name: "garchomp",
-        form_name: null,
-        display_name: "Garchomp",
-        national_dex_number: 445,
-        type1: "dragon",
-        type2: "ground",
-        ability_slot1: "rough-skin",
-        ability_slot2: null,
-        ability_hidden: null,
-        stat_hp: 108,
-        stat_attack: 130,
-        stat_defense: 95,
-        stat_special_attack: 80,
-        stat_special_defense: 85,
-        stat_speed: 102,
-        base_stat_total: 600,
-        sprite_url: "https://img/garchomp.png",
-        artwork_url: "https://img/garchomp_official.png",
-        generation: "champions",
-        is_gen9_native: 1,
-        source_generation: null,
-      })
-      .run();
-    db.insert(learnset)
-      .values({
-        pokemon_id: "garchomp",
-        move_slug: "earthquake",
-        format: "champions",
-        method: "machine",
-      })
-      .run();
-    db.insert(ingest_meta)
-      .values({
-        format: "champions",
-        last_success_at: 0,
-        pokemon_count: 1,
-        learnset_count: 1,
-        names_count: 0,
-        schema_version: "2",
-      })
-      .run();
+    await database.insert(pokemon).values({
+      format: "champions",
+      id: "garchomp",
+      species_name: "garchomp",
+      form_name: null,
+      display_name: "Garchomp",
+      national_dex_number: 445,
+      type1: "dragon",
+      type2: "ground",
+      ability_slot1: "rough-skin",
+      ability_slot2: null,
+      ability_hidden: null,
+      stat_hp: 108,
+      stat_attack: 130,
+      stat_defense: 95,
+      stat_special_attack: 80,
+      stat_special_defense: 85,
+      stat_speed: 102,
+      base_stat_total: 600,
+      sprite_url: "https://img/garchomp.png",
+      artwork_url: "https://img/garchomp_official.png",
+      generation: "champions",
+      is_gen9_native: 1,
+      source_generation: null,
+    });
+    await database.insert(learnset).values({
+      pokemon_id: "garchomp",
+      move_slug: "earthquake",
+      format: "champions",
+      method: "machine",
+    });
+    await database.insert(ingest_meta).values({
+      format: "champions",
+      last_success_at: 0,
+      pokemon_count: 1,
+      learnset_count: 1,
+      names_count: 0,
+      schema_version: "2",
+    });
   }
 
-  it("queryPokedex only returns rows for the requested format", () => {
-    const db = makeDb();
-    seed(db); // 5 scarlet-violet mons
-    seedBothFormats(db); // + 1 champions garchomp
+  it("queryPokedex only returns rows for the requested format", async () => {
+    const fix = await createPgSchema({ seed: "none" });
+    try {
+      await seed(fix.db); // 5 scarlet-violet mons
+      await seedBothFormats(fix.db); // + 1 champions garchomp
 
-    const sv = queryPokedexRaw({}, "scarlet-violet", db);
-    if ("error" in sv || "unresolved" in sv) throw new Error("expected results");
-    expect(sv.total_count).toBe(5); // the champions garchomp is NOT counted
+      const sv = await queryPokedexRaw({}, "scarlet-violet", fix.db);
+      if ("error" in sv || "unresolved" in sv)
+        throw new Error("expected results");
+      expect(sv.total_count).toBe(5); // the champions garchomp is NOT counted
 
-    const champ = queryPokedexRaw({}, "champions", db);
-    if ("error" in champ || "unresolved" in champ)
-      throw new Error("expected results");
-    expect(champ.total_count).toBe(1);
-    expect(champ.results[0].display_name).toBe("Garchomp");
-  });
+      const champ = await queryPokedexRaw({}, "champions", fix.db);
+      if ("error" in champ || "unresolved" in champ)
+        throw new Error("expected results");
+      expect(champ.total_count).toBe(1);
+      expect(champ.results[0].display_name).toBe("Garchomp");
+    } finally {
+      await fix.cleanup();
+    }
+  }, 60_000);
 
-  it("getPokemon resolves the row for the requested format", () => {
-    const db = makeDb();
-    seed(db);
-    seedBothFormats(db);
+  it("getPokemon resolves the row for the requested format", async () => {
+    const fix = await createPgSchema({ seed: "none" });
+    try {
+      await seed(fix.db);
+      await seedBothFormats(fix.db);
 
-    // Standard garchomp has a slot1 ability of sand-veil; champions' is rough-skin.
-    const sv = getPokemonRaw("garchomp", "scarlet-violet", db);
-    expect(sv.found && sv.abilities.slot1).toBe("sand-veil");
+      // Standard garchomp has a slot1 ability of sand-veil; champions' is rough-skin.
+      const sv = await getPokemonRaw("garchomp", "scarlet-violet", fix.db);
+      expect(sv.found && sv.abilities.slot1).toBe("sand-veil");
 
-    const champ = getPokemonRaw("garchomp", "champions", db);
-    expect(champ.found && champ.abilities.slot1).toBe("rough-skin");
-  });
+      const champ = await getPokemonRaw("garchomp", "champions", fix.db);
+      expect(champ.found && champ.abilities.slot1).toBe("rough-skin");
+    } finally {
+      await fix.cleanup();
+    }
+  }, 60_000);
 
-  it("index_unavailable is per-format (champions meta missing ⇒ unavailable)", () => {
-    const db = makeDb();
-    seed(db); // seeds only the scarlet-violet ingest_meta row
-    expect(queryPokedexRaw({}, "champions", db)).toEqual({
-      error: "index_unavailable",
-    });
-  });
+  it("index_unavailable is per-format (champions meta missing ⇒ unavailable)", async () => {
+    const fix = await createPgSchema({ seed: "none" });
+    try {
+      await seed(fix.db); // seeds only the scarlet-violet ingest_meta row
+      expect(await queryPokedexRaw({}, "champions", fix.db)).toEqual({
+        error: "index_unavailable",
+      });
+    } finally {
+      await fix.cleanup();
+    }
+  }, 60_000);
 });

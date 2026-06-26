@@ -9,11 +9,8 @@ dist
 build
 .cache
 
-# Runtime data artifacts (7.4MB sqlite + WAL/SHM must never enter a layer)
+# Local data dir (Postgres data lives in the `pgdata` named volume, not here)
 data
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
 
 # VCS & meta
 .git

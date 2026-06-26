@@ -5,7 +5,7 @@
  * PR").
  *
  * Runs in the Vitest node project (the eval test glob) so the real tool layer
- * + better-sqlite3 fixture DB are available. The Anthropic client is mocked
+ * + Postgres fixture schema are available. The Anthropic client is mocked
  * inside runDeterministic (a scripted transcript via runPokebotWith), so this
  * test NEVER reaches the network — the dummy ANTHROPIC_API_KEY from
  * vitest.config.ts is enough and no real model call can occur.
@@ -20,10 +20,6 @@
  *      fetches.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // The tool layer pulls in reference-cache.ts, which statically `import
@@ -35,7 +31,7 @@ import { createAgentContext } from "@/agent/context";
 import type { AgentContext } from "@/agent/types";
 
 import { deterministicCases } from "./cases";
-import { createFixtureFile } from "./fixtures/seed-fixture-db";
+import { createPgSchema, installAsSingleton, type PgFixture } from "../test/support/pg";
 import type { AssertResult } from "./judge";
 
 /** IDs design.md pins to the deterministic CI subset. */
@@ -45,38 +41,30 @@ let ctx: AgentContext;
 let results: AssertResult[];
 let byId: Record<string, AssertResult>;
 let plannedIds: readonly string[];
-let fixtureDir: string;
+let fix: PgFixture;
 
 beforeAll(async () => {
   // NOTE: resolve_entity (G3) reads the @/data/db SINGLETON, not ctx.db. So we
-  // point that singleton at a freshly-seeded on-disk fixture and clear the
-  // global memo BEFORE the first @/data/db import — which happens when
-  // ./deterministic (the runtime + tool layer) is imported dynamically below.
-  fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-deterministic-"));
-  const fixturePath = path.join(fixtureDir, "fixture.sqlite");
-  process.env.POKEBOT_DB_PATH = fixturePath;
-  delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
-
-  // Build + seed the on-disk fixture, then close it so the singleton reads it.
-  const seeded = createFixtureFile(fixturePath);
-  (seeded as unknown as { $client?: { close?: () => void } }).$client?.close?.();
+  // migrate + seed an isolated Postgres schema and INSTALL it as that singleton
+  // BEFORE the first @/data/db import — which happens when ./deterministic
+  // (the runtime + tool layer) is imported dynamically below.
+  fix = await createPgSchema({ seed: "eval" });
+  await installAsSingleton(fix);
 
   const { PLANNED_CASE_IDS, runDeterministic } = await import(
     "./deterministic"
   );
   plannedIds = PLANNED_CASE_IDS;
 
-  // No `db` override → ctx binds the singleton (the seeded fixture file), so the
-  // DB-backed tools AND resolve_entity read the same data.
+  // No `db` override → ctx binds the singleton (the seeded fixture schema), so
+  // the DB-backed tools AND resolve_entity read the same data.
   ctx = await createAgentContext();
   results = await runDeterministic(deterministicCases, ctx);
   byId = Object.fromEntries(results.map((r) => [r.caseId, r]));
-});
+}, 120_000);
 
 afterAll(async () => {
-  const dbMod = (await import("@/data/db")) as { sqlite?: { close?: () => void } };
-  dbMod.sqlite?.close?.();
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
+  await fix?.cleanup();
 });
 
 describe("deterministic subset — membership", () => {

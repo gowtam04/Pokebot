@@ -16,23 +16,19 @@
  *   - structured errors (unresolved / found:false) and NEVER throwing
  *
  * Wiring notes (per the RISK DIRECTIVES):
- *   - We point POKEBOT_DB_PATH at a fresh temp file and seed it BEFORE the first
- *     dynamic import of @/data/db, so the memoized singleton opens the fixture.
- *   - @/data/db memoizes on globalThis; we clear that key in beforeAll so this
- *     file always binds to its own fixture even if a worker is reused.
+ *   - We migrate + seed an isolated Postgres schema (createPgSchema) and install
+ *     it as the @/data/db singleton (installAsSingleton) BEFORE the first dynamic
+ *     import of the tool layer, so resolve_entity (which reads the singleton, not
+ *     ctx.db) and the DB-backed tools all see this schema.
  *   - These dynamic imports fail until Phase 4 lands the repos/tools/context;
  *     `loadError` turns that into one clear failing assertion (the red gate).
  */
-
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // src/data/db.ts does `import "server-only"`, whose Node (non-RSC) variant
 // throws. Neutralize it so the repos/tools can be loaded under the vitest node
-// environment (they are the real SQLite readers in these integration oracles).
+// environment (they are the real Postgres readers in these integration oracles).
 vi.mock("server-only", () => ({}));
 
 import {
@@ -45,7 +41,8 @@ import {
 } from "@/agent/schemas";
 import type { AgentContext } from "@/agent/types";
 
-import { loadToolSurface, seedToolsFixture } from "./fixtures/tools-fixture";
+import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
+import { loadToolSurface } from "./fixtures/tools-fixture";
 
 let dispatch: (
   name: string,
@@ -54,22 +51,12 @@ let dispatch: (
 ) => Promise<unknown>;
 let ctx: AgentContext;
 let loadError: unknown = null;
-let fixtureDir: string;
-let fixturePath: string;
+let fix: PgFixture;
 
 beforeAll(async () => {
   try {
-    fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-oracle-"));
-    fixturePath = path.join(fixtureDir, "fixture.sqlite");
-    process.env.POKEBOT_DB_PATH = fixturePath;
-
-    // Force a fresh connection bound to our fixture path.
-    delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
-
-    const dbMod = (await import("@/data/db")) as {
-      sqlite: import("better-sqlite3").Database;
-    };
-    seedToolsFixture(dbMod.sqlite);
+    fix = await createPgSchema({ seed: "tools" });
+    await installAsSingleton(fix);
 
     const surface = await loadToolSurface();
     dispatch = surface.dispatch;
@@ -77,12 +64,10 @@ beforeAll(async () => {
   } catch (e) {
     loadError = e;
   }
-}, 30_000);
+}, 60_000);
 
-afterAll(() => {
-  if (fixtureDir) {
-    rmSync(fixtureDir, { recursive: true, force: true });
-  }
+afterAll(async () => {
+  await fix?.cleanup();
 });
 
 function ensureLoaded(): void {

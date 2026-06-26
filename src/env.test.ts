@@ -16,7 +16,9 @@ describe("env", () => {
     const parsed = parseEnv({ ANTHROPIC_API_KEY: "sk-test" });
     expect(parsed.ANTHROPIC_API_KEY).toBe("sk-test");
     expect(parsed.ANTHROPIC_MODEL).toBe("claude-sonnet-4-6");
-    expect(parsed.POKEBOT_DB_PATH).toBe("./data/pokebot.sqlite");
+    expect(parsed.DATABASE_URL).toBe(
+      "postgres://pokebot:pokebot@localhost:5432/pokebot",
+    );
     expect(parsed.POKEAPI_BASE_URL).toBe("https://pokeapi.co/api/v2");
     expect(parsed.LOG_LEVEL).toBe("info");
   });

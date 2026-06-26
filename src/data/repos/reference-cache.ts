@@ -13,12 +13,12 @@
  * `upstream_unavailable` is retained in the return union (the detail tools still
  * accept it) but is never produced now — local data can't be "unavailable".
  *
- * better-sqlite3 is SYNCHRONOUS — the DB reads here are never awaited.
+ * node-postgres is asynchronous — the DB reads here are awaited.
  */
 
 import "server-only";
 
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, ilike } from "drizzle-orm";
 
 import type { PokebotDb } from "@/data/db";
 import type { Format } from "@/data/formats";
@@ -83,26 +83,26 @@ function parsePayload(payload: string): RefRecord | null {
 }
 
 /** Cheap candidate slugs for a miss (full fuzzy ranking is resolve_entity's job). */
-function suggestSlugs(
+async function suggestSlugs(
   db: PokebotDb,
   kind: RefKind,
   slug: string,
   format: Format,
-): string[] {
+): Promise<string[]> {
   // evolution chains key off a species name -> search the pokemon name set.
   const searchKind = kind === "evolution" ? "pokemon" : kind;
-  const rows = db
+  // ilike: SQLite LIKE was case-insensitive by default; Postgres LIKE is not.
+  const rows = await db
     .select({ slug: searchable_names.slug })
     .from(searchable_names)
     .where(
       and(
         eq(searchable_names.format, format),
         eq(searchable_names.kind, searchKind),
-        like(searchable_names.slug, `%${slug}%`),
+        ilike(searchable_names.slug, `%${slug}%`),
       ),
     )
-    .limit(5)
-    .all();
+    .limit(5);
   return rows.map((r) => r.slug);
 }
 
@@ -126,7 +126,7 @@ export async function getReference(
 
   let cached: { payload: string } | undefined;
   try {
-    cached = db
+    const rows = await db
       .select({ payload: reference_cache.payload })
       .from(reference_cache)
       .where(
@@ -135,7 +135,8 @@ export async function getReference(
           eq(reference_cache.resource_key, key),
         ),
       )
-      .get();
+      .limit(1);
+    cached = rows[0];
   } catch {
     // Table missing (migrations not applied) — treat as a miss.
     return { found: false, suggestions: [] };
@@ -145,5 +146,8 @@ export async function getReference(
     const record = parsePayload(cached.payload);
     if (record) return record;
   }
-  return { found: false, suggestions: suggestSlugs(db, kind, slug, format) };
+  return {
+    found: false,
+    suggestions: await suggestSlugs(db, kind, slug, format),
+  };
 }

@@ -1,20 +1,44 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=pokebot
+      - POSTGRES_PASSWORD=pokebot
+      - POSTGRES_DB=pokebot
+    ports:
+      - "5432:5432"        # exposed to the host for psql / drizzle-kit / local dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # named volume → data survives `down`
+    healthcheck:
+      # web waits for this so the first ingest/migrate doesn't race the boot
+      test: ["CMD-SHELL", "pg_isready -U pokebot -d pokebot"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   web:
     build:
       context: .
       dockerfile: Dockerfile.dev
     image: pokebot-dev
     init: true                 # clean SIGINT/SIGTERM shutdown of next dev
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       - WATCHPACK_POLLING=true   # mandatory for HMR through macOS bind mount (webpack)
       - CHOKIDAR_USEPOLLING=true # belt-and-suspenders for any chokidar watcher
       - NODE_ENV=development
-      - ANTHROPIC_API_KEY        # bare = pass through from host shell if exported (wins over env_file)
+      # The app + ingest connect here; `db` is the compose service hostname.
+      # (Set in `environment` so it always wins over any stale value in .env.local.)
+      - DATABASE_URL=postgres://pokebot:pokebot@db:5432/pokebot
     env_file:
-      # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does
-      # not auto-load .env). required:false keeps `up` working if the file is absent.
+      # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does not
+      # auto-load .env). ANTHROPIC_API_KEY comes from here — NOT a bare passthrough
+      # in `environment`, which would clobber it with an empty value whenever the
+      # host shell hasn't exported it. required:false keeps `up` working if absent.
       - path: .env.local
         required: false
     volumes:
@@ -22,3 +46,6 @@ services:
       - /app/node_modules      # MASK host macOS node_modules; use container's Linux build (mandatory)
       - /app/.next             # keep build cache off the bind mount
     command: ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]
+
+volumes:
+  pgdata:

@@ -134,23 +134,22 @@ export function createResolveIndex(rows: SearchableName[]): ResolveIndex {
 const byFormat = new Map<Format, ResolveIndex>();
 
 /** Read the `searchable_names` rows for one format. */
-function loadRows(format: Format): SearchableName[] {
-  return db
+async function loadRows(format: Format): Promise<SearchableName[]> {
+  return (await db
     .select({
       kind: searchable_names.kind,
       slug: searchable_names.slug,
       display_name: searchable_names.display_name,
     })
     .from(searchable_names)
-    .where(eq(searchable_names.format, format))
-    .all() as SearchableName[];
+    .where(eq(searchable_names.format, format))) as SearchableName[];
 }
 
 /** Get (building lazily on first use) the resolve index for `format`. */
-function getIndex(format: Format): ResolveIndex {
+async function getIndex(format: Format): Promise<ResolveIndex> {
   let index = byFormat.get(format);
   if (!index) {
-    index = createResolveIndex(loadRows(format));
+    index = createResolveIndex(await loadRows(format));
     byFormat.set(format, index);
   }
   return index;
@@ -164,13 +163,13 @@ function getIndex(format: Format): ResolveIndex {
  * for the process lifetime. Returns ranked matches (best-first) or
  * `{ matches: [] }` when nothing is close — never throws.
  */
-export function resolveEntity(
+export async function resolveEntity(
   query: string,
   kind: ResolveKind = "any",
   limit = 5,
   format: Format = "scarlet-violet",
-): ResolveEntityOutput {
-  return getIndex(format).resolve(query, kind, limit);
+): Promise<ResolveEntityOutput> {
+  return (await getIndex(format)).resolve(query, kind, limit);
 }
 
 /**

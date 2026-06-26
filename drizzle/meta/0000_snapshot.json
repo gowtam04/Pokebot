@@ -1,427 +1,558 @@
 {
-  "version": "6",
-  "dialect": "sqlite",
-  "id": "643a6277-3ce4-4579-8743-0545bf317aa9",
+  "id": "c91193f1-4ed6-4607-923a-c33a90742d3e",
   "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "ingest_meta": {
+    "public.ingest_meta": {
       "name": "ingest_meta",
+      "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
+        "format": {
+          "name": "format",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "last_success_at": {
           "name": "last_success_at",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version_groups": {
-          "name": "version_groups",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "pokemon_count": {
           "name": "pokemon_count",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "learnset_count": {
           "name": "learnset_count",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "names_count": {
           "name": "names_count",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "schema_version": {
           "name": "schema_version",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "learnset": {
+    "public.learnset": {
       "name": "learnset",
+      "schema": "",
       "columns": {
         "pokemon_id": {
           "name": "pokemon_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "move_slug": {
           "name": "move_slug",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
-        "version_group": {
-          "name": "version_group",
+        "format": {
+          "name": "format",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "method": {
           "name": "method",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {
         "learnset_move_slug_idx": {
           "name": "learnset_move_slug_idx",
-          "columns": ["move_slug"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "move_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "learnset_pokemon_id_idx": {
           "name": "learnset_pokemon_id_idx",
-          "columns": ["pokemon_id"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "pokemon_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "learnset_pokemon_id_move_slug_version_group_pk": {
-          "columns": ["pokemon_id", "move_slug", "version_group"],
-          "name": "learnset_pokemon_id_move_slug_version_group_pk"
+        "learnset_pokemon_id_move_slug_format_pk": {
+          "name": "learnset_pokemon_id_move_slug_format_pk",
+          "columns": [
+            "pokemon_id",
+            "move_slug",
+            "format"
+          ]
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "pokemon": {
+    "public.pokemon": {
       "name": "pokemon",
+      "schema": "",
       "columns": {
+        "format": {
+          "name": "format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "id": {
           "name": "id",
           "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
+          "primaryKey": false,
+          "notNull": true
         },
         "species_name": {
           "name": "species_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "form_name": {
           "name": "form_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "display_name": {
           "name": "display_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "national_dex_number": {
           "name": "national_dex_number",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "type1": {
           "name": "type1",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "type2": {
           "name": "type2",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "ability_slot1": {
           "name": "ability_slot1",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "ability_slot2": {
           "name": "ability_slot2",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "ability_hidden": {
           "name": "ability_hidden",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "stat_hp": {
           "name": "stat_hp",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "stat_attack": {
           "name": "stat_attack",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "stat_defense": {
           "name": "stat_defense",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "stat_special_attack": {
           "name": "stat_special_attack",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "stat_special_defense": {
           "name": "stat_special_defense",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "stat_speed": {
           "name": "stat_speed",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "base_stat_total": {
           "name": "base_stat_total",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "sprite_url": {
           "name": "sprite_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "artwork_url": {
           "name": "artwork_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "generation": {
           "name": "generation",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "is_gen9_native": {
           "name": "is_gen9_native",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "source_generation": {
           "name": "source_generation",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {
         "pokemon_national_dex_number_idx": {
           "name": "pokemon_national_dex_number_idx",
-          "columns": ["national_dex_number"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "national_dex_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_type1_idx": {
           "name": "pokemon_type1_idx",
-          "columns": ["type1"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "type1",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_type2_idx": {
           "name": "pokemon_type2_idx",
-          "columns": ["type2"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "type2",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_hp_idx": {
           "name": "pokemon_stat_hp_idx",
-          "columns": ["stat_hp"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_hp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_attack_idx": {
           "name": "pokemon_stat_attack_idx",
-          "columns": ["stat_attack"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_attack",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_defense_idx": {
           "name": "pokemon_stat_defense_idx",
-          "columns": ["stat_defense"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_defense",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_special_attack_idx": {
           "name": "pokemon_stat_special_attack_idx",
-          "columns": ["stat_special_attack"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_special_attack",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_special_defense_idx": {
           "name": "pokemon_stat_special_defense_idx",
-          "columns": ["stat_special_defense"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_special_defense",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_stat_speed_idx": {
           "name": "pokemon_stat_speed_idx",
-          "columns": ["stat_speed"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "stat_speed",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "pokemon_base_stat_total_idx": {
           "name": "pokemon_base_stat_total_idx",
-          "columns": ["base_stat_total"],
-          "isUnique": false
+          "columns": [
+            {
+              "expression": "base_stat_total",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "pokemon_format_id_pk": {
+          "name": "pokemon_format_id_pk",
+          "columns": [
+            "format",
+            "id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "reference_cache": {
+    "public.reference_cache": {
       "name": "reference_cache",
+      "schema": "",
       "columns": {
+        "format": {
+          "name": "format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "resource_key": {
           "name": "resource_key",
           "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
+          "primaryKey": false,
+          "notNull": true
         },
         "resource_kind": {
           "name": "resource_kind",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "payload": {
           "name": "payload",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "endpoint_url": {
           "name": "endpoint_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "fetched_at": {
           "name": "fetched_at",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "searchable_names": {
-      "name": "searchable_names",
-      "columns": {
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "searchable_names_kind_slug_pk": {
-          "columns": ["kind", "slug"],
-          "name": "searchable_names_kind_slug_pk"
+        "reference_cache_format_resource_key_pk": {
+          "name": "reference_cache_format_resource_key_pk",
+          "columns": [
+            "format",
+            "resource_key"
+          ]
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.searchable_names": {
+      "name": "searchable_names",
+      "schema": "",
+      "columns": {
+        "format": {
+          "name": "format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "searchable_names_format_kind_slug_pk": {
+          "name": "searchable_names_format_kind_slug_pk",
+          "columns": [
+            "format",
+            "kind",
+            "slug"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
-  "views": {},
   "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "internal": {
-    "indexes": {}
+    "tables": {}
   }
 }

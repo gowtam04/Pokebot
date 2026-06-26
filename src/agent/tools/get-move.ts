@@ -56,7 +56,7 @@ export const getMoveTool: ToolDef = {
     if (include_gen9_learner_count) {
       return {
         ...(ref as MoveDetail),
-        gen9_learner_count: gen9LearnerCount(
+        gen9_learner_count: await gen9LearnerCount(
           name,
           format,
           ctx.db as unknown as PokebotDb,

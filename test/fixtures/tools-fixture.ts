@@ -22,14 +22,25 @@
  *   - ingest_meta is populated so the index reads as "available" (NOT
  *     index_unavailable) for the seeded-DB oracle.
  *
- * The seeder writes via the RAW better-sqlite3 connection (prepared statements)
- * so it depends only on the committed physical schema (drizzle/0000_*.sql) and
- * not on any Phase-4 code.
+ * The seeder writes via Drizzle inserts over the node-postgres handle, so it
+ * depends only on the committed schema (src/data/schema.ts) and not on any
+ * Phase-4 code.
  */
 
-import type Database from "better-sqlite3";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
+import * as schema from "@/data/schema";
+import {
+  ingest_meta,
+  learnset,
+  pokemon,
+  reference_cache,
+  searchable_names,
+} from "@/data/schema";
 import type { AgentContext } from "@/agent/types";
+
+/** A Drizzle handle typed over the full Pokebot schema (node-postgres). */
+export type ToolsFixtureDb = NodePgDatabase<typeof schema>;
 
 // ---------------------------------------------------------------------------
 // Seed data
@@ -540,65 +551,31 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * Insert the full fixture into a freshly-migrated SQLite connection (the RAW
- * better-sqlite3 handle exported as `sqlite` from src/data/db.ts). Idempotent on
- * a fresh DB; the caller must point the connection at an empty file.
+ * Insert the full fixture into a freshly-migrated Postgres schema via Drizzle.
+ * Idempotent on a fresh schema; the caller must supply an empty, migrated handle
+ * (typically `createPgSchema({ seed: "tools" })` does this).
  */
-export function seedToolsFixture(sqlite: Database.Database): void {
+export async function seedToolsFixture(db: ToolsFixtureDb): Promise<void> {
   const now = Date.now();
-
-  const insertPokemon = sqlite.prepare(
-    `INSERT INTO pokemon (
-       format, id, species_name, form_name, display_name, national_dex_number,
-       type1, type2, ability_slot1, ability_slot2, ability_hidden,
-       stat_hp, stat_attack, stat_defense, stat_special_attack,
-       stat_special_defense, stat_speed, base_stat_total,
-       sprite_url, artwork_url, generation, is_gen9_native, source_generation
-     ) VALUES (
-       @format, @id, @species_name, @form_name, @display_name, @national_dex_number,
-       @type1, @type2, @ability_slot1, @ability_slot2, @ability_hidden,
-       @stat_hp, @stat_attack, @stat_defense, @stat_special_attack,
-       @stat_special_defense, @stat_speed, @base_stat_total,
-       @sprite_url, @artwork_url, @generation, @is_gen9_native, @source_generation
-     )`,
-  );
-  const insertLearnset = sqlite.prepare(
-    `INSERT INTO learnset (pokemon_id, move_slug, format, method)
-     VALUES (@pokemon_id, @move_slug, @format, @method)`,
-  );
-  const insertName = sqlite.prepare(
-    `INSERT INTO searchable_names (format, kind, slug, display_name)
-     VALUES (@format, @kind, @slug, @display_name)`,
-  );
-  const insertRef = sqlite.prepare(
-    `INSERT INTO reference_cache (format, resource_key, resource_kind, payload, endpoint_url, fetched_at)
-     VALUES (@format, @resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
-  );
-  const insertMeta = sqlite.prepare(
-    `INSERT INTO ingest_meta (
-       format, last_success_at, pokemon_count, learnset_count,
-       names_count, schema_version
-     ) VALUES (
-       @format, @last_success_at, @pokemon_count, @learnset_count,
-       @names_count, @schema_version
-     )`,
-  );
-
-  const tx = sqlite.transaction(() => {
-    for (const p of POKEMON_SEED) insertPokemon.run({ ...p, format: SV });
-    for (const l of LEARNSET_SEED) insertLearnset.run(l);
-    for (const n of SEARCHABLE_NAMES_SEED) insertName.run({ ...n, format: SV });
-    for (const r of REFERENCE_CACHE_SEED) {
-      insertRef.run({
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(pokemon)
+      .values(POKEMON_SEED.map((p) => ({ ...p, format: SV })));
+    await tx.insert(learnset).values(LEARNSET_SEED);
+    await tx
+      .insert(searchable_names)
+      .values(SEARCHABLE_NAMES_SEED.map((n) => ({ ...n, format: SV })));
+    await tx.insert(reference_cache).values(
+      REFERENCE_CACHE_SEED.map((r) => ({
         format: SV,
         resource_key: r.resource_key,
         resource_kind: r.resource_kind,
         payload: JSON.stringify(r.payload),
         endpoint_url: r.endpoint_url,
         fetched_at: now,
-      });
-    }
-    insertMeta.run({
+      })),
+    );
+    await tx.insert(ingest_meta).values({
       format: SV,
       last_success_at: now,
       pokemon_count: POKEMON_SEED.length,
@@ -607,8 +584,6 @@ export function seedToolsFixture(sqlite: Database.Database): void {
       schema_version: "2",
     });
   });
-
-  tx();
 }
 
 // ---------------------------------------------------------------------------

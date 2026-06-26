@@ -32,30 +32,19 @@
  *   - All 18 type slugs
  *
  * Exports:
- *   - seedFixtureDb(db)   — seed an already-migrated Drizzle handle
- *   - createFixtureDb()   — fresh in-memory SQLite + migrate + seed (for tests)
- *   - FIXTURE_DB_PATH     — default on-disk path when run as a CLI script
+ *   - seedFixtureDb(db)   — seed an already-migrated Drizzle handle (async)
  *
- * When run directly (`tsx eval/fixtures/seed-fixture-db.ts [path]`):
- *   writes the fixture to the supplied path or FIXTURE_DB_PATH.
+ * To get a ready-to-use seeded database, call
+ * `createPgSchema({ seed: "eval" })` from test/support/pg.ts (it migrates an
+ * isolated Postgres schema and calls `seedFixtureDb` for you).
  *
  * Module-boundary rules:
  *   - Does NOT import "server-only" (not a Next.js module).
  *   - Does NOT import @/data/db (which has server-only + Next.js wiring).
- *   - Creates its own Database + Drizzle handle.
- *   - better-sqlite3 is synchronous — nothing is awaited.
+ *   - node-postgres is asynchronous — seeding is awaited.
  */
 
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import Database from "better-sqlite3";
-import {
-  drizzle,
-  type BetterSQLite3Database,
-} from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/data/schema";
 import {
@@ -71,24 +60,8 @@ import { TYPE_NAMES } from "@/agent/schemas";
 // Types
 // ---------------------------------------------------------------------------
 
-/** A Drizzle handle typed over the full Pokebot schema. */
-export type FixtureDb = BetterSQLite3Database<typeof schema>;
-
-// ---------------------------------------------------------------------------
-// Path resolution (stable across cwd changes)
-// ---------------------------------------------------------------------------
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-/** Project root — two dirs up from eval/fixtures/. */
-const PROJECT_ROOT = resolve(__dirname, "..", "..");
-
-/** Committed Drizzle migrations folder. */
-const MIGRATIONS_DIR = resolve(PROJECT_ROOT, "drizzle");
-
-/** Default on-disk path for the fixture SQLite file. */
-export const FIXTURE_DB_PATH = resolve(__dirname, "fixture.sqlite");
+/** A Drizzle handle typed over the full Pokebot schema (node-postgres). */
+export type FixtureDb = NodePgDatabase<typeof schema>;
 
 // ===========================================================================
 // Fixture data
@@ -815,103 +788,23 @@ const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
 /**
  * Seed an already-migrated Drizzle handle with all fixture rows.
  *
- * Idempotent: existing rows are replaced (ON CONFLICT DO NOTHING isn't used;
- * callers are expected to supply a fresh / empty DB from createFixtureDb() or
- * an in-memory DB created via `new Database(':memory:')` + migrate()).
- *
- * better-sqlite3 is synchronous — this function is NOT async.
+ * Expects a fresh / empty schema (callers use `createPgSchema({ seed: "eval" })`
+ * which migrates an isolated schema first). node-postgres is asynchronous, so
+ * this is async and wraps the inserts in one transaction.
  */
-export function seedFixtureDb(db: FixtureDb): void {
+export async function seedFixtureDb(db: FixtureDb): Promise<void> {
   // Every fixture row is the standard scope; stamp `format` on insert.
-  db.insert(pokemon)
-    .values(POKEMON_ROWS.map((r) => ({ ...r, format: SV })))
-    .run();
-  db.insert(learnset).values(LEARNSET_ROWS).run();
-  db.insert(reference_cache)
-    .values(REFERENCE_CACHE_ROWS.map((r) => ({ ...r, format: SV })))
-    .run();
-  db.insert(searchable_names)
-    .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: SV })))
-    .run();
-  db.insert(ingest_meta).values(INGEST_META_ROW).run();
-}
-
-// ===========================================================================
-// DB factory
-// ===========================================================================
-
-/**
- * Create a fresh in-memory SQLite database, run migrations, and seed it with
- * the curated fixture data. Returns the ready Drizzle handle.
- *
- * Suitable for use in Vitest node tests (no file I/O, fully isolated).
- *
- * @example
- * ```ts
- * const db = createFixtureDb();
- * const result = queryPokedex({ types: ["fire"] }, db);
- * ```
- */
-export function createFixtureDb(): FixtureDb {
-  const sqlite = new Database(":memory:");
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  seedFixtureDb(db);
-  return db;
-}
-
-/**
- * Create an on-disk SQLite fixture file at `filePath`, overwriting any
- * existing file at that path.
- *
- * Use this for integration tests that need a persistent file (e.g. tests that
- * exercise the full DB path resolution in src/data/db.ts), or for running the
- * eval harness against a fixture index.
- */
-export function createFixtureFile(filePath: string): FixtureDb {
-  // Remove any stale file first so migrate() starts with a clean slate.
-  if (existsSync(filePath)) {
-    rmSync(filePath);
-  }
-  // Also remove WAL/SHM sidecar files if they exist.
-  for (const ext of ["-wal", "-shm"]) {
-    const sidecar = filePath + ext;
-    if (existsSync(sidecar)) rmSync(sidecar);
-  }
-
-  mkdirSync(dirname(filePath), { recursive: true });
-
-  const sqlite = new Database(filePath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  seedFixtureDb(db);
-  return db;
-}
-
-// ===========================================================================
-// CLI entry point
-// ===========================================================================
-//
-// `tsx eval/fixtures/seed-fixture-db.ts [output-path]`
-// Creates the on-disk fixture at the given path (or FIXTURE_DB_PATH).
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const targetPath = process.argv[2] ?? FIXTURE_DB_PATH;
-  console.log(`Building fixture DB → ${targetPath}`);
-  const db = createFixtureFile(targetPath);
-  // Verify the seed completed successfully by reading back the meta row.
-  const meta = db.select().from(ingest_meta).limit(1).all()[0];
-  if (!meta) {
-    console.error("ERROR: ingest_meta row missing after seed");
-    process.exit(1);
-  }
-  console.log(
-    `Done. pokemon=${meta.pokemon_count} learnset=${meta.learnset_count} names=${meta.names_count}`,
-  );
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(pokemon)
+      .values(POKEMON_ROWS.map((r) => ({ ...r, format: SV })));
+    await tx.insert(learnset).values(LEARNSET_ROWS);
+    await tx
+      .insert(reference_cache)
+      .values(REFERENCE_CACHE_ROWS.map((r) => ({ ...r, format: SV })));
+    await tx
+      .insert(searchable_names)
+      .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: SV })));
+    await tx.insert(ingest_meta).values(INGEST_META_ROW);
+  });
 }

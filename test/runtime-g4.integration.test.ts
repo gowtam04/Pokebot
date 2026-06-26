@@ -18,22 +18,20 @@
  *   (2) the produced PokebotAnswer is schema-valid, status "answered", and
  *       carries an inferences[] entry about Armor Tail blocking priority (BR-3).
  *
- * Wiring mirrors the *.oracle.test.ts harness: neutralize `server-only`, point
- * POKEBOT_DB_PATH at a fresh temp file, and seed BEFORE the first dynamic import
- * of @/data/db so the memoized singleton binds to the fixture.
+ * Wiring mirrors the *.oracle.test.ts harness: neutralize `server-only`, migrate
+ * + seed an isolated Postgres schema (createPgSchema), and install it as the
+ * @/data/db singleton BEFORE the first dynamic import of the tool layer.
  */
-
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { pokebotAnswerSchema } from "@/agent/schemas";
+import { reference_cache } from "@/data/schema";
 import type { AgentContext, ChatMessage } from "@/agent/types";
 import type { PokebotAnswer } from "@/agent/schemas";
 
-import { loadToolSurface, seedToolsFixture } from "./fixtures/tools-fixture";
+import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
+import { loadToolSurface } from "./fixtures/tools-fixture";
 
 // src/data/db.ts does `import "server-only"`; its Node (non-RSC) variant throws.
 // Neutralize it so the real repos/tools load under the vitest node environment.
@@ -76,7 +74,7 @@ let runPokebotWith: (
 ) => Promise<PokebotAnswer>;
 let ctx: AgentContext;
 let loadError: unknown = null;
-let fixtureDir: string;
+let fix: PgFixture;
 
 beforeAll(async () => {
   try {
@@ -84,39 +82,34 @@ beforeAll(async () => {
     // built — but importing the env-validated modules wants a key present.
     process.env.ANTHROPIC_API_KEY ??= "test-dummy-key";
 
-    fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-g4-"));
-    process.env.POKEBOT_DB_PATH = path.join(fixtureDir, "fixture.sqlite");
-    delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
-
-    const dbMod = (await import("@/data/db")) as {
-      sqlite: import("better-sqlite3").Database;
-    };
-    seedToolsFixture(dbMod.sqlite);
-
-    // Warm the two reference rows G4 reasons over so get_move / get_ability are
-    // cache HITS (no network), exactly like the type-chart rows in the fixture.
-    const insertRef = dbMod.sqlite.prepare(
-      `INSERT INTO reference_cache (format, resource_key, resource_kind, payload, endpoint_url, fetched_at)
-       VALUES (@format, @resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
-    );
-    const now = Date.now();
-    // Standard mode → the scarlet-violet data scope (formatForMode).
-    insertRef.run({
-      format: "scarlet-violet",
-      resource_key: "move/fake-out",
-      resource_kind: "move",
-      payload: JSON.stringify(FAKE_OUT_MOVE),
-      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
-      fetched_at: now,
+    // Seed dataset B, then warm the two reference rows G4 reasons over so
+    // get_move / get_ability are cache HITS — exactly like the type-chart rows.
+    fix = await createPgSchema({
+      seed: "tools",
+      after: async (db) => {
+        const now = Date.now();
+        // Standard mode → the scarlet-violet data scope (formatForMode).
+        await db.insert(reference_cache).values([
+          {
+            format: "scarlet-violet",
+            resource_key: "move/fake-out",
+            resource_kind: "move",
+            payload: JSON.stringify(FAKE_OUT_MOVE),
+            endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+            fetched_at: now,
+          },
+          {
+            format: "scarlet-violet",
+            resource_key: "ability/armor-tail",
+            resource_kind: "ability",
+            payload: JSON.stringify(ARMOR_TAIL_ABILITY),
+            endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+            fetched_at: now,
+          },
+        ]);
+      },
     });
-    insertRef.run({
-      format: "scarlet-violet",
-      resource_key: "ability/armor-tail",
-      resource_kind: "ability",
-      payload: JSON.stringify(ARMOR_TAIL_ABILITY),
-      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
-      fetched_at: now,
-    });
+    await installAsSingleton(fix);
 
     // Real tool surface (dispatch + ctx) bound to the seeded singleton DB...
     const surface = await loadToolSurface();
@@ -129,10 +122,10 @@ beforeAll(async () => {
   } catch (e) {
     loadError = e;
   }
-}, 30_000);
+}, 60_000);
 
-afterAll(() => {
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
+afterAll(async () => {
+  await fix?.cleanup();
 });
 
 function ensureLoaded(): void {

@@ -8,15 +8,11 @@
  * index_unavailable gracefully"). evaluation.md G22 / integration.md map this to
  * an insufficient_data answer downstream.
  *
- * This file deliberately points POKEBOT_DB_PATH at its OWN fresh, MIGRATED but
- * EMPTY database (no rows, no ingest_meta) so the seeded-DB oracle and this one
- * never share a connection. Kept in a separate file so the @/data/db globalThis
- * singleton is bound to the empty fixture for the whole file.
+ * This file deliberately migrates its OWN fresh but EMPTY Postgres schema
+ * (no rows, no ingest_meta) so the seeded-DB oracle and this one never share
+ * data. The empty schema is installed as the @/data/db singleton for the whole
+ * file.
  */
-
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -26,6 +22,7 @@ vi.mock("server-only", () => ({}));
 import { queryPokedexOutputSchema } from "@/agent/schemas";
 import type { AgentContext } from "@/agent/types";
 
+import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 import { loadToolSurface } from "./fixtures/tools-fixture";
 
 let dispatch: (
@@ -35,17 +32,13 @@ let dispatch: (
 ) => Promise<unknown>;
 let ctx: AgentContext;
 let loadError: unknown = null;
-let fixtureDir: string;
+let fix: PgFixture;
 
 beforeAll(async () => {
   try {
-    fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-oracle-empty-"));
-    process.env.POKEBOT_DB_PATH = path.join(fixtureDir, "empty.sqlite");
-
-    // Fresh connection bound to the empty fixture; migrations create the tables
-    // (so the schema exists) but we insert NO rows and NO ingest_meta.
-    delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
-    await import("@/data/db");
+    // Migrated but empty: tables exist, but NO rows and NO ingest_meta.
+    fix = await createPgSchema({ seed: "none" });
+    await installAsSingleton(fix);
 
     const surface = await loadToolSurface();
     dispatch = surface.dispatch;
@@ -53,12 +46,10 @@ beforeAll(async () => {
   } catch (e) {
     loadError = e;
   }
-}, 30_000);
+}, 60_000);
 
-afterAll(() => {
-  if (fixtureDir) {
-    rmSync(fixtureDir, { recursive: true, force: true });
-  }
+afterAll(async () => {
+  await fix?.cleanup();
 });
 
 function ensureLoaded(): void {

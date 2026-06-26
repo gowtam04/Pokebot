@@ -1,5 +1,5 @@
 /**
- * PokedexRepo — typed, read-only SQLite access backing the two index tools
+ * PokedexRepo — typed, read-only Postgres access backing the two index tools
  * (design.md § Data-access repositories):
  *
  *   queryPokedex  → T2 `query_pokedex` (the workhorse): dynamic filter / sort /
@@ -27,11 +27,11 @@
  *     learnset-repo.pokemonLearningAll; it is inlined here so query_pokedex owns
  *     a single dynamic statement and so this repo + its tests stay self-contained.
  *
- * better-sqlite3 is SYNCHRONOUS — every Drizzle call here ends in `.all()` and
- * nothing is awaited. The Drizzle handle is supplied by the caller (the bound
+ * node-postgres is ASYNCHRONOUS — every read path here is `async` and awaits its
+ * Drizzle query. The Drizzle handle is supplied by the caller (the bound
  * per-request DbCtx); this module imports only the TYPE of the handle from
  * db.ts, never the runtime connection, so it can be exercised against a fixture
- * DB without opening the on-disk index.
+ * DB without opening a connection of its own.
  */
 
 import {
@@ -42,8 +42,8 @@ import {
   eq,
   gt,
   gte,
+  ilike,
   inArray,
-  like,
   lt,
   lte,
   or,
@@ -182,14 +182,16 @@ type IndexMeta = { available: true } | { available: false };
  * `ingest_meta` row is the canonical signal (data-sources.md failure behavior);
  * a missing row or an unreadable table → `index_unavailable`.
  */
-function readIndexMeta(db: PokebotDb, format: Format): IndexMeta {
+async function readIndexMeta(
+  db: PokebotDb,
+  format: Format,
+): Promise<IndexMeta> {
   try {
-    const rows = db
+    const rows = await db
       .select()
       .from(ingest_meta)
       .where(eq(ingest_meta.format, format))
-      .limit(1)
-      .all();
+      .limit(1);
     return rows.length === 0 ? { available: false } : { available: true };
   } catch {
     // Table doesn't exist yet (migrations not applied) — treat as unavailable.
@@ -203,8 +205,12 @@ function readIndexMeta(db: PokebotDb, format: Format): IndexMeta {
 
 const CANONICAL_TYPES = new Set<string>(TYPE_NAMES);
 
-function abilityInIndex(db: PokebotDb, abilitySlug: string, format: Format): boolean {
-  const rows = db
+async function abilityInIndex(
+  db: PokebotDb,
+  abilitySlug: string,
+  format: Format,
+): Promise<boolean> {
+  const rows = await db
     .select({ id: pokemon.id })
     .from(pokemon)
     .where(
@@ -217,18 +223,20 @@ function abilityInIndex(db: PokebotDb, abilitySlug: string, format: Format): boo
         ),
       ),
     )
-    .limit(1)
-    .all();
+    .limit(1);
   return rows.length > 0;
 }
 
-function moveInIndex(db: PokebotDb, moveSlug: string, format: Format): boolean {
-  const rows = db
+async function moveInIndex(
+  db: PokebotDb,
+  moveSlug: string,
+  format: Format,
+): Promise<boolean> {
+  const rows = await db
     .select({ id: learnset.pokemon_id })
     .from(learnset)
     .where(and(eq(learnset.move_slug, moveSlug), eq(learnset.format, format)))
-    .limit(1)
-    .all();
+    .limit(1);
   return rows.length > 0;
 }
 
@@ -238,20 +246,20 @@ function moveInIndex(db: PokebotDb, moveSlug: string, format: Format): boolean {
  * validated against the 18 canonical type slugs; abilities/moves against the
  * actual format-scoped index rows.
  */
-function collectUnresolved(
+async function collectUnresolved(
   db: PokebotDb,
   f: PokedexFilters,
   format: Format,
-): string[] {
+): Promise<string[]> {
   const unresolved: string[] = [];
   for (const t of f.types ?? []) {
     if (!CANONICAL_TYPES.has(t)) unresolved.push(t);
   }
   for (const a of f.abilities ?? []) {
-    if (!abilityInIndex(db, a, format)) unresolved.push(a);
+    if (!(await abilityInIndex(db, a, format))) unresolved.push(a);
   }
   for (const m of f.moveIds ?? []) {
-    if (!moveInIndex(db, m, format)) unresolved.push(m);
+    if (!(await moveInIndex(db, m, format))) unresolved.push(m);
   }
   return unresolved;
 }
@@ -266,21 +274,20 @@ function collectUnresolved(
  * Pokémon, and keep only those covering every distinct move (BR-7).
  * (Equivalent to learnset-repo.pokemonLearningAll.)
  */
-function pokemonLearningAll(
+async function pokemonLearningAll(
   db: PokebotDb,
   moveIds: string[],
   format: Format,
-): string[] {
+): Promise<string[]> {
   if (moveIds.length === 0) return [];
-  const rows = db
+  const rows = await db
     .select({ pokemonId: learnset.pokemon_id })
     .from(learnset)
     .where(
       and(inArray(learnset.move_slug, moveIds), eq(learnset.format, format)),
     )
     .groupBy(learnset.pokemon_id)
-    .having(eq(countDistinct(learnset.move_slug), moveIds.length))
-    .all();
+    .having(eq(countDistinct(learnset.move_slug), moveIds.length));
   return rows.map((r) => r.pokemonId);
 }
 
@@ -288,19 +295,19 @@ function pokemonLearningAll(
 // queryPokedex — T2
 // ===========================================================================
 
-export function queryPokedex(
+export async function queryPokedex(
   f: PokedexFilters,
   format: Format,
   db: PokebotDb,
-): QueryPokedexOutput {
-  const meta = readIndexMeta(db, format);
+): Promise<QueryPokedexOutput> {
+  const meta = await readIndexMeta(db, format);
   if (!meta.available) {
     return { error: "index_unavailable" };
   }
 
   // Reject any filter slug the index doesn't know — the agent should
   // resolve_entity and retry (tools.md T2).
-  const unresolved = collectUnresolved(db, f, format);
+  const unresolved = await collectUnresolved(db, f, format);
   if (unresolved.length > 0) {
     return { unresolved };
   }
@@ -338,7 +345,7 @@ export function queryPokedex(
   // moves — Gen-9 learnset intersection; an empty intersection short-circuits
   // to an honest empty result (NOT an error).
   if (f.moveIds && f.moveIds.length > 0) {
-    const ids = pokemonLearningAll(db, f.moveIds, format);
+    const ids = await pokemonLearningAll(db, f.moveIds, format);
     if (ids.length === 0) {
       return { total_count: 0, truncated: false, sort, results: [] };
     }
@@ -348,11 +355,15 @@ export function queryPokedex(
   const whereExpr = and(...conditions);
 
   // --- total_count (full match set, pre-limit) -----------------------------
+  // count(*) is a Postgres bigint (node-postgres returns it as a string);
+  // `.mapWith(Number)` coerces it back to a JS number.
   const countBase = db
-    .select({ value: sql<number>`count(*)` })
+    .select({ value: sql<number>`count(*)`.mapWith(Number) })
     .from(pokemon)
     .$dynamic();
-  const countRows = (whereExpr ? countBase.where(whereExpr) : countBase).all();
+  const countRows = await (whereExpr
+    ? countBase.where(whereExpr)
+    : countBase);
   const total_count = countRows[0]?.value ?? 0;
 
   // --- page of rows --------------------------------------------------------
@@ -363,11 +374,10 @@ export function queryPokedex(
     : asc(pokemon.national_dex_number);
 
   const selectBase = db.select().from(pokemon).$dynamic();
-  const rows = (whereExpr ? selectBase.where(whereExpr) : selectBase)
+  const rows = await (whereExpr ? selectBase.where(whereExpr) : selectBase)
     // stable, deterministic tiebreaker on the slug PK
     .orderBy(primaryOrder, asc(pokemon.id))
-    .limit(limit)
-    .all();
+    .limit(limit);
 
   return {
     total_count,
@@ -390,40 +400,44 @@ function normalizeName(name: string): string {
  * Up to five close ids for a miss, by substring match on the slug or species
  * name — a lightweight nudge; resolve_entity (T1) is the real fuzzy matcher.
  */
-function suggestionsFor(db: PokebotDb, query: string, format: Format): string[] {
+async function suggestionsFor(
+  db: PokebotDb,
+  query: string,
+  format: Format,
+): Promise<string[]> {
   const q = normalizeName(query);
   if (q.length === 0) return [];
   const pattern = `%${q}%`;
-  const rows = db
+  // ilike: SQLite LIKE was case-insensitive by default; Postgres LIKE is not.
+  const rows = await db
     .select({ id: pokemon.id })
     .from(pokemon)
     .where(
       and(
         eq(pokemon.format, format),
-        or(like(pokemon.id, pattern), like(pokemon.species_name, pattern)),
+        or(ilike(pokemon.id, pattern), ilike(pokemon.species_name, pattern)),
       ),
     )
     .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id))
-    .limit(5)
-    .all();
+    .limit(5);
   return rows.map((r) => r.id);
 }
 
-export function getPokemon(
+export async function getPokemon(
   slug: string,
   format: Format,
   db: PokebotDb,
-): GetPokemonOutput {
+): Promise<GetPokemonOutput> {
   const id = normalizeName(slug);
 
   let row: PokemonRecord | undefined;
   try {
-    row = db
+    const rows = await db
       .select()
       .from(pokemon)
       .where(and(eq(pokemon.id, id), eq(pokemon.format, format)))
-      .limit(1)
-      .all()[0];
+      .limit(1);
+    row = rows[0];
   } catch {
     // Index unreadable (e.g. table missing) — surface as a miss with no
     // suggestions; get_pokemon has no index_unavailable branch (schemas.ts).
@@ -431,19 +445,25 @@ export function getPokemon(
   }
 
   if (!row) {
-    return { found: false, suggestions: suggestionsFor(db, slug, format) };
+    return {
+      found: false,
+      suggestions: await suggestionsFor(db, slug, format),
+    };
   }
 
   // All forms of this species (e.g. Tauros' Paldean breeds), dex-then-slug order.
-  const forms = db
-    .select({ id: pokemon.id })
-    .from(pokemon)
-    .where(
-      and(eq(pokemon.species_name, row.species_name), eq(pokemon.format, format)),
-    )
-    .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id))
-    .all()
-    .map((r) => r.id);
+  const forms = (
+    await db
+      .select({ id: pokemon.id })
+      .from(pokemon)
+      .where(
+        and(
+          eq(pokemon.species_name, row.species_name),
+          eq(pokemon.format, format),
+        ),
+      )
+      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id))
+  ).map((r) => r.id);
 
   const profile: PokemonProfile = {
     found: true,

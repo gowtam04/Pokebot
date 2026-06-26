@@ -15,8 +15,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-// Mocked db: `db.select({...}).from(table).all()` returns the current rows and
-// counts reads so the memoization test can assert loadRows ran exactly once.
+// Mocked db: node-postgres query builders are awaitable, so
+// `await db.select({...}).from(table).where(...)` resolves to the current rows;
+// we count reads so the memoization test can assert loadRows ran exactly once.
 // `vi.hoisted` lets the (hoisted) vi.mock factory close over shared state.
 const dbState = vi.hoisted(() => ({
   rows: [] as { kind: string; slug: string; display_name: string }[],
@@ -26,13 +27,11 @@ vi.mock("@/data/db", () => ({
   db: {
     select: () => ({
       from: () => ({
-        // loadRows now filters by format: .from(searchable_names).where(...).all()
-        where: () => ({
-          all: () => {
-            dbState.allCalls += 1;
-            return dbState.rows;
-          },
-        }),
+        // loadRows: .from(searchable_names).where(...) — awaited directly.
+        where: () => {
+          dbState.allCalls += 1;
+          return Promise.resolve(dbState.rows);
+        },
       }),
     }),
   },
@@ -139,35 +138,35 @@ describe("resolveEntity (singleton, lazy-loaded from searchable_names)", () => {
     dbState.allCalls = 0;
   });
 
-  it("loads rows from the db on first call and resolves", () => {
+  it("loads rows from the db on first call and resolves", async () => {
     dbState.rows = [...NAMES];
-    const { matches } = resolveEntity("Will-o-Whisp", "any", 5);
+    const { matches } = await resolveEntity("Will-o-Whisp", "any", 5);
     expect(matches[0].slug).toBe("will-o-wisp");
     expect(dbState.allCalls).toBe(1);
   });
 
-  it("defaults kind='any' and limit=5", () => {
+  it("defaults kind='any' and limit=5", async () => {
     dbState.rows = [...NAMES];
-    const { matches } = resolveEntity("Garchomp");
+    const { matches } = await resolveEntity("Garchomp");
     expect(matches.length).toBeLessThanOrEqual(5);
     expect(matches[0].slug).toBe("garchomp");
   });
 
-  it("memoizes the index (does not re-read after the first build)", () => {
+  it("memoizes the index (does not re-read after the first build)", async () => {
     dbState.rows = [...NAMES];
-    resolveEntity("Garchomp"); // builds + caches the index
+    await resolveEntity("Garchomp"); // builds + caches the index
     dbState.rows = []; // a NEW empty source (index already cached)
-    const { matches } = resolveEntity("Garchomp"); // served from cache
+    const { matches } = await resolveEntity("Garchomp"); // served from cache
     expect(matches[0].slug).toBe("garchomp");
     expect(dbState.allCalls).toBe(1); // loadRows ran exactly once
   });
 
-  it("rebuilds from the current table after resetResolveIndex()", () => {
+  it("rebuilds from the current table after resetResolveIndex()", async () => {
     dbState.rows = [...NAMES];
-    resolveEntity("Garchomp");
+    await resolveEntity("Garchomp");
     dbState.rows = [];
     resetResolveIndex();
-    expect(resolveEntity("Garchomp").matches).toEqual([]);
+    expect((await resolveEntity("Garchomp")).matches).toEqual([]);
     expect(dbState.allCalls).toBe(2); // reloaded after reset
   });
 });

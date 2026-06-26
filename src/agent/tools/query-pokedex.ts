@@ -55,8 +55,10 @@ export const queryPokedexTool: ToolDef = {
       order: i.order,
       limit: i.limit,
     };
-    return Promise.resolve(
-      queryPokedex(filters, formatForMode(ctx.mode), ctx.db as unknown as PokebotDb),
+    return queryPokedex(
+      filters,
+      formatForMode(ctx.mode),
+      ctx.db as unknown as PokebotDb,
     );
   },
 };

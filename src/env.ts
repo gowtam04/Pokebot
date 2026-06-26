@@ -12,7 +12,10 @@ const EnvSchema = z.object({
     .string({ required_error: "ANTHROPIC_API_KEY is required" })
     .min(1, "ANTHROPIC_API_KEY must not be empty"),
   ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
-  POKEBOT_DB_PATH: z.string().min(1).default("./data/pokebot.sqlite"),
+  DATABASE_URL: z
+    .string()
+    .url()
+    .default("postgres://pokebot:pokebot@localhost:5432/pokebot"),
   POKEAPI_BASE_URL: z.string().url().default("https://pokeapi.co/api/v2"),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

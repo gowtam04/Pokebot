@@ -31,12 +31,10 @@ export const getPokemonTool: ToolDef = {
     if (!parsed.success) {
       return Promise.resolve({ found: false, suggestions: [] });
     }
-    return Promise.resolve(
-      getPokemon(
-        parsed.data.name,
-        formatForMode(ctx.mode),
-        ctx.db as unknown as PokebotDb,
-      ),
+    return getPokemon(
+      parsed.data.name,
+      formatForMode(ctx.mode),
+      ctx.db as unknown as PokebotDb,
     );
   },
 };

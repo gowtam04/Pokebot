@@ -16,22 +16,18 @@
  *
  * Connection ownership: the ingest CLI runs under tsx as its OWN process and
  * does NOT import the `@/data/db` singleton (that module is `server-only`).
- * It opens its own better-sqlite3 + Drizzle handle over the same absolute
- * POKEBOT_DB_PATH and runs the committed migrations before writing.
+ * It opens its own node-postgres pool + Drizzle handle over DATABASE_URL and
+ * runs the committed migrations before writing.
  */
 
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import Database from "better-sqlite3";
-import {
-  drizzle,
-  type BetterSQLite3Database,
-} from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { Pool } from "pg";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   ingest_meta,
@@ -60,24 +56,19 @@ import { buildReferenceRows, type ReferenceRow } from "./build-reference";
 // Connection (own handle — db.ts is server-only and unusable under tsx)
 // ---------------------------------------------------------------------------
 
-type IngestDb = BetterSQLite3Database<typeof schema>;
+type IngestDb = NodePgDatabase<typeof schema>;
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..", "..");
 const MIGRATIONS_DIR = path.resolve(PROJECT_ROOT, "drizzle");
 
-const DB_PATH: string = path.isAbsolute(env.POKEBOT_DB_PATH)
-  ? env.POKEBOT_DB_PATH
-  : path.resolve(PROJECT_ROOT, env.POKEBOT_DB_PATH);
-
-function openIngestDb(): IngestDb {
-  mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const sqlite = new Database(DB_PATH);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("synchronous = NORMAL");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  return db;
+async function openIngestDb(): Promise<{ db: IngestDb; pool: Pool }> {
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const db = drizzle(pool, { schema });
+  // Apply the committed migrations before writing so a fresh database (or a
+  // fresh docker volume) has its tables. Idempotent.
+  await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  return { db, pool };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,35 +108,39 @@ const INSERT_CHUNK = 500;
 // ---------------------------------------------------------------------------
 
 /** Replace the entire contents of `table` with `rows` in one transaction. */
-function replaceTable<TTable extends SQLiteTable>(
+async function replaceTable<TTable extends PgTable>(
   db: IngestDb,
   table: TTable,
   rows: TTable["$inferInsert"][],
-): void {
-  db.transaction((tx) => {
-    tx.delete(table).run();
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(table);
+    // Chunk inserts well under Postgres' 65535 bind-parameter limit (the widest
+    // row, pokemon, has ~22 columns ⇒ ~11k params per 500-row chunk).
     for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
       const chunk = rows.slice(i, i + INSERT_CHUNK);
-      if (chunk.length > 0) tx.insert(table).values(chunk).run();
+      if (chunk.length > 0) await tx.insert(table).values(chunk);
     }
   });
 }
 
 /** Replace all ingest_meta rows with one row per built format. */
-function writeIngestMeta(db: IngestDb, reports: FormatReport[], at: number): void {
-  db.transaction((tx) => {
-    tx.delete(ingest_meta).run();
+async function writeIngestMeta(
+  db: IngestDb,
+  reports: FormatReport[],
+  at: number,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(ingest_meta);
     for (const r of reports) {
-      tx.insert(ingest_meta)
-        .values({
-          format: r.format,
-          last_success_at: at,
-          pokemon_count: r.pokemon,
-          learnset_count: r.learnsets,
-          names_count: r.names,
-          schema_version: SCHEMA_VERSION,
-        })
-        .run();
+      await tx.insert(ingest_meta).values({
+        format: r.format,
+        last_success_at: at,
+        pokemon_count: r.pokemon,
+        learnset_count: r.learnsets,
+        names_count: r.names,
+        schema_version: SCHEMA_VERSION,
+      });
     }
   });
 }
@@ -220,18 +215,23 @@ export async function runIngest(
   }
 
   // ----- Write phase -------------------------------------------------------
-  const db = openIngestDb();
-  report("writing pokemon…");
-  replaceTable(db, pokemon, pokemonRows);
-  report("writing learnset…");
-  replaceTable(db, learnset, learnsetRows);
-  report("writing searchable_names…");
-  replaceTable(db, searchable_names, nameRows);
-  report("writing reference_cache…");
-  replaceTable(db, reference_cache, referenceRows);
+  const { db, pool } = await openIngestDb();
+  let finishedAt: number;
+  try {
+    report("writing pokemon…");
+    await replaceTable(db, pokemon, pokemonRows);
+    report("writing learnset…");
+    await replaceTable(db, learnset, learnsetRows);
+    report("writing searchable_names…");
+    await replaceTable(db, searchable_names, nameRows);
+    report("writing reference_cache…");
+    await replaceTable(db, reference_cache, referenceRows);
 
-  const finishedAt = Date.now();
-  writeIngestMeta(db, formatReports, finishedAt);
+    finishedAt = Date.now();
+    await writeIngestMeta(db, formatReports, finishedAt);
+  } finally {
+    await pool.end();
+  }
 
   return {
     formats: formatReports,

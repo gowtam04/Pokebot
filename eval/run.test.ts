@@ -8,10 +8,6 @@
  * nightly/on-release job, and it is guarded behind real flags + a real API key.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { describe, expect, it, vi } from "vitest";
 
 // run.ts → deterministic.ts → runtime → tools → reference-cache.ts, which
@@ -26,7 +22,6 @@ import {
   parseArgs,
   selectCases,
 } from "./run";
-import { createFixtureFile } from "./fixtures/seed-fixture-db";
 import type { AssertResult, JudgeResult } from "./judge";
 
 describe("parseArgs", () => {
@@ -46,14 +41,14 @@ describe("parseArgs", () => {
       "--fixture",
       "--json",
       "--case=g4, G11",
-      "--live-index=/tmp/x.sqlite",
+      "--live-index=postgres://h:5432/db",
     ]);
     expect(o.rebuild).toBe(true);
     expect(o.deterministic).toBe(true);
     expect(o.fixture).toBe(true);
     expect(o.json).toBe(true);
     expect(o.caseIds).toEqual(["G4", "G11"]);
-    expect(o.liveIndexPath).toBe("/tmp/x.sqlite");
+    expect(o.liveIndexUri).toBe("postgres://h:5432/db");
   });
 });
 
@@ -141,16 +136,9 @@ describe("report formatting", () => {
 
 describe("main — offline deterministic path", () => {
   it("runs the deterministic subset against the fixture and exits 0", async () => {
-    // resolve_entity (G3) reads the @/data/db singleton, not the fixture ctx
-    // handle. Point that singleton at a freshly-seeded on-disk fixture and clear
-    // the global memo before main() first imports @/data/db (via runDeterministic).
-    const fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-run-"));
-    const fixturePath = path.join(fixtureDir, "fixture.sqlite");
-    process.env.POKEBOT_DB_PATH = fixturePath;
-    delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
-    const seeded = createFixtureFile(fixturePath);
-    (seeded as unknown as { $client?: { close?: () => void } }).$client?.close?.();
-
+    // In --fixture mode, buildContext() provisions an isolated, seeded Postgres
+    // schema and installs it as the @/data/db singleton (so resolve_entity, which
+    // reads the singleton, sees the fixture), then cleans it up in its finally.
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
@@ -164,7 +152,6 @@ describe("main — offline deterministic path", () => {
     } finally {
       logSpy.mockRestore();
       warnSpy.mockRestore();
-      rmSync(fixtureDir, { recursive: true, force: true });
     }
-  });
+  }, 120_000);
 });

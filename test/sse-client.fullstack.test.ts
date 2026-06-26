@@ -10,7 +10,7 @@
  * Mirrors the backend checkpoint (test/api-chat.integration.test.ts) from the
  * client side: there the route emits frames; here the hook parses them. `fetch`
  * is stubbed to return a `Response` whose body is a `ReadableStream` of those
- * frames — no server/db/runtime is imported (those use native better-sqlite3
+ * frames — no server/db/runtime is imported (those open a Postgres connection
  * which fails under jsdom). The file runs under jsdom (via the docblock above) so
  * the hook's React state can be observed with `renderHook`.
  */

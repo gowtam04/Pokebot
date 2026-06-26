@@ -16,14 +16,14 @@
  *     table is built by ingest for Gen-9 version groups only (D6/BR-2), so a
  *     plain `COUNT(DISTINCT pokemon_id)` over the move already respects Gen-9.
  *
- * Module boundary (design.md § Code Conventions): repos are the sole SQLite
+ * Module boundary (design.md § Code Conventions): repos are the sole Postgres
  * readers. The Drizzle handle is threaded in by the caller (the per-request
  * DbCtx assembled in src/agent/context.ts) rather than imported here, so this
  * module has no eager DB-connection side effect and stays trivially testable
  * against a fixture database. `PokebotDb` is imported type-only for that reason.
  *
- * better-sqlite3 is synchronous — these functions return plain values
- * (`string[]` / `number`), never Promises, and nothing here is awaited.
+ * node-postgres is asynchronous — these functions are `async` and `await` their
+ * Drizzle queries (Promise<string[]> / Promise<number>).
  */
 
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -59,17 +59,17 @@ import { learnset } from "@/data/schema";
  * @param database the Drizzle handle (from the request's DbCtx / fixture).
  * @returns sorted list of matching `pokemon.id` slugs (possibly empty).
  */
-export function pokemonLearningAll(
+export async function pokemonLearningAll(
   moveIds: string[],
   format: Format,
   database: PokebotDb,
-): string[] {
+): Promise<string[]> {
   const distinctMoveIds = [...new Set(moveIds)];
   if (distinctMoveIds.length === 0) {
     return [];
   }
 
-  const rows = database
+  const rows = await database
     .select({ pokemonId: learnset.pokemon_id })
     .from(learnset)
     .where(
@@ -82,8 +82,7 @@ export function pokemonLearningAll(
     .having(
       sql`count(distinct ${learnset.move_slug}) = ${distinctMoveIds.length}`,
     )
-    .orderBy(learnset.pokemon_id)
-    .all();
+    .orderBy(learnset.pokemon_id);
 
   return rows.map((row) => row.pokemonId);
 }
@@ -98,18 +97,21 @@ export function pokemonLearningAll(
  * @param format   the active data scope ("scarlet-violet" | "champions").
  * @param database the Drizzle handle (from the request's DbCtx / fixture).
  */
-export function gen9LearnerCount(
+export async function gen9LearnerCount(
   moveId: string,
   format: Format,
   database: PokebotDb,
-): number {
-  const row = database
+): Promise<number> {
+  // count(distinct …) is a Postgres bigint, which node-postgres returns as a
+  // string; `.mapWith(Number)` coerces it back to a JS number.
+  const rows = await database
     .select({
-      count: sql<number>`count(distinct ${learnset.pokemon_id})`,
+      count: sql<number>`count(distinct ${learnset.pokemon_id})`.mapWith(
+        Number,
+      ),
     })
     .from(learnset)
-    .where(and(eq(learnset.move_slug, moveId), eq(learnset.format, format)))
-    .get();
+    .where(and(eq(learnset.move_slug, moveId), eq(learnset.format, format)));
 
-  return row?.count ?? 0;
+  return rows[0]?.count ?? 0;
 }

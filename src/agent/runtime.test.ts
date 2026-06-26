@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentContext, ChatMessage } from "@/agent/types";
 import type { PokebotAnswer } from "@/agent/schemas";
 
-// --- Mock the tool layer so importing the runtime never pulls in better-sqlite3.
+// --- Mock the tool layer so importing the runtime never opens a Postgres pool.
 const { mockDispatch } = vi.hoisted(() => ({ mockDispatch: vi.fn() }));
 
 vi.mock("@/agent/tools", () => ({

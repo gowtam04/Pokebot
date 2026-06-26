@@ -34,8 +34,6 @@ export const resolveEntityTool: ToolDef = {
       return Promise.resolve({ matches: [] });
     }
     const { query, kind, limit } = parsed.data;
-    return Promise.resolve(
-      resolveEntity(query, kind, limit, formatForMode(ctx.mode)),
-    );
+    return resolveEntity(query, kind, limit, formatForMode(ctx.mode));
   },
 };

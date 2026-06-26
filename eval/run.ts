@@ -28,8 +28,8 @@
  *   --rebuild              use the G1/G5/G6/G7/G17 regression set
  *   --deterministic        run the offline deterministic subset (no live LLM)
  *   --case=G4,G11          run only these case IDs
- *   --fixture              force the in-memory fixture DB
- *   --live-index[=PATH]    force the on-disk index (default: $POKEBOT_DB_PATH)
+ *   --fixture              force an isolated, seeded Postgres fixture schema
+ *   --live-index[=URI]     force the live Postgres index (default: $DATABASE_URL)
  *   --json                 emit a machine-readable JSON report
  *
  * Live mode (judged) needs a REAL ANTHROPIC_API_KEY in the environment; the
@@ -37,16 +37,14 @@
  * real key.
  */
 
-import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 
 import { env } from "@/env";
 import { createAgentContext } from "@/agent/context";
 import type { AgentContext } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
 import * as schema from "@/data/schema";
 
 import {
@@ -54,6 +52,7 @@ import {
   deterministicCases,
   rebuildRegressionCases,
 } from "./cases";
+import { createPgSchema, installAsSingleton } from "../test/support/pg";
 // NOTE: ./judge and ./deterministic pull in the agent runtime → tool layer →
 // reference-cache.ts, which statically `import "server-only"`. We import them
 // DYNAMICALLY inside main() (TYPE-only here) so the server-only shim below runs
@@ -65,7 +64,6 @@ import type {
   JudgeResult,
   RubricDimension,
 } from "./judge";
-import { createFixtureDb, type FixtureDb } from "./fixtures/seed-fixture-db";
 
 // ---------------------------------------------------------------------------
 // `server-only` shim (CLI only — Vitest mocks the module itself)
@@ -111,10 +109,10 @@ export interface EvalOptions {
   deterministic: boolean;
   /** Restrict to these case IDs (uppercased, e.g. "G4"). */
   caseIds?: string[];
-  /** Force the in-memory fixture DB. */
+  /** Force an isolated, seeded Postgres fixture schema. */
   fixture: boolean;
-  /** Force the on-disk index; value is the path (defaults to POKEBOT_DB_PATH). */
-  liveIndexPath?: string;
+  /** Force the live index; value is the Postgres URI (defaults to DATABASE_URL). */
+  liveIndexUri?: string;
   /** Emit a JSON report instead of the human-readable summary. */
   json: boolean;
 }
@@ -133,9 +131,9 @@ export function parseArgs(argv: string[]): EvalOptions {
       opts.deterministic = true;
     else if (arg === "--fixture") opts.fixture = true;
     else if (arg === "--json") opts.json = true;
-    else if (arg === "--live-index") opts.liveIndexPath = env.POKEBOT_DB_PATH;
+    else if (arg === "--live-index") opts.liveIndexUri = env.DATABASE_URL;
     else if (arg.startsWith("--live-index=")) {
-      opts.liveIndexPath = arg.slice("--live-index=".length);
+      opts.liveIndexUri = arg.slice("--live-index=".length);
     } else if (arg.startsWith("--case=")) {
       opts.caseIds = arg
         .slice("--case=".length)
@@ -186,54 +184,51 @@ export function selectCases(opts: EvalOptions): {
 }
 
 // ---------------------------------------------------------------------------
-// Context wiring (no `server-only` boundary — opens SQLite directly)
+// Context wiring (installs the @/data/db singleton so resolve_entity sees it)
 // ---------------------------------------------------------------------------
 
 interface BuiltContext {
   ctx: AgentContext;
   label: string;
-  close: () => void;
+  close: () => Promise<void>;
 }
 
 /**
- * Build an AgentContext bound to either the fixture DB or the on-disk index.
- * Opens better-sqlite3 directly (not via @/data/db) so the eval CLI never trips
- * the `server-only` import boundary.
+ * Build an AgentContext bound to either an isolated, seeded Postgres fixture
+ * schema or the live Postgres index. Both paths INSTALL the chosen handle as the
+ * @/data/db singleton (globalThis.__pokebotDb) so resolve_entity — which reads
+ * the singleton, not ctx.db — sees the same data as ctx.db.
  */
 async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
-  // Explicit fixture, or no index requested and none on disk → fixture.
-  const indexPath = opts.liveIndexPath ?? env.POKEBOT_DB_PATH;
-  const wantsLive = !opts.fixture && (opts.deterministic ? false : true);
-  const useLive = !opts.fixture && wantsLive && existsSync(indexPath);
+  // Deterministic mode is offline → fixture by default. Judged/rebuild modes hit
+  // the live index unless --fixture forces the seeded schema.
+  const wantsLive = !opts.fixture && !opts.deterministic;
 
-  if (!useLive) {
-    if (!opts.fixture && wantsLive) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[eval] index not found at ${indexPath}; falling back to the in-memory fixture DB. Run \`npm run ingest\` for a real-data eval.`,
-      );
-    }
-    const fixture: FixtureDb = createFixtureDb();
-    const ctx = await createAgentContext({
-      db: fixture as unknown as PokebotDb,
-    });
+  if (wantsLive) {
+    const uri = opts.liveIndexUri ?? env.DATABASE_URL;
+    const pool = new Pool({ connectionString: uri });
+    const db = drizzle(pool, { schema });
+    (globalThis as { __pokebotDb?: { pool: Pool; db: typeof db } }).__pokebotDb =
+      { pool, db };
+    (await import("@/data/repos/resolve-index")).resetResolveIndex();
+    const ctx = await createAgentContext();
     return {
       ctx,
-      label: "fixture (in-memory)",
-      close: () =>
-        (
-          fixture as unknown as { $client?: { close?: () => void } }
-        ).$client?.close?.(),
+      label: `live index (${uri})`,
+      close: async () => {
+        await pool.end();
+      },
     };
   }
 
-  const sqlite = new Database(indexPath, { readonly: true });
-  const db = drizzle(sqlite, { schema });
-  const ctx = await createAgentContext({ db: db as unknown as PokebotDb });
+  // Fixture: an isolated, migrated + seeded Postgres schema.
+  const fix = await createPgSchema({ seed: "eval" });
+  await installAsSingleton(fix);
+  const ctx = await createAgentContext();
   return {
     ctx,
-    label: `on-disk index (${indexPath})`,
-    close: () => sqlite.close(),
+    label: "fixture (pg schema)",
+    close: () => fix.cleanup(),
   };
 }
 
@@ -373,7 +368,7 @@ export async function main(argv: string[]): Promise<number> {
     }
     return results.every((r) => r.overallPass) ? 0 : 1;
   } finally {
-    built.close();
+    await built.close();
   }
 }
 

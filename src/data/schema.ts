@@ -1,5 +1,5 @@
 /**
- * Drizzle ORM table definitions for Pokebot's SQLite store.
+ * Drizzle ORM table definitions for Pokebot's Postgres store.
  *
  * Five tables (design.md § Data Model). Since the @pkmn migration each data
  * table carries a `format` discriminator ("scarlet-violet" | "champions") so one
@@ -14,21 +14,29 @@
  *   searchable_names — backs resolve_entity (T1, BR-9), PK (format, kind, slug)
  *   ingest_meta      — pipeline bookkeeping, one row PER FORMAT
  *
+ * Postgres type notes (vs. the old SQLite schema):
+ *   - `integer` is int4 — fine for dex numbers, stats, counts, and the 0/1
+ *     `is_gen9_native` flag.
+ *   - `fetched_at` / `last_success_at` hold epoch MILLISECONDS (~1.75e12) which
+ *     overflow int4, so they are `bigint` with `mode: "number"` (safe < 2^53).
+ *   - `payload` stays TEXT (a JSON string written/read with JSON.stringify/parse).
+ *
  * Import only from here — never duplicate column defs elsewhere.
  */
 
 import {
+  bigint,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // pokemon — DS-2 Pokédex index (one row per (format, battle-relevant form), D8)
 // ---------------------------------------------------------------------------
-export const pokemon = sqliteTable(
+export const pokemon = pgTable(
   "pokemon",
   {
     /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
@@ -69,35 +77,29 @@ export const pokemon = sqliteTable(
     /** Set when is_gen9_native = 0 (BR-1), e.g. "gen-8"; null otherwise. */
     source_generation: text("source_generation"),
   },
-  (t) => ({
+  (t) => [
     // Same national-dex slug exists in both formats → format is part of the PK.
-    pk: primaryKey({ columns: [t.format, t.id] }),
+    primaryKey({ columns: [t.format, t.id] }),
     // national dex sort / lookup
-    idxNationalDex: index("pokemon_national_dex_number_idx").on(
-      t.national_dex_number,
-    ),
+    index("pokemon_national_dex_number_idx").on(t.national_dex_number),
     // type filters (US-2)
-    idxType1: index("pokemon_type1_idx").on(t.type1),
-    idxType2: index("pokemon_type2_idx").on(t.type2),
+    index("pokemon_type1_idx").on(t.type1),
+    index("pokemon_type2_idx").on(t.type2),
     // individual stat threshold / superlative queries (AC-3.x)
-    idxStatHp: index("pokemon_stat_hp_idx").on(t.stat_hp),
-    idxStatAttack: index("pokemon_stat_attack_idx").on(t.stat_attack),
-    idxStatDefense: index("pokemon_stat_defense_idx").on(t.stat_defense),
-    idxStatSpecialAttack: index("pokemon_stat_special_attack_idx").on(
-      t.stat_special_attack,
-    ),
-    idxStatSpecialDefense: index("pokemon_stat_special_defense_idx").on(
-      t.stat_special_defense,
-    ),
-    idxStatSpeed: index("pokemon_stat_speed_idx").on(t.stat_speed),
-    idxBaseStatTotal: index("pokemon_base_stat_total_idx").on(t.base_stat_total),
-  }),
+    index("pokemon_stat_hp_idx").on(t.stat_hp),
+    index("pokemon_stat_attack_idx").on(t.stat_attack),
+    index("pokemon_stat_defense_idx").on(t.stat_defense),
+    index("pokemon_stat_special_attack_idx").on(t.stat_special_attack),
+    index("pokemon_stat_special_defense_idx").on(t.stat_special_defense),
+    index("pokemon_stat_speed_idx").on(t.stat_speed),
+    index("pokemon_base_stat_total_idx").on(t.base_stat_total),
+  ],
 );
 
 // ---------------------------------------------------------------------------
 // learnset — DS-3 learnset index (D6, BR-2)
 // ---------------------------------------------------------------------------
-export const learnset = sqliteTable(
+export const learnset = pgTable(
   "learnset",
   {
     /** FK → pokemon.id (within the same format). */
@@ -109,21 +111,21 @@ export const learnset = sqliteTable(
     /** "level-up" | "machine" | "tutor". Egg moves excluded (out of scope). */
     method: text("method"),
   },
-  (t) => ({
+  (t) => [
     // Composite PK — (pokemon_id, move_slug, format)
-    pk: primaryKey({ columns: [t.pokemon_id, t.move_slug, t.format] }),
+    primaryKey({ columns: [t.pokemon_id, t.move_slug, t.format] }),
     // "what Pokémon learn move X?" — move_slug not the leftmost PK prefix
-    idxMoveSlug: index("learnset_move_slug_idx").on(t.move_slug),
+    index("learnset_move_slug_idx").on(t.move_slug),
     // lookup all moves for a given pokemon — redundant with PK prefix but
     // provides an explicit fast path and makes intent clear
-    idxPokemonId: index("learnset_pokemon_id_idx").on(t.pokemon_id),
-  }),
+    index("learnset_pokemon_id_idx").on(t.pokemon_id),
+  ],
 );
 
 // ---------------------------------------------------------------------------
 // reference_cache — DS-4 reference detail (pre-built per format at ingest)
 // ---------------------------------------------------------------------------
-export const reference_cache = sqliteTable(
+export const reference_cache = pgTable(
   "reference_cache",
   {
     /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
@@ -132,22 +134,20 @@ export const reference_cache = sqliteTable(
     resource_key: text("resource_key").notNull(),
     /** "move" | "ability" | "type" | "evolution" | "item". */
     resource_kind: text("resource_kind").notNull(),
-    /** Normalized detail shape the tool returns (not raw source JSON). */
+    /** Normalized detail shape the tool returns (JSON string, not raw source). */
     payload: text("payload").notNull(),
     /** Source label for citations (e.g. "@pkmn/dex (Pokémon Showdown)"). */
     endpoint_url: text("endpoint_url").notNull(),
     /** Epoch milliseconds the row was built (informational; no TTL anymore). */
-    fetched_at: integer("fetched_at").notNull(),
+    fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),
   },
-  (t) => ({
-    pk: primaryKey({ columns: [t.format, t.resource_key] }),
-  }),
+  (t) => [primaryKey({ columns: [t.format, t.resource_key] })],
 );
 
 // ---------------------------------------------------------------------------
 // searchable_names — backs resolve_entity (T1, BR-9)
 // ---------------------------------------------------------------------------
-export const searchable_names = sqliteTable(
+export const searchable_names = pgTable(
   "searchable_names",
   {
     /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
@@ -158,20 +158,20 @@ export const searchable_names = sqliteTable(
     slug: text("slug").notNull(),
     display_name: text("display_name").notNull(),
   },
-  (t) => ({
+  (t) => [
     // Composite PK — (format, kind, slug)
-    pk: primaryKey({ columns: [t.format, t.kind, t.slug] }),
-  }),
+    primaryKey({ columns: [t.format, t.kind, t.slug] }),
+  ],
 );
 
 // ---------------------------------------------------------------------------
 // ingest_meta — pipeline bookkeeping (one row per format)
 // ---------------------------------------------------------------------------
-export const ingest_meta = sqliteTable("ingest_meta", {
+export const ingest_meta = pgTable("ingest_meta", {
   /** Data scope this row describes ("scarlet-violet" | "champions"). PK. */
   format: text("format").primaryKey(),
   /** Epoch ms of the last successful ingest run for this format. */
-  last_success_at: integer("last_success_at").notNull(),
+  last_success_at: bigint("last_success_at", { mode: "number" }).notNull(),
   /** Number of rows in the pokemon table for this format after ingest. */
   pokemon_count: integer("pokemon_count").notNull(),
   /** Number of rows in the learnset table for this format after ingest. */

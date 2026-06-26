@@ -7,7 +7,7 @@
  * This mirrors the backend checkpoint (test/api-chat.integration.test.ts): there
  * the route's SSE framing is proven; here the AnswerCard field→component mapping
  * is proven. It imports ONLY view code + plain fixture objects — never
- * db/repos/runtime (those use native better-sqlite3 which fails under jsdom).
+ * db/repos/runtime (those open a Postgres connection / pull server-only).
  *
  * Runs in the Vitest "jsdom" project (jest-dom matchers from its setupFiles).
  */
