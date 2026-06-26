@@ -1,0 +1,38 @@
+# Agents
+
+Single agent. One role, one prompt, one model.
+
+## Pokebot Agent
+
+| Field | Value |
+|-------|-------|
+| **Role** | Conversational Pokémon expert that answers questions by fetching PokeAPI data and reasoning about game mechanics. |
+| **Goal (per invocation)** | Take the user's latest message (with session history), gather exactly the data needed via tools, reason to a correct answer, and emit one `submit_answer` structured result with the answer, reasoning, citations, inference/uncertainty flags, and generation basis. |
+| **Success criteria** | (a) Correct answer to representative questions incl. multi-move filters and mechanics interactions; (b) every answer cites the specific PokeAPI data it used (BR-4); (c) inferences are flagged distinctly from stated facts (BR-3); (d) generation basis is explicit, with fallback flagged (BR-1); (e) unresolved entities trigger resolve-or-clarify, not silent empties (BR-9); (f) efficient tool use — no brute-force crawling (BR-8). |
+| **Model** | `claude-sonnet-4-6` (see `overview.md` D2). |
+| **Runtime shape** | Agentic tool-loop, multi-turn within one user message. Max **10** tool iterations per turn (budget guard — typical answers use 1–5). Final action is always `submit_answer`. |
+| **Extended thinking** | **On**, interleaved, moderate budget. Mechanics deductions and damage math benefit materially; "a few seconds" latency is acceptable per NFRs. Disable per-turn if a question is a trivial lookup and latency matters (orchestration may set this heuristically; default on). |
+| **Prompt caching** | Cache the stable prefix: system prompt + tool definitions + few-shot examples. Conversation history and the current user message are the variable tail. (Config handled by dev-team via `claude-api` skill.) |
+| **Streaming** | On — but the **final answer is a `submit_answer` tool call**, not streamed prose. Stream tool **activity** as progress ("🔍 resolving Will-O-Wisp…", "📊 querying Pokédex…"); render the structured card when `submit_answer` arrives. (See `ux-design.md`.) |
+| **Context budget** | Stable prefix ≈ 3–5K tokens. Tool results are capped (e.g. `query_pokedex` returns `total_count` + top-N, not the full set) to keep turns well under the window. History is in-session only and bounded by session length. |
+| **Inputs** | `message: string` (user's question), `history: Message[]` (prior turns this session). |
+| **Outputs** | One `PokebotAnswer` object (the `submit_answer` payload — see `output-formats.md`). |
+| **Tools** | `resolve_entity`, `query_pokedex`, `get_pokemon`, `get_move`, `get_ability`, `get_type_matchups`, `get_evolution_chain`, `get_item`, `compute_stat`, `estimate_damage`, `submit_answer` (see `tools.md`). |
+| **Data sources** | Local Pokédex index, Gen-9 learnset index, PokeAPI reference cache, in-session history (see `data-sources.md`). |
+
+### Behavior summary (full text in `prompts.md`)
+
+1. **Resolve before fetching** when an entity name is uncertain/misspelled;
+   offer the closest match rather than returning empty (BR-9, AC-1.3).
+2. **Use the index, not brute force** — `query_pokedex` for filters/superlatives;
+   pass multiple moves to it for Gen-9 learnset **intersection** (BR-7).
+3. **Reason about mechanics** explicitly, separating stated facts from
+   deductions; flag the deductions (BR-3).
+4. **Use calc tools** for any stat/damage math; never hand-compute. State all
+   assumptions; present results as estimates (BR-6).
+5. **Anchor every answer to Gen 9**; when a Pokémon isn't in Gen 9, use its most
+   recent prior data and **flag the fallback** with the generation named (BR-1).
+6. **Cite specifics** — exact priority values, effect text, stat figures (BR-4).
+7. **Refuse out-of-scope** (egg moves/breeding, locations/encounters, full battle
+   simulation, non-PokeAPI data) politely, naming the boundary.
+8. **End every turn with `submit_answer`.**

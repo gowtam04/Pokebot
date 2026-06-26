@@ -1,0 +1,444 @@
+# Tools
+
+Eleven tools. Eight read data (one queries the local index, six fetch reference
+details, one resolves names), two compute battle math, one emits the final
+answer. All read/compute tools are **read-only and idempotent** — safe to retry
+in the loop. Tools return **structured errors the model can reason about**, never
+raw exceptions.
+
+Conventions:
+- Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
+  `flash-fire`). Use `resolve_entity` first if unsure.
+- Every detail tool's miss returns `{ found: false, suggestions: [...] }` rather
+  than throwing, so the agent can resolve-or-clarify (BR-9).
+- Generation context defaults to Gen 9; tools surface `is_gen9_native` /
+  `source_generation` so the agent can flag fallback (BR-1).
+
+---
+
+## T1 — `resolve_entity`
+
+**Description (for the model):** Resolve a possibly-misspelled or ambiguous name
+to canonical Pokémon-data entities. Use this when the user's wording for a
+Pokémon, move, ability, type, or item might not exactly match a real name, or
+when a name is ambiguous across forms. Returns ranked candidate matches with
+their canonical slugs.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": { "type": "string", "description": "The name as the user wrote it, e.g. 'Will-o-Whisp', 'Farigiraf', 'Trik Room'." },
+    "kind": { "type": "string", "enum": ["pokemon", "move", "ability", "type", "item", "any"], "default": "any", "description": "Restrict the search to one entity kind, or 'any' to search all." },
+    "limit": { "type": "integer", "default": 5, "minimum": 1, "maximum": 10 }
+  },
+  "required": ["query"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "matches": [
+    { "kind": "move", "slug": "will-o-wisp", "display_name": "Will-O-Wisp", "score": 0.94 },
+    { "kind": "move", "slug": "wisp", "display_name": "—", "score": 0.0 }
+  ]
+}
+```
+**Side effects:** Read-only. Idempotent. **Failure modes:** none fatal — returns
+`{ "matches": [] }` when nothing is close (agent then says it can't resolve and
+asks). **Auth:** none.
+
+---
+
+## T2 — `query_pokedex`  *(the workhorse)*
+
+**Description (for the model):** Search the local Pokédex index for Pokémon
+matching structured filters, with optional sorting and a result limit. Use this
+for any filter, threshold, superlative ("fastest"), or compound query — never
+fetch Pokémon one by one for these. Pass multiple moves to get the **set of
+Pokémon that can learn ALL of them** in Gen 9 (intersection). Returns the total
+match count plus the top-N rows with stats, types, abilities, and sprite.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "types": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon having ALL listed types (e.g. ['fire'] or ['fire','flying'])." },
+    "abilities": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon that can have ANY of these abilities (slot1/slot2/hidden). Use one for an exact-ability filter." },
+    "moves": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon that can learn ALL listed moves in Gen 9 (intersection of learnsets, BR-7)." },
+    "stat_filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stat": { "type": "string", "enum": ["hp","attack","defense","special_attack","special_defense","speed","base_stat_total"] },
+          "op": { "type": "string", "enum": [">",">=","<","<=","=="] },
+          "value": { "type": "integer" }
+        },
+        "required": ["stat","op","value"]
+      },
+      "description": "Numeric base-stat constraints, ANDed together (e.g. attack > 130)."
+    },
+    "sort_by": { "type": "string", "enum": ["hp","attack","defense","special_attack","special_defense","speed","base_stat_total","national_dex_number"], "description": "Stat/field to rank by — use for superlatives like 'fastest' (sort_by=speed, order=desc)." },
+    "order": { "type": "string", "enum": ["asc","desc"], "default": "desc" },
+    "limit": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
+  }
+}
+```
+**Output shape (sample):**
+```json
+{
+  "total_count": 7,
+  "truncated": false,
+  "sort": "speed desc",
+  "results": [
+    {
+      "display_name": "Garchomp", "national_dex_number": 445,
+      "types": ["dragon","ground"],
+      "abilities": { "slot1": "sand-veil", "hidden": "rough-skin" },
+      "base_stats": { "hp": 108, "attack": 130, "defense": 95, "special_attack": 80, "special_defense": 85, "speed": 102 },
+      "base_stat_total": 600,
+      "sprite_url": "https://.../445.png",
+      "is_gen9_native": true, "source_generation": null
+    }
+  ]
+}
+```
+**Side effects:** Read-only against DS-2/DS-3. Idempotent. **Failure modes:**
+`{ "error": "index_unavailable" }`; or `{ "unresolved": ["trik-room"] }` when a
+passed move/ability/type slug isn't in the index (agent should `resolve_entity`
+and retry). Empty match returns `{ "total_count": 0, "results": [] }` —
+**not** an error; agent reports "none found" honestly. **Auth:** none.
+
+> Multi-move note: `moves` intersection is computed in code over DS-3 (Gen-9
+> learnsets), so the result already respects BR-2/BR-7. The agent should still
+> cite each move's learnset as the source.
+
+---
+
+## T3 — `get_pokemon`
+
+**Description (for the model):** Get the full profile of one specific Pokémon
+form: its types, all abilities (including the hidden ability), base stats,
+sprite/artwork, national dex number, available forms, and which generation the
+data is from. Use for single-Pokémon lookups (US-4) and to ground reasoning.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "description": "Canonical Pokémon slug, e.g. 'garchomp', 'tauros-paldea-aqua'." }
+  },
+  "required": ["name"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "found": true,
+  "display_name": "Farigiraf", "national_dex_number": 981,
+  "types": ["normal","psychic"],
+  "abilities": { "slot1": "cud-chew", "slot2": "armor-tail", "hidden": "sap-sipper" },
+  "base_stats": { "hp": 120, "attack": 90, "defense": 70, "special_attack": 110, "special_defense": 70, "speed": 60 },
+  "base_stat_total": 520,
+  "sprite_url": "https://.../981.png", "artwork_url": "https://.../981_official.png",
+  "forms": ["farigiraf"],
+  "is_gen9_native": true, "source_generation": null
+}
+```
+**Side effects:** Read-only (DS-2). Idempotent. **Failure modes:**
+`{ "found": false, "suggestions": ["farigiraf"] }`. **Auth:** none.
+
+---
+
+## T4 — `get_move`
+
+**Description (for the model):** Get a move's mechanical details — type, power,
+accuracy, PP, **priority**, damage class (physical/special/status), target, and
+effect text. Use whenever reasoning depends on how a move behaves (e.g. checking
+that Fake Out is a priority move). Optionally returns the count of Pokémon that
+learn it in Gen 9.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "description": "Canonical move slug, e.g. 'fake-out', 'will-o-wisp'." },
+    "include_gen9_learner_count": { "type": "boolean", "default": false }
+  },
+  "required": ["name"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "found": true,
+  "display_name": "Fake Out",
+  "type": "normal", "damage_class": "physical",
+  "power": 40, "accuracy": 100, "pp": 10,
+  "priority": 3,
+  "target": "selected-pokemon",
+  "effect_short": "Hits first (priority +3) and makes the target flinch; only works on the user's first turn out.",
+  "effect_full": "Inflicts regular damage. Has +3 priority. The target flinches... Only succeeds on the first turn after the user switches in.",
+  "gen9_learner_count": 112
+}
+```
+**Side effects:** Read-only (DS-4, with DS-3 for the count). Idempotent.
+**Failure modes:** `{ "found": false, "suggestions": [...] }`;
+`{ "error": "upstream_unavailable" }` on a cache miss while PokeAPI is down.
+**Auth:** none.
+
+---
+
+## T5 — `get_ability`
+
+**Description (for the model):** Get an ability's effect text and short
+description. Use when reasoning depends on what an ability does (e.g. Armor Tail
+negating priority moves, Flash Fire's Fire immunity).
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": { "name": { "type": "string", "description": "Canonical ability slug, e.g. 'armor-tail', 'flash-fire'." } },
+  "required": ["name"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "found": true,
+  "display_name": "Armor Tail",
+  "effect_short": "Prevents the holder from being hit by moves with increased priority.",
+  "effect_full": "The Pokémon and its allies cannot be targeted by opposing moves that have positive priority (e.g. Fake Out, Quick Attack, Extreme Speed)."
+}
+```
+**Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
+`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
+**Auth:** none.
+
+---
+
+## T6 — `get_type_matchups`
+
+**Description (for the model):** Get type effectiveness relationships using the
+**latest** type chart. Pass one type for its offensive and defensive profile, or
+two types for a combined **defensive** profile (the product of both types'
+weaknesses/resistances/immunities). Use for matchup questions (US-6).
+Immunities are 0× and must be treated as immunities, not resistances.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "types": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 2, "description": "One type for full profile, or two for a combined defensive matchup (e.g. ['ground','flying'])." }
+  },
+  "required": ["types"]
+}
+```
+**Output shape (sample, single type 'ground'):**
+```json
+{
+  "found": true,
+  "types": ["ground"],
+  "offensive": {
+    "super_effective_against": ["fire","electric","poison","rock","steel"],
+    "not_very_effective_against": ["bug","grass"],
+    "no_effect_against": ["flying"]
+  },
+  "defensive": {
+    "weak_to": ["water","grass","ice"],
+    "resists": ["poison","rock"],
+    "immune_to": ["electric"]
+  }
+}
+```
+**Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
+`{ "found": false, "suggestions": [...] }` for an unknown type;
+`{ "error": "upstream_unavailable" }`. **Auth:** none.
+
+---
+
+## T7 — `get_evolution_chain`
+
+**Description (for the model):** Get a Pokémon's full evolution line and the
+condition(s) for each stage (level, item, friendship, trade, time of day, etc.)
+as provided by PokeAPI. Use for evolution questions (US-5).
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": { "species": { "type": "string", "description": "Canonical species slug, e.g. 'eevee'." } },
+  "required": ["species"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "found": true,
+  "chain": [
+    { "from": "eevee", "to": "vaporeon", "conditions": [{ "trigger": "use-item", "item": "water-stone" }] },
+    { "from": "eevee", "to": "espeon", "conditions": [{ "trigger": "level-up", "min_happiness": 160, "time_of_day": "day" }] }
+  ]
+}
+```
+**Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
+`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
+**Auth:** none.
+
+---
+
+## T8 — `get_item`
+
+**Description (for the model):** Get an item's effect text and, where available,
+which Pokémon are found holding it in the wild. Use for item questions (US-8).
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": { "name": { "type": "string", "description": "Canonical item slug, e.g. 'leftovers'." } },
+  "required": ["name"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "found": true,
+  "display_name": "Leftovers",
+  "effect_short": "Holder restores 1/16 of its max HP at the end of each turn.",
+  "effect_full": "At the end of each turn, the holder recovers 1/16 of its maximum HP.",
+  "held_by_wild": [{ "pokemon": "snorlax", "rarity_percent": 100 }]
+}
+```
+**Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
+`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
+**Auth:** none.
+
+---
+
+## T9 — `compute_stat`
+
+**Description (for the model):** Compute a Pokémon's final stat at a given level
+using the exact in-game formula (handles the per-step flooring). Provide the base
+stat (from `get_pokemon`/`query_pokedex`), IV, EV, level, and nature effect on
+this stat. Returns the exact value and a step-by-step breakdown. Use this for any
+stat-math question — do not compute stats yourself.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "base_stat": { "type": "integer" },
+    "is_hp": { "type": "boolean", "default": false, "description": "True for the HP stat (different formula)." },
+    "iv": { "type": "integer", "default": 31, "minimum": 0, "maximum": 31 },
+    "ev": { "type": "integer", "default": 0, "minimum": 0, "maximum": 252 },
+    "level": { "type": "integer", "default": 50, "minimum": 1, "maximum": 100 },
+    "nature_effect": { "type": "string", "enum": ["boosted","neutral","hindered"], "default": "neutral", "description": "Whether the chosen nature raises (×1.1), leaves (×1.0), or lowers (×0.9) this stat. Ignored for HP." }
+  },
+  "required": ["base_stat"]
+}
+```
+**Output shape (sample — Garchomp Speed, base 102, lvl 50, 252 EV, 31 IV, Jolly):**
+```json
+{
+  "value": 169,
+  "breakdown": "floor((2*102 + 31 + floor(252/4)) * 50 / 100) = 149; (149 + 5) * 1.1 = 169.4 -> floor 169",
+  "inputs_echo": { "base_stat": 102, "iv": 31, "ev": 252, "level": 50, "nature_effect": "boosted", "is_hp": false }
+}
+```
+**Side effects:** Pure function. Idempotent. **Failure modes:**
+`{ "error": "invalid_input", "detail": "ev must be 0..252" }`. **Auth:** none.
+
+> Formulas (for the implementer):
+> non-HP: `floor((floor((2*Base + IV + floor(EV/4)) * Level/100) + 5) * NatureMod)`
+> HP: `floor((2*Base + IV + floor(EV/4)) * Level/100) + Level + 10`
+> NatureMod ∈ {1.1, 1.0, 0.9}. (Shedinja HP = 1 is a known exception.)
+
+---
+
+## T10 — `estimate_damage`
+
+**Description (for the model):** Estimate damage for one attack using the
+standard damage formula, returning the min–max range (from the 0.85–1.0 random
+roll) and a breakdown. Provide attacker/defender effective stats, move power,
+STAB, type effectiveness multiplier, and any extra modifiers. Use this for
+damage questions — do not compute damage yourself. Always present the result as
+an estimate.
+
+**Input schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "level": { "type": "integer", "default": 50 },
+    "power": { "type": "integer", "description": "Move base power." },
+    "attack_stat": { "type": "integer", "description": "Attacker's effective Atk or SpA." },
+    "defense_stat": { "type": "integer", "description": "Defender's effective Def or SpD." },
+    "stab": { "type": "boolean", "default": false, "description": "Same-type-attack bonus (×1.5)." },
+    "type_effectiveness": { "type": "number", "default": 1, "description": "Product of type matchups, e.g. 2, 0.5, 0, 4." },
+    "other_modifier": { "type": "number", "default": 1, "description": "Combined weather/item/ability/etc. multiplier." }
+  },
+  "required": ["power","attack_stat","defense_stat"]
+}
+```
+**Output shape (sample):**
+```json
+{
+  "min_damage": 142, "max_damage": 168,
+  "is_estimate": true,
+  "breakdown": "base = floor(floor(floor((2*50/5+2)*120*169/95)/50)+2) = X; * STAB 1.5 * type 2.0 * roll[0.85..1.0]",
+  "inputs_echo": { "level": 50, "power": 120, "attack_stat": 169, "defense_stat": 95, "stab": true, "type_effectiveness": 2, "other_modifier": 1 }
+}
+```
+**Side effects:** Pure function. Idempotent. **Failure modes:**
+`{ "error": "invalid_input", "detail": "..." }`. **Auth:** none.
+
+> Formula (for the implementer):
+> `base = floor(floor(floor((2*Level/5 + 2) * Power * A / D) / 50) + 2)`
+> then `× STAB(1.5) × type_effectiveness × other_modifier × roll`, roll ∈
+> [0.85, 1.0]. Report `min` (0.85) and `max` (1.0).
+
+---
+
+## T11 — `submit_answer`  *(structured output / final action)*
+
+**Description (for the model):** Submit your final answer. Call this exactly
+once, as your last action, every turn. Its fields populate the user-facing
+answer card. Include the direct answer, your reasoning, the specific data you
+relied on (citations), any inferences with their confidence, the generation your
+answer is based on, and the Pokémon/candidates/calc results to display. If you
+couldn't resolve an entity or need clarification, set `status` accordingly and
+provide `suggestions`.
+
+**Input schema:** the full `PokebotAnswer` object — see `output-formats.md` for
+the complete JSON Schema and field semantics.
+
+**Side effects:** Terminates the agent loop; the payload is returned to the
+caller and rendered by the frontend. Idempotent (one call per turn). **Failure
+modes:** if the payload fails schema validation, orchestration returns the
+validation error to the model and asks it to re-emit (see `integration.md`).
+**Auth:** none.
+
+---
+
+## Tool-existence status
+
+| Tool | Exists? | Build note |
+|------|---------|------------|
+| resolve_entity | ❌ | Needs a name→slug fuzzy index over DS-2/DS-4. |
+| query_pokedex | ❌ | Needs DS-2 + DS-3 + a query layer. **Largest build item.** |
+| get_pokemon | ❌ | Reads DS-2. |
+| get_move / get_ability / get_type_matchups / get_evolution_chain / get_item | ❌ | Read DS-4 (read-through cache over PokeAPI). |
+| compute_stat / estimate_damage | ❌ | Pure formula functions (D5). |
+| submit_answer | ❌ | Structured-output tool; schema in `output-formats.md`. |
+
+All tools are new work. None require auth or carry side effects beyond reads —
+simplifying retry logic in the loop.
