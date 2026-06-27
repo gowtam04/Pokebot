@@ -54,12 +54,14 @@ import { computeStatTool } from "./compute-stat.tool";
 import { estimateDamageTool } from "./estimate-damage.tool";
 import { submitAnswerTool } from "./submit-answer";
 import { getActiveTeamTool } from "./get-active-team.tool";
+import { saveTeamTool } from "./save-team.tool";
 
 /**
- * The 12 tools, in T1..T12 order. T1..T11 are the fixed agent-design contract;
- * T12 (`get_active_team`) is the inlined team-builder addition (TEAM-AD-1,
- * reconciled into docs/agent-design in Phase 11). Appended last so the existing
- * T1..T11 order — and thus most of the cached prefix — is unchanged.
+ * The 13 tools, in T1..T13 order. T1..T11 are the fixed agent-design contract;
+ * T12 (`get_active_team`) and T13 (`save_team`) are the inlined team-builder
+ * additions (TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design). Appended
+ * last so the existing T1..T11 order — and thus most of the cached prefix — is
+ * unchanged.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -74,6 +76,7 @@ export const tools: ToolDef[] = [
   estimateDamageTool,
   submitAnswerTool,
   getActiveTeamTool,
+  saveTeamTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

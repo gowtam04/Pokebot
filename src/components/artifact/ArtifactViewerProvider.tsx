@@ -24,6 +24,7 @@ import {
 
 import type { EntityArtifactResponse } from "@/lib/entity-artifact";
 import { fetchEntityArtifact } from "@/lib/entity-client";
+import { getTeam, type TeamDetail } from "@/lib/teams-client";
 
 import type {
   ArtifactFormat,
@@ -32,6 +33,7 @@ import type {
   EntityKind,
   StructuredArtifact,
   StructuredArtifactInput,
+  TeamArtifactInput,
 } from "./types";
 
 const NOOP_API: ArtifactViewerApi = {
@@ -40,6 +42,7 @@ const NOOP_API: ArtifactViewerApi = {
   canGoBack: false,
   openEntity: () => {},
   openStructured: () => {},
+  openTeam: () => {},
   back: () => {},
   close: () => {},
   askInChat: () => {},
@@ -108,6 +111,63 @@ export function ArtifactViewerProvider({
     setStack((prev) => [...prev, { id, type: "structured", artifact }]);
   }, []);
 
+  const openTeam = useCallback((input: TeamArtifactInput) => {
+    const fmt = formatRef.current;
+    const id = ++idRef.current;
+
+    // Proposed team → render inline (no fetch), like a structured artifact.
+    if ("team" in input) {
+      const detail: TeamDetail = {
+        id: "", // not yet saved → no /teams row → no Edit link
+        name: input.team.name,
+        format: input.team.format,
+        members: input.team.members,
+        validation: [],
+      };
+      setStack((prev) => [
+        ...prev,
+        {
+          id,
+          type: "team",
+          format: fmt,
+          title: detail.name || "Proposed team",
+          source: "proposed",
+          phase: "done",
+          detail,
+        },
+      ]);
+      return;
+    }
+
+    // Saved team → fetch live (members + computed warnings), like an entity.
+    setStack((prev) => [
+      ...prev,
+      {
+        id,
+        type: "team",
+        format: fmt,
+        title: input.name ?? "Team",
+        source: "saved",
+        phase: "loading",
+        detail: null,
+      },
+    ]);
+    void getTeam(input.teamId).then((detail) => {
+      setStack((prev) =>
+        prev.map((v) =>
+          v.id === id && v.type === "team"
+            ? {
+                ...v,
+                phase: detail ? "done" : "error",
+                detail,
+                title: detail?.name ?? v.title,
+              }
+            : v,
+        ),
+      );
+    });
+  }, []);
+
   const back = useCallback(() => {
     setStack((prev) => prev.slice(0, -1));
   }, []);
@@ -131,11 +191,12 @@ export function ArtifactViewerProvider({
       canGoBack: stack.length > 1,
       openEntity,
       openStructured,
+      openTeam,
       back,
       close,
       askInChat,
     };
-  }, [stack, openEntity, openStructured, back, close, askInChat]);
+  }, [stack, openEntity, openStructured, openTeam, back, close, askInChat]);
 
   return (
     <ArtifactViewerContext.Provider value={api}>

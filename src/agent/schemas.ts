@@ -523,6 +523,29 @@ export const questionSchema = z
   })
   .strict();
 
+// The agent's proposed team (TEAM-AD-6) — a buildable team the user can Apply.
+// Extracted as a named schema so the `proposed_team` answer field, the
+// `save_team` tool input, and `ctx.proposedTeam` all share one definition.
+export const proposedTeamSchema = z
+  .object({
+    name: z.string(),
+    format: z.enum(["scarlet-violet", "champions"]),
+    members: teamMembersSchema,
+  })
+  .strict();
+
+// A reference to a team the agent SAVED this turn via `save_team` (T13). The
+// route stamps this onto the answer authoritatively (server-owned id), so the
+// UI can render a persistent "Saved ✓ — open in viewer" card and the model
+// never has to copy a UUID.
+export const savedTeamSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    format: z.enum(["scarlet-violet", "champions"]),
+  })
+  .strict();
+
 export const pokebotAnswerSchema = z
   .object({
     status: z.enum([
@@ -544,16 +567,14 @@ export const pokebotAnswerSchema = z
     uncertainty_flags: z.array(z.string()).optional(),
     // The agent's proposed team (TEAM-AD-6). ADDITIVE optional field: previously
     // stored answer_json (no `proposed_team` key) stays valid under `.strict()`,
-    // and a new answer may carry a buildable team the user can Apply (save-new /
-    // apply-existing) via the Teams API — the agent itself NEVER writes (BR-T8).
-    proposed_team: z
-      .object({
-        name: z.string(),
-        format: z.enum(["scarlet-violet", "champions"]),
-        members: teamMembersSchema,
-      })
-      .strict()
-      .optional(),
+    // and a new answer carries a buildable team the user can Apply (save-new /
+    // apply-existing via the Teams API) OR approve in chat (the agent then calls
+    // `save_team`, T13, to persist it — TEAM-AD-7).
+    proposed_team: proposedTeamSchema.optional(),
+    // The team the agent SAVED this turn (T13). ADDITIVE optional field, stamped
+    // by the route from `ctx.savedTeam` after a successful `save_team` call —
+    // never emitted by the model. Drives the persistent "Saved ✓" card.
+    saved_team: savedTeamSchema.optional(),
   })
   .strict();
 
@@ -576,6 +597,35 @@ export type GetActiveTeamInput = z.infer<typeof getActiveTeamInputSchema>;
 export type GetActiveTeamOutput =
   | { active: false }
   | { active: true; team: EnrichedActiveTeam };
+
+// ===========================================================================
+// T13 — save_team (conversational save; TEAM-AD-7)
+// ===========================================================================
+
+// Persists a team to the user's saved Teams on explicit user approval. Prefers
+// the server-bound proposed team for the turn (`ctx.proposedTeam`, the exact set
+// the user saw) so EVs/IVs/moves are never re-typed by the model; `team` is the
+// fallback for a build-AND-save in one message (no prior proposal in context).
+// `name` optionally overrides the saved team's name. `.strict()` rejects strays.
+export const saveTeamInputSchema = z
+  .object({
+    name: z.string().optional(),
+    team: proposedTeamSchema.optional(),
+  })
+  .strict();
+
+export type SaveTeamInput = z.infer<typeof saveTeamInputSchema>;
+/**
+ * Output of `save_team`: the saved team's id + name + format on success, else a
+ * structured miss (`not_signed_in` — guest; `no_team` — nothing to save;
+ * `index_unavailable` — write fault). Never throws in-domain (tool contract).
+ */
+export type SaveTeamOutput =
+  | { saved: true; team_id: string; name: string; format: string }
+  | {
+      saved: false;
+      reason: "not_signed_in" | "no_team" | "index_unavailable";
+    };
 
 // ===========================================================================
 // Inferred TypeScript types
@@ -623,6 +673,8 @@ export type Candidates = z.infer<typeof candidatesSchema>;
 export type DamageCalc = z.infer<typeof damageCalcSchema>;
 export type QuestionOption = z.infer<typeof questionOptionSchema>;
 export type Question = z.infer<typeof questionSchema>;
+export type ProposedTeam = z.infer<typeof proposedTeamSchema>;
+export type SavedTeam = z.infer<typeof savedTeamSchema>;
 export type TypeName = z.infer<typeof typeNameSchema>;
 export type StatKey = z.infer<typeof statKeySchema>;
 export type EntityKind = z.infer<typeof entityKindSchema>;
@@ -680,6 +732,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   submit_answer: toJsonSchema(pokebotAnswerSchema),
   // T12 — no team-selecting argument (server-bound active team).
   get_active_team: toJsonSchema(getActiveTeamInputSchema),
+  // T13 — save a proposed team to the user's Teams on approval.
+  save_team: toJsonSchema(saveTeamInputSchema),
 };
 
 /** The generated `submit_answer` (PokebotAnswer) JSON Schema. */
@@ -700,6 +754,7 @@ export const TOOL_NAMES = [
   "estimate_damage",
   "submit_answer",
   "get_active_team",
+  "save_team",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

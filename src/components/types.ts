@@ -194,6 +194,22 @@ export interface ProposedTeamCardProps {
 }
 
 /**
+ * `saved_team` — a team the agent SAVED this turn via `save_team` (T13, stamped
+ * onto `PokebotAnswer` by the route). Lives in the persisted `answer_json`, so a
+ * `ChatTurn`'s assistant `answer` re-renders the card on reload.
+ */
+export type SavedTeam = NonNullable<PokebotAnswer["saved_team"]>;
+
+/**
+ * "Saved ✓" card — confirms a chat-driven save and offers an "Open in viewer"
+ * button that re-opens the saved team (fetched fresh by id) in the artifact
+ * viewer, even after navigating away.
+ */
+export interface SavedTeamCardProps {
+  savedTeam: SavedTeam;
+}
+
+/**
  * Chat-side active-team selector (TEAM-US-8 / AC-8.1). Lists the signed-in
  * account's teams for the CURRENT format only, defaults to none, and on select
  * both lifts the choice via `onChange` (so the next chat turn carries

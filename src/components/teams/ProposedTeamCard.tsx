@@ -9,6 +9,7 @@ import {
   updateTeam,
   type TeamSummary,
 } from "@/lib/teams-client";
+import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 
 /** Human-friendly format label for the header badge. */
 function formatLabel(format: string): string {
@@ -50,6 +51,7 @@ export default function ProposedTeamCard({ proposedTeam }: ProposedTeamCardProps
   const [existing, setExisting] = useState<TeamSummary[]>([]);
   const [targetId, setTargetId] = useState<string>("");
   const [state, setState] = useState<ApplyState>({ kind: "idle" });
+  const { openTeam } = useArtifactViewer();
 
   // Offer apply-existing only for same-format teams the account already owns.
   useEffect(() => {
@@ -132,6 +134,15 @@ export default function ProposedTeamCard({ proposedTeam }: ProposedTeamCardProps
       </ol>
 
       <div className="proposed-team__actions">
+        <button
+          type="button"
+          className="proposed-team__open-viewer"
+          data-testid="proposed-team-open-viewer"
+          onClick={() => openTeam({ team: { name, format, members } })}
+        >
+          Open in viewer
+        </button>
+
         <button
           type="button"
           className="proposed-team__save-new"

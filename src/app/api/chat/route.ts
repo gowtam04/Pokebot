@@ -35,6 +35,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
+import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
 import {
   DEFAULT_MODEL_KEY,
   isModelKey,
@@ -279,6 +280,10 @@ export async function POST(req: Request): Promise<Response> {
   //    consistent with the guest-first stance for account resolution.
   //    GUEST: the in-memory session store, exactly as before.
   let history: ChatMessage[];
+  // The most recent team the agent proposed in this conversation (structured),
+  // bound onto ctx so the agent can act on "save it" / "this team" reliably —
+  // history forwards only the markdown, dropping the structured proposal.
+  let proposedTeam: ProposedTeam | undefined;
   if (account) {
     try {
       const repo = await import("@/data/repos/conversation-repo");
@@ -289,6 +294,20 @@ export async function POST(req: Request): Promise<Response> {
         history = trimMessages(
           stored.map((m) => ({ role: m.role, content: m.textContent })),
         );
+        // Walk back to the latest assistant turn carrying a valid proposed_team.
+        for (let i = stored.length - 1; i >= 0 && !proposedTeam; i--) {
+          const m = stored[i];
+          if (m.role !== "assistant" || !m.answerJson) continue;
+          try {
+            const parsed = JSON.parse(m.answerJson) as {
+              proposed_team?: unknown;
+            };
+            const candidate = proposedTeamSchema.safeParse(parsed.proposed_team);
+            if (candidate.success) proposedTeam = candidate.data;
+          } catch {
+            /* malformed stored answer — skip */
+          }
+        }
       } else {
         history = []; // new conversation; mode stays body-derived
       }
@@ -413,6 +432,11 @@ export async function POST(req: Request): Promise<Response> {
             // `undefined` ⇒ no team is bound; the model only ever sees it via the
             // arg-less `get_active_team` tool, never as an input it can widen.
             activeTeam: activeTeam ?? undefined,
+            // Signed-in account id + the conversation's pending proposed team —
+            // both server-bound, read only by `save_team` (T13) so an approval
+            // ("save it") persists the EXACT set the user saw.
+            accountId: account?.id,
+            proposedTeam,
             // Forward the inbound abort signal so a client disconnect (the user
             // pressed Stop) tears down the Anthropic stream immediately and the
             // loop bails between iterations — no wasted tokens.
@@ -452,6 +476,14 @@ export async function POST(req: Request): Promise<Response> {
 
           // In-domain success (any status). Persist the turn pair for multi-turn
           // refinement, then emit the single terminal answer event.
+          // If `save_team` (T13) persisted a team this turn, stamp the answer
+          // authoritatively from the server-owned result (the model never copies
+          // the UUID). This drives the persistent "Saved ✓" card + viewer open,
+          // and the active-team persistence below.
+          if (ctx.savedTeam) {
+            answer.saved_team = ctx.savedTeam;
+          }
+
           if (account) {
             // SIGNED IN: durable, account-scoped persistence (chat-history
             // HIST-AD-3/BR-H2). Deliver the answer FIRST, then write — keeping
@@ -472,10 +504,12 @@ export async function POST(req: Request): Promise<Response> {
                 answer,
                 now: Date.now(),
                 // Persist the conversation's active team last-selected-wins
-                // (TEAM-US-8): the RESOLVED id when one bound, else `null` (no
-                // selection / not-owned / format mismatch) so resume restores
-                // exactly what was in effect this turn (BR-T9).
-                activeTeamId: activeTeam?.id ?? null,
+                // (TEAM-US-8): a team just SAVED this turn (T13) wins, else the
+                // RESOLVED bound id, else `null` (no selection / not-owned /
+                // format mismatch) so resume restores exactly what was in effect
+                // this turn (BR-T9). The save-then-set also covers a brand-new
+                // conversation whose row didn't exist when `save_team` ran.
+                activeTeamId: ctx.savedTeam?.id ?? activeTeam?.id ?? null,
               });
             } catch (err) {
               logger.error(

@@ -26,6 +26,7 @@ import ItemArtifact from "./ItemArtifact";
 import TypeMatchupsArtifact from "./TypeMatchupsArtifact";
 import ComparisonArtifact from "./ComparisonArtifact";
 import DamageCalcArtifact from "./DamageCalcArtifact";
+import TeamArtifact from "./TeamArtifact";
 
 function formatLabel(format: string): string {
   return format === "champions" ? "Champions" : "Scarlet/Violet";
@@ -38,6 +39,14 @@ interface HeaderInfo {
 }
 
 function headerFor(view: ArtifactView): HeaderInfo {
+  if (view.type === "team") {
+    const name = view.detail?.name || view.title;
+    return {
+      title: name,
+      formatTag: formatLabel(view.format),
+      askText: `Tell me about the team "${name}".`,
+    };
+  }
   if (view.type === "structured") {
     if (view.artifact.kind === "comparison") {
       return {
@@ -93,6 +102,25 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
     ) : (
       <DamageCalcArtifact damageCalc={view.artifact.damageCalc} />
     );
+  }
+
+  if (view.type === "team") {
+    if (view.phase === "loading") {
+      return (
+        <div className="artifact-viewer__loading" data-testid="artifact-loading">
+          <span className="artifact-viewer__spinner" aria-hidden />
+          <span>Loading…</span>
+        </div>
+      );
+    }
+    if (view.phase === "error" || view.detail === null) {
+      return (
+        <div className="artifact-viewer__state" data-testid="artifact-error">
+          Couldn’t load this team. It may have been deleted.
+        </div>
+      );
+    }
+    return <TeamArtifact view={view} />;
   }
 
   if (view.phase === "loading") {

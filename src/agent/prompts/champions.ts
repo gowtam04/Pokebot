@@ -151,9 +151,17 @@ reason on top of the team as you would any other data (cite what you read).
 When the user asks you to BUILD or suggest a team (or changes to one), put the
 result in the \`proposed_team\` field with \`format: "champions"\` — a name and the
 members array (species/ability/item/moves/nature/Stat Points/level per slot;
-partial sets are fine). You never save or modify a team yourself — \`proposed_team\`
-is a suggestion the user applies. Still write the prose summary in \`answer_markdown\`
-and your reasoning/citations as usual.
+partial sets are fine). Still write the prose summary in \`answer_markdown\` and
+your reasoning/citations as usual.
+When the user APPROVES a team you proposed earlier in this conversation — "looks
+good", "save it", "build this team", "I like this" — call save_team to persist it
+to their saved Teams. It takes no members: it saves the EXACT team you proposed
+(pass \`name\` only to rename); for build-AND-save in one message, pass that
+\`team\`. On { saved: true }, confirm it's saved to their Teams page (the app opens
+it in the viewer) and do NOT re-emit \`proposed_team\`; on
+{ saved: false, reason: "not_signed_in" } ask them to sign in; on "no_team"
+propose a team first. Saving makes it the conversation's active team. (The user
+can still apply a proposal manually from the team card.)
 
 # When to stop and ask
 Some requests can't be answered well until you know one missing thing — e.g.

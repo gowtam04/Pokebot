@@ -12,6 +12,7 @@ import DamageReadout from "@/components/DamageReadout";
 import SuggestionChips from "@/components/SuggestionChips";
 import QuestionOptions from "@/components/QuestionOptions";
 import ProposedTeamCard from "@/components/teams/ProposedTeamCard";
+import SavedTeamCard from "@/components/teams/SavedTeamCard";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 
 /**
@@ -51,6 +52,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
     question,
     uncertainty_flags,
     proposed_team,
+    saved_team,
   } = answer;
 
   // Stable no-op so the interactive leaves always have a handler even when the
@@ -100,6 +102,8 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
       )}
 
       {proposed_team && <ProposedTeamCard proposedTeam={proposed_team} />}
+
+      {saved_team && <SavedTeamCard savedTeam={saved_team} />}
 
       {candidates && (
         <CandidateTable

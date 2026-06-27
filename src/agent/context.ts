@@ -73,6 +73,14 @@ export interface CreateAgentContextOptions {
    * `mode` — never set by the model.
    */
   activeTeam?: ActiveTeam;
+  /** Signed-in account id (server-controlled). Used only by `save_team` (T13). */
+  accountId?: string;
+  /**
+   * The most recent team the agent proposed earlier in this conversation (raw
+   * members), bound straight onto `AgentContext.proposedTeam`. Server-controlled
+   * like `activeTeam`; `undefined` (default) means none pending.
+   */
+  proposedTeam?: import("@/agent/schemas").ProposedTeam;
 }
 
 /**
@@ -129,6 +137,9 @@ export async function createAgentContext(
     model,
     signal: opts.signal,
     activeTeam: opts.activeTeam,
+    accountId: opts.accountId,
+    sessionId: opts.sessionId,
+    proposedTeam: opts.proposedTeam,
   };
 }
 

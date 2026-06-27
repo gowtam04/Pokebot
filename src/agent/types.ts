@@ -77,6 +77,32 @@ export interface AgentContext {
    * agent layer still never sees `account_id`.
    */
   activeTeam?: import("@/server/teams/active-team").ActiveTeam;
+  /**
+   * The signed-in account id for the turn, or `undefined` for a guest. Bound by
+   * the route (server-controlled, never an LLM input). Used only by the
+   * `save_team` tool (T13) to write an account-scoped team; the rest of the
+   * agent layer never sees it.
+   */
+  accountId?: string;
+  /**
+   * The conversation id for the turn (same value passed to the logger). Bound by
+   * the route. Used by `save_team` to make the freshly-saved team the
+   * conversation's active team.
+   */
+  sessionId?: string;
+  /**
+   * The most recent team the agent proposed earlier in THIS conversation
+   * (extracted from stored `answer_json.proposed_team` by the route). Server-
+   * bound like {@link activeTeam}; lets `save_team` persist the EXACT set the
+   * user saw on approval, with no model re-typing. `undefined` ⇒ none pending.
+   */
+  proposedTeam?: import("@/agent/schemas").ProposedTeam;
+  /**
+   * MUTABLE result slot: `save_team` sets this to the team it persisted. The
+   * route reads it after the loop to stamp `answer.saved_team` authoritatively
+   * and to persist the conversation's active team. `undefined` ⇒ nothing saved.
+   */
+  savedTeam?: import("@/agent/schemas").SavedTeam;
 }
 
 /**

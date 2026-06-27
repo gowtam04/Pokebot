@@ -13,12 +13,18 @@ import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
 import SidebarToggle from "@/components/SidebarToggle";
 import ActiveTeamSelector from "@/components/teams/ActiveTeamSelector";
+import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/auth-client";
 import { useConversations } from "@/lib/use-conversations";
 import { getConversation, importConversation } from "@/lib/history-client";
-import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
+import type {
+  ChatStatus,
+  ChatTurn,
+  PokebotAnswer,
+  SavedTeam,
+} from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
 const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
@@ -266,6 +272,9 @@ export default function Home() {
   // Commit each terminal answer exactly once (guard against effect re-runs /
   // React strict-mode double-invoke by tracking the committed object identity).
   const committedAnswerRef = useRef<PokebotAnswer | null>(null);
+  // A team the agent JUST saved (save_team, T13) — set only from a fresh answer
+  // so the viewer auto-opens on arrival, never when reloading history.
+  const [savedTeamToOpen, setSavedTeamToOpen] = useState<SavedTeam | null>(null);
   useEffect(() => {
     if (status === "done" && answer && committedAnswerRef.current !== answer) {
       committedAnswerRef.current = answer;
@@ -273,6 +282,7 @@ export default function Home() {
         ...prev,
         { id: makeId(), role: "assistant", answer },
       ]);
+      if (answer.saved_team) setSavedTeamToOpen(answer.saved_team);
       // Signed in: the server just persisted this turn (creating the
       // conversation on the first turn, or bumping it to the top on a
       // follow-up). Re-list so the sidebar reflects the new title / ordering.
@@ -526,6 +536,9 @@ export default function Home() {
               prefill={prefill}
             />
           </div>
+
+          {/* Headless: auto-opens a just-saved team in the viewer on arrival. */}
+          <SavedTeamAutoOpen savedTeam={savedTeamToOpen} />
 
           {/* Docked side panel (full-screen overlay on mobile); hidden until an
               artifact is opened, at which point the chat reflows (AV-US-7). */}
