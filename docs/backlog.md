@@ -131,6 +131,13 @@ which are the point of the product) and the ability to resume threads.
 
 ## B-4 — Artifact viewer
 
+> **Decisions (open questions resolved):** Artifacts are **ephemeral / session-only —
+> they will not persist** (no per-account storage, not shareable), so this item has **no
+> B-1/B-3 dependency**. Emission is **user-triggered** — the user opens a rendered answer
+> "as an artifact"; the agent does not decide to emit one. Still open: whether an artifact
+> is a new shape in the `PokebotAnswer` schema vs. a separate output channel vs. a
+> frontend-derived view, and which artifact type ships first.
+
 **Why:** Some answers are inherently richer than a single chat bubble — a full team
 sheet, a damage-calc breakdown, a type-matchup grid, a side-by-side species comparison.
 Today every answer renders inline in the `AnswerCard` stream and scrolls away. A
@@ -218,6 +225,19 @@ benefits from B-1 (per-account).
 ---
 
 ## B-6 — Clickable sources → source-detail artifact
+
+> **Decisions (open questions resolved):** Built **after B-4**, reusing its artifact
+> viewer (open / pin / dismiss, ephemeral/session-only per B-4). The source-detail comes
+> from the **full underlying datum carried in the answer payload** — *not* a fresh
+> tool/repo lookup on click — so the read path and the fixed 11-tool contract stay
+> untouched. Note that today's `citationSchema` is strictly `{ source, detail,
+> endpoint_url? }` (`src/agent/schemas.ts`), so carrying that full datum means
+> **enriching the citation/answer shape** at answer time; the click-time render is then
+> purely frontend-derived. **Intent:** surface *more context to help the user understand
+> the specific source* — beyond the bare `source — detail`, show the underlying structured
+> value, its provenance, the format/generation it's drawn from, and the canonical
+> endpoint. Still open: whether "source detail" is its own artifact type or one rendering
+> of a more general entity artifact (B-4).
 
 **Why:** Citations are core to the product — every answer carries its sources so the
 reasoning stays grounded (BR-4). Today each citation in `SourceList` shows only the
