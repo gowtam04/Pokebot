@@ -1,0 +1,118 @@
+/**
+ * Unit tests for the team-builder additions to the agent schema contract
+ * (src/agent/schemas.ts): the additive `proposed_team` field on the `.strict()`
+ * PokebotAnswer (TEAM-AD-6) and the T12 `get_active_team` I/O.
+ *
+ * Pure schema tests — no DB / server-only (schemas.ts pulls only the shared
+ * team-schema and a type-only EnrichedActiveTeam import).
+ *
+ * Focus:
+ *   - backward-compat: a stored answer_json WITHOUT proposed_team still parses;
+ *   - a valid proposed_team parses; an unknown key / bad format is rejected;
+ *   - get_active_team is in TOOL_NAMES with an empty, strict input schema.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  pokebotAnswerSchema,
+  getActiveTeamInputSchema,
+  TOOL_NAMES,
+  toolInputJsonSchemas,
+  type PokebotAnswer,
+} from "@/agent/schemas";
+import type { TeamMember } from "@/data/teams/team-schema";
+
+/** A minimal valid PokebotAnswer (the pre-team-builder required surface). */
+const BASE_ANSWER: PokebotAnswer = {
+  status: "answered",
+  answer_markdown: "Bottom line.",
+  reasoning_markdown: "Because.",
+  citations: [],
+  inferences: [],
+  generation_basis: { generation: "gen-9", fallback: false },
+};
+
+const MEMBER: TeamMember = {
+  species: "garchomp",
+  ability: "rough-skin",
+  item: "life-orb",
+  moves: ["earthquake", "dragon-claw"],
+  nature: "jolly",
+  evs: { hp: 0, atk: 252, def: 0, spa: 0, spd: 4, spe: 252 },
+  ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+  tera_type: "fire",
+  level: 50,
+};
+
+describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
+  it("parses a stored answer WITHOUT proposed_team (backward compatible)", () => {
+    const parsed = pokebotAnswerSchema.safeParse(BASE_ANSWER);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.proposed_team).toBeUndefined();
+    }
+  });
+
+  it("parses an answer carrying a valid proposed_team", () => {
+    const parsed = pokebotAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      proposed_team: {
+        name: "Rain Offense",
+        format: "scarlet-violet",
+        members: [MEMBER],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts both formats in proposed_team.format and rejects an unknown one", () => {
+    for (const format of ["scarlet-violet", "champions"] as const) {
+      const parsed = pokebotAnswerSchema.safeParse({
+        ...BASE_ANSWER,
+        proposed_team: { name: "T", format, members: [] },
+      });
+      expect(parsed.success).toBe(true);
+    }
+    const bad = pokebotAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      proposed_team: { name: "T", format: "gen-1", members: [] },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it("rejects an unknown key inside proposed_team (.strict())", () => {
+    const parsed = pokebotAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      proposed_team: {
+        name: "T",
+        format: "scarlet-violet",
+        members: [],
+        notes: "nope",
+      },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("still rejects unknown TOP-LEVEL keys (the answer stays strict)", () => {
+    const parsed = pokebotAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      not_a_field: true,
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("get_active_team I/O (T12)", () => {
+  it("registers get_active_team in TOOL_NAMES and toolInputJsonSchemas", () => {
+    expect(TOOL_NAMES).toContain("get_active_team");
+    expect(toolInputJsonSchemas.get_active_team).toBeDefined();
+  });
+
+  it("input schema accepts {} and rejects any team-selecting argument", () => {
+    expect(getActiveTeamInputSchema.safeParse({}).success).toBe(true);
+    expect(
+      getActiveTeamInputSchema.safeParse({ team_id: "abc" }).success,
+    ).toBe(false);
+  });
+});

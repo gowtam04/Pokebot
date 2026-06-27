@@ -150,6 +150,24 @@ You may receive follow-ups that build on the previous answer ("now only the Fire
 types", "which of those is fastest?"). Apply the refinement to the prior result
 set / topic from earlier in this conversation rather than starting over.
 
+# Active team
+The user can have a saved team SELECTED as the conversation's active team. When a
+question is about "my team", a member of it, "this set", or wants advice grounded
+in what they're running, call get_active_team to read it. It takes no arguments —
+the user selects the team, you cannot pick or change it — and returns the members
+(species, ability, item, moves, nature, EVs/IVs, Tera type, level) with display
+names plus any validity/legality \`warnings\` (illegal moves, over-cap EVs,
+duplicate species, etc.). If it returns { active: false }, no team is selected:
+say so and offer to help build or import one rather than inventing a team. Use the
+warnings to ground your advice, and reason on top of the team the same way you do
+for any other data (cite what you read, flag inferences).
+When the user asks you to BUILD or suggest a team (or changes to one), put the
+result in the \`proposed_team\` field — a name, the format, and the members array
+(species/ability/item/moves/nature/EVs/IVs/tera_type/level per slot; partial sets
+are fine, omit what you're unsure of). You never save or modify a team yourself —
+\`proposed_team\` is a suggestion the user applies. Still write the prose summary in
+\`answer_markdown\` and your reasoning/citations as usual.
+
 # When to stop and ask
 Some requests can't be answered well until you know one missing thing — e.g.
 "build a Trick Room team" (Singles or Doubles? — the setters and abusers differ a
@@ -294,6 +312,30 @@ User: help me build a trick room team
     citations: [],
     inferences: [],
     generation_basis: { generation: "gen-9", fallback: false }
+  })
+
+## Example G — Grounding advice in the user's active team
+User: anything wrong with my team?
+→ get_active_team({})
+← { active: true, team: { name: "Rain Offense", format: "scarlet-violet", members: [
+    { species: "garchomp", species_display: "Garchomp", ability: "rough-skin", item: "life-orb",
+      moves: ["earthquake","dragon-claw","fire-fang","stealth-rock"], moves_display: ["Earthquake","Dragon Claw","Fire Fang","Stealth Rock"],
+      nature: "jolly", evs: { hp: 0, atk: 252, def: 0, spa: 0, spd: 4, spe: 252 }, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, tera_type: "fire", level: 50 },
+    /* …five more members… */
+  ], warnings: [
+    { code: "move_not_in_learnset", message: "Garchomp can't learn Stealth Rock in this format.", slot: 0, field: "moves[3]" },
+    { code: "ev_total_exceeded", message: "Slot 2 spends 512 EVs (max 508).", slot: 1 }
+  ] } }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "Two issues stand out on **Rain Offense**:\\n\\n1. **Garchomp – Stealth Rock** isn't in its learnset for this format, so that slot is illegal as written. Swap to a legal hazard setter (or drop the move).\\n2. **Slot 2** is over the EV cap — it spends **512** of a maximum **508**, so 4 EVs are wasted; trim a stat by 4.\\n\\nEverything else looks legal.",
+    reasoning_markdown: "I read your active team and its computed warnings. The move-legality and EV-cap flags come straight from the validator; I'm surfacing the two that actually need a fix and leaving the rest alone.",
+    citations: [
+      { source: "active_team/Rain Offense", detail: "warning move_not_in_learnset: Garchomp / Stealth Rock (slot 0)" },
+      { source: "active_team/Rain Offense", detail: "warning ev_total_exceeded: slot 2 total 512 > 508" }
+    ],
+    inferences: [],
+    generation_basis: { generation: "gen-9", fallback: false }
   })`;
 
 /**
@@ -328,7 +370,8 @@ const CHAMPIONS_SYSTEM_BLOCKS: Anthropic.TextBlockParam[] = [
 ];
 
 /**
- * The 11 tool definitions for the Anthropic SDK, built once. `name` /
+ * The tool definitions for the Anthropic SDK, built once (T1..T11 plus the
+ * inlined T12 `get_active_team`, which auto-joins from the tool layer). `name` /
  * `inputSchema` come straight from the tool layer (schemas.ts is the single
  * source), so this list is deterministic and never reordered between turns
  * (reordering would invalidate the cache).
@@ -356,6 +399,7 @@ const PROGRESS_LABELS: Record<string, string> = {
   compute_stat: "🧮 Computing stat…",
   estimate_damage: "💥 Estimating damage…",
   submit_answer: "✍️ Composing the answer…",
+  get_active_team: "📋 Reading your active team…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */

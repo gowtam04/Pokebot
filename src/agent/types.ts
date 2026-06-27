@@ -59,6 +59,15 @@ export interface AgentContext {
    * iterations. Undefined for callers/tests that don't supply one.
    */
   signal?: AbortSignal;
+  /**
+   * The turn's active team (TEAM-AD-1), resolved + authorized by the route and
+   * bound here — the exact analogue of {@link mode}: server-controlled, NEVER an
+   * LLM-visible tool input. Read only by the `get_active_team` tool; `undefined`
+   * means no team is bound (guest, no selection, or a format mismatch), which
+   * surfaces to the model as `{ active: false }`. Imported type-only so the
+   * agent layer still never sees `account_id`.
+   */
+  activeTeam?: import("@/server/teams/active-team").ActiveTeam;
 }
 
 /**

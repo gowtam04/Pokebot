@@ -16,6 +16,11 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+import { teamMembersSchema } from "@/data/teams/team-schema";
+// Type-only — erased at compile, so this shared module never pulls the
+// server-only active-team service (or its repos) into a client bundle.
+import type { EnrichedActiveTeam } from "@/server/teams/active-team";
+
 // ---------------------------------------------------------------------------
 // Shared enums / leaf schemas
 // ---------------------------------------------------------------------------
@@ -518,8 +523,40 @@ export const pokebotAnswerSchema = z
     suggestions: z.array(z.string()).optional(),
     question: questionSchema.optional(),
     uncertainty_flags: z.array(z.string()).optional(),
+    // The agent's proposed team (TEAM-AD-6). ADDITIVE optional field: previously
+    // stored answer_json (no `proposed_team` key) stays valid under `.strict()`,
+    // and a new answer may carry a buildable team the user can Apply (save-new /
+    // apply-existing) via the Teams API — the agent itself NEVER writes (BR-T8).
+    proposed_team: z
+      .object({
+        name: z.string(),
+        format: z.enum(["scarlet-violet", "champions"]),
+        members: teamMembersSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
+
+// ===========================================================================
+// T12 — get_active_team (inlined team-builder internal; reconciled in Phase 11)
+// ===========================================================================
+
+// Input takes NO team-selecting argument: the active team is server-bound onto
+// AgentContext (the exact analogue of `mode`), so the model has no parameter to
+// widen scope. `.strict()` rejects any stray key the model might invent.
+export const getActiveTeamInputSchema = z.object({}).strict();
+
+/**
+ * Output of `get_active_team`: `{ active: false }` when no team is bound for the
+ * turn, else the enriched team view (display names + computed warnings). Hand-
+ * authored as a discriminated union — the enriched shape is owned by the
+ * active-team service, not re-derived here.
+ */
+export type GetActiveTeamInput = z.infer<typeof getActiveTeamInputSchema>;
+export type GetActiveTeamOutput =
+  | { active: false }
+  | { active: true; team: EnrichedActiveTeam };
 
 // ===========================================================================
 // Inferred TypeScript types
@@ -622,13 +659,15 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   estimate_damage: toJsonSchema(estimateDamageInputSchema),
   // submit_answer's input IS the PokebotAnswer object.
   submit_answer: toJsonSchema(pokebotAnswerSchema),
+  // T12 — no team-selecting argument (server-bound active team).
+  get_active_team: toJsonSchema(getActiveTeamInputSchema),
 };
 
 /** The generated `submit_answer` (PokebotAnswer) JSON Schema. */
 export const pokebotAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T11), in order. */
+/** Canonical tool name list (T1..T12), in order. */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -641,6 +680,7 @@ export const TOOL_NAMES = [
   "compute_stat",
   "estimate_damage",
   "submit_answer",
+  "get_active_team",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

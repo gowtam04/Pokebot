@@ -36,6 +36,7 @@ import type { Logger } from "pino";
 
 import type { AgentContext, AgentMode, DbCtx } from "@/agent/types";
 import type { PokebotDb } from "@/data/db";
+import type { ActiveTeam } from "@/server/teams/active-team";
 import { logger as defaultLogger } from "@/server/logger";
 
 /** Overrides for {@link createAgentContext}; every field defaults sensibly. */
@@ -59,6 +60,13 @@ export interface CreateAgentContextOptions {
    * disconnects (user pressed Stop). Optional — defaults to undefined.
    */
   signal?: AbortSignal;
+  /**
+   * The turn's active team (already resolved + authorized by the route via
+   * `resolveActiveTeam`). Bound straight onto `AgentContext.activeTeam`;
+   * `undefined` (the default) means no team is bound. Server-controlled like
+   * `mode` — never set by the model.
+   */
+  activeTeam?: ActiveTeam;
 }
 
 /**
@@ -111,6 +119,7 @@ export async function createAgentContext(
     requestId,
     mode,
     signal: opts.signal,
+    activeTeam: opts.activeTeam,
   };
 }
 
