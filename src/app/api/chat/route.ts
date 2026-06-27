@@ -297,17 +297,19 @@ export async function POST(req: Request): Promise<Response> {
   // 3b. Resolve + authorize the conversation's ACTIVE TEAM before opening the
   //    stream — the exact analogue of `mode`: server-controlled, never an
   //    LLM-visible tool input (BR-T9 / TEAM-AD-1). Gated on a signed-in account
-  //    (guests have no saved teams). `resolveActiveTeam` binds the team ONLY when
-  //    it is account-owned AND `team.format === formatForMode(mode)` — a missing
-  //    id, a not-owned team, or a format mismatch all yield `null` (BR-T3,
-  //    AC-8.3). It runs AFTER the history block so `mode` is already finalized
-  //    from the stored conversation format on a resume. The resolved team is
-  //    bound onto `ctx.activeTeam` (below) and persisted last-selected-wins. A DB
-  //    blip degrades to no active team rather than a 500 (guest-first stance).
+  //    (guests have no saved teams). Gated on a non-empty `active_team_id` too:
+  //    with no id there is nothing to resolve, so we skip the import entirely and
+  //    leave `activeTeam` null (a not-owned team or a format mismatch still yield
+  //    `null` — BR-T3, AC-8.3). `resolveActiveTeam` binds the team ONLY when it is
+  //    account-owned AND `team.format === formatForMode(mode)`. It runs AFTER the
+  //    history block so `mode` is already finalized from the stored conversation
+  //    format on a resume. The resolved team is bound onto `ctx.activeTeam` (below)
+  //    and persisted last-selected-wins. A DB blip degrades to no active team
+  //    rather than a 500 (guest-first stance).
   let activeTeam:
     | import("@/server/teams/active-team").ActiveTeam
     | null = null;
-  if (account) {
+  if (account && body.active_team_id) {
     try {
       const [{ resolveActiveTeam }, { db }] = await Promise.all([
         import("@/server/teams/active-team"),
