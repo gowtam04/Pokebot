@@ -38,8 +38,10 @@ import { createAgentContext } from "@/agent/context";
 import {
   DEFAULT_MODEL_KEY,
   isModelKey,
+  modelLabel,
   type ModelKey,
 } from "@/agent/models";
+import { ProviderTransportError } from "@/agent/providers/errors";
 import type {
   AgentMode,
   ChatMessage,
@@ -513,14 +515,29 @@ export async function POST(req: Request): Promise<Response> {
               event: "chat_transport_error",
               request_id: requestId,
               session_id,
+              model: body.model,
               err: detail,
             },
             "pokebot_chat_transport_error",
           );
-          send("error", {
-            code: "agent_error",
-            message: "The assistant hit a transport error. Please try again.",
-          });
+          // A typed provider fault (xAI/OpenAI 4xx/5xx — bad key, unsupported
+          // param, rate limit, unknown model) gets a MODEL-SCOPED message so the
+          // user knows to switch models / fix the provider key, plus the upstream
+          // status so the client can auto-revert to the default model. The generic
+          // Anthropic/unknown fault keeps the neutral retry message.
+          if (err instanceof ProviderTransportError) {
+            const statusPart = err.status ? ` (HTTP ${err.status})` : "";
+            send("error", {
+              code: "model_provider_error",
+              message: `${modelLabel(body.model)} is unavailable right now${statusPart} — try Claude or check the provider key.`,
+              ...(err.status !== undefined ? { status: err.status } : {}),
+            });
+          } else {
+            send("error", {
+              code: "agent_error",
+              message: "The assistant hit a transport error. Please try again.",
+            });
+          }
         } finally {
           close();
         }

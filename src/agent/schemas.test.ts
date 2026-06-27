@@ -116,3 +116,34 @@ describe("get_active_team I/O (T12)", () => {
     ).toBe(false);
   });
 });
+
+describe("submit_answer JSON Schema — xAI strict-safe (P3a)", () => {
+  // xAI tool-call arguments are ALWAYS implicitly strict; its validator can
+  // reject an open `additionalProperties: {}` (what z.record(z.unknown())
+  // generates). The free-form maps (candidate key_stats, damage_calc
+  // assumptions/result) are typed as JSON scalars so they emit a CONCRETE
+  // additionalProperties schema instead. Guard that no bare `{}` map remains.
+  it("has no bare `additionalProperties: {}` anywhere", () => {
+    const offenders: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (Array.isArray(node)) {
+        node.forEach((n, i) => walk(n, `${path}[${i}]`));
+        return;
+      }
+      if (!node || typeof node !== "object") return;
+      const obj = node as Record<string, unknown>;
+      const ap = obj.additionalProperties;
+      if (
+        ap !== null &&
+        typeof ap === "object" &&
+        !Array.isArray(ap) &&
+        Object.keys(ap as object).length === 0
+      ) {
+        offenders.push(`${path}.additionalProperties`);
+      }
+      for (const [k, v] of Object.entries(obj)) walk(v, `${path}.${k}`);
+    };
+    walk(toolInputJsonSchemas.submit_answer, "submit_answer");
+    expect(offenders).toEqual([]);
+  });
+});

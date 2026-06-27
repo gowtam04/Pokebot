@@ -17,9 +17,21 @@ import { MODELS, type ModelKey } from "@/agent/models";
 type ModelSelectorProps = {
   value: ModelKey;
   onChange: (next: ModelKey) => void;
+  /**
+   * Which models the SERVER actually has configured (from GET /api/config).
+   * Options not in this list are disabled (greyed out) since selecting them would
+   * just 503. `undefined` (not yet fetched) means "don't disable anything".
+   */
+  configuredModels?: ModelKey[];
 };
 
-export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
+export default function ModelSelector({
+  value,
+  onChange,
+  configuredModels,
+}: ModelSelectorProps) {
+  const isConfigured = (key: ModelKey): boolean =>
+    configuredModels ? configuredModels.includes(key) : true;
   return (
     <label
       title="Choose which AI model answers"
@@ -60,13 +72,22 @@ export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
           paddingInlineEnd: "var(--space-1)",
         }}
       >
-        {MODELS.map((m) => (
-          // Dark text on the native option list (rendered by the OS in its own
-          // surface, not the translucent header), so set an explicit color.
-          <option key={m.key} value={m.key} style={{ color: "var(--neutral-900, #111)" }}>
-            {m.label}
-          </option>
-        ))}
+        {MODELS.map((m) => {
+          const configured = isConfigured(m.key);
+          return (
+            // Dark text on the native option list (rendered by the OS in its own
+            // surface, not the translucent header), so set an explicit color.
+            <option
+              key={m.key}
+              value={m.key}
+              disabled={!configured}
+              style={{ color: "var(--neutral-900, #111)" }}
+            >
+              {m.label}
+              {configured ? "" : " (not configured)"}
+            </option>
+          );
+        })}
       </select>
     </label>
   );

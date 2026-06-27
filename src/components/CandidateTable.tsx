@@ -38,6 +38,7 @@ const STAT_LABELS: Record<(typeof STAT_ORDER)[number], string> = {
 export default function CandidateTable({
   candidates,
   onSelect,
+  onShowAll,
 }: CandidateTableProps) {
   const { total_count, truncated, shown, sort } = candidates;
 
@@ -68,6 +69,16 @@ export default function CandidateTable({
           >
             sorted by {sort}
           </span>
+        )}
+        {truncated && onShowAll && (
+          <button
+            type="button"
+            className="candidate-table__show-all"
+            data-testid="candidate-table-show-all"
+            onClick={onShowAll}
+          >
+            Show all {total_count}
+          </button>
         )}
       </div>
 

@@ -105,6 +105,11 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
         <CandidateTable
           candidates={candidates}
           onSelect={(name) => followUp(`Tell me about ${name}`)}
+          onShowAll={() =>
+            followUp(
+              `Show me all ${candidates.total_count} of those, not just the top ${candidates.shown.length}.`,
+            )
+          }
         />
       )}
 

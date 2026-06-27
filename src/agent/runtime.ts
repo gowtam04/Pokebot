@@ -48,7 +48,12 @@ import type {
   ProviderToolDef,
   ToolResult,
 } from "@/agent/providers/types";
-import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
+import {
+  pokebotAnswerSchema,
+  type PokebotAnswer,
+  type PokemonProfile,
+} from "@/agent/schemas";
+import { enrichAnswer } from "@/agent/enrich-answer";
 import type {
   AgentContext,
   ChatMessage,
@@ -674,6 +679,14 @@ export async function runWithProvider(
   let submitRetries = 0;
   let emptyTurnNudges = 0;
 
+  // get_pokemon profiles fetched this turn — used by answer enrichment to
+  // synthesize subjects[] when the model omits it on a single-entity answer.
+  const lookedUpProfiles: PokemonProfile[] = [];
+
+  // Emit the "reasoning…" progress tick at most once per turn (UX for models like
+  // Grok that stream a long reasoning phase before the answer arrives at once).
+  let reasoningNudged = false;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Bail if the client disconnected (user pressed Stop) during the prior tool
     // dispatch — covers the gap between the provider-level aborts. Thrown as an
@@ -722,6 +735,11 @@ export async function runWithProvider(
         extractor = null;
       } else if (event.type === "text_delta") {
         assistantText += event.text;
+      } else if (event.type === "thinking_delta" && !reasoningNudged) {
+        // Surface a single "reasoning…" tick so a long pre-answer reasoning phase
+        // (e.g. Grok at reasoning_effort:high) reads as progress, not a stall.
+        reasoningNudged = true;
+        onProgress?.({ tool: "reasoning", label: "🤔 Reasoning…" });
       }
     }
 
@@ -819,6 +837,15 @@ export async function runWithProvider(
       let errorMessage: string | null = null;
       try {
         result = await dispatch(call.name, call.input, ctx);
+        // Stash successful single-Pokémon profiles for subjects[] enrichment.
+        if (
+          call.name === "get_pokemon" &&
+          result &&
+          typeof result === "object" &&
+          (result as { found?: unknown }).found === true
+        ) {
+          lookedUpProfiles.push(result as PokemonProfile);
+        }
       } catch (caught) {
         errorMessage =
           caught instanceof Error ? caught.message : String(caught);
@@ -839,9 +866,12 @@ export async function runWithProvider(
     }
 
     // A valid answer terminates the turn immediately (no further API call, so
-    // the unused tool_results are harmless).
+    // the unused tool_results are harmless). Enrich it first — backfill
+    // sprite_url/dex_number/types (and derive subjects[] when absent) so sprites
+    // are model-independent. Enrichment never throws and never weakens the answer.
     if (validAnswer) {
-      return finalize(validAnswer, state, ctx);
+      const enriched = await enrichAnswer(validAnswer, ctx, lookedUpProfiles);
+      return finalize(enriched, state, ctx);
     }
 
     // submit_answer was emitted but invalid: re-emit up to the budget, then

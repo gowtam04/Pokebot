@@ -284,16 +284,35 @@ export function useSseClient(): UseSseClientReturn {
         return;
       }
 
-      // ── Step 2: check HTTP-level errors (e.g. 413 / 429 pre-stream) ────────
+      // ── Step 2: check HTTP-level errors (e.g. 413 / 429 / 503 pre-stream) ──
       if (!response.ok || !response.body) {
-        setState((prev) => ({
-          ...prev,
-          status: "error",
-          error: {
-            code: `http_${response.status}`,
-            message: `HTTP ${response.status} ${response.statusText}`,
-          },
-        }));
+        // Prefer the server's JSON `{ code, message }` (e.g. 503
+        // model_unavailable) so the UI shows a meaningful, actionable error and
+        // can react to the code (e.g. auto-revert the model). Fall back to the
+        // raw HTTP status for a non-JSON body.
+        let errorEvent = {
+          code: `http_${response.status}`,
+          message: `HTTP ${response.status} ${response.statusText}`,
+        } as { code: string; message: string; status?: number };
+        try {
+          const data = (await response.json()) as {
+            code?: unknown;
+            message?: unknown;
+          };
+          if (
+            typeof data?.code === "string" &&
+            typeof data?.message === "string"
+          ) {
+            errorEvent = {
+              code: data.code,
+              message: data.message,
+              status: response.status,
+            };
+          }
+        } catch {
+          /* non-JSON body — keep the http_<status> fallback */
+        }
+        setState((prev) => ({ ...prev, status: "error", error: errorEvent }));
         return;
       }
 

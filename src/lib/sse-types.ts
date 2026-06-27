@@ -72,6 +72,11 @@ export interface AnswerEvent {
 export interface ErrorEvent {
   code: string;
   message: string;
+  /**
+   * Upstream HTTP status for a provider transport fault (e.g. an xAI 401/429),
+   * when known. Lets the client tailor its message / suggest switching models.
+   */
+  status?: number;
 }
 
 /** The SSE event names this endpoint emits. */

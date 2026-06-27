@@ -125,6 +125,54 @@ export default function Home() {
     }
   }, []);
 
+  // Which models the SERVER actually has configured (GET /api/config). Drives the
+  // dropdown's disabled options and an auto-revert if the persisted/selected model
+  // isn't usable. `null` until resolved (or on failure) ⇒ nothing is disabled.
+  const [configuredModels, setConfiguredModels] = useState<ModelKey[] | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { configuredModels?: unknown } | null) => {
+        if (!active || !data) return;
+        if (Array.isArray(data.configuredModels)) {
+          setConfiguredModels(
+            data.configuredModels.filter((k): k is ModelKey => isModelKey(k)),
+          );
+        }
+      })
+      .catch(() => {
+        /* config is non-critical — leave every model enabled */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // If the persisted/selected model isn't configured on this server, fall back to
+  // Claude (always configured) so the user can't sit on an unusable selection.
+  useEffect(() => {
+    if (configuredModels && !configuredModels.includes(selectedModel)) {
+      setSelectedModelPersisted(DEFAULT_MODEL_KEY);
+    }
+  }, [configuredModels, selectedModel, setSelectedModelPersisted]);
+
+  // A model/provider fault (503 model_unavailable pre-stream, or model_provider_error
+  // mid-stream) means the chosen model isn't usable right now — revert to Claude so
+  // the next attempt works.
+  useEffect(() => {
+    if (
+      status === "error" &&
+      (error?.code === "model_unavailable" ||
+        error?.code === "model_provider_error") &&
+      selectedModel !== DEFAULT_MODEL_KEY
+    ) {
+      setSelectedModelPersisted(DEFAULT_MODEL_KEY);
+    }
+  }, [status, error, selectedModel, setSelectedModelPersisted]);
+
   // History-sidebar collapsed state. Default expanded so the first render is
   // deterministic (the sidebar + its toggle are both gated on `auth.signedIn`,
   // which only flips after `fetchMe()` resolves post-mount, so no SSR markup
@@ -387,6 +435,7 @@ export default function Home() {
           <ModelSelector
             value={selectedModel}
             onChange={setSelectedModelPersisted}
+            configuredModels={configuredModels ?? undefined}
           />
           <ChampionsToggle
             checked={championsMode}

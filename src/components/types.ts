@@ -139,6 +139,12 @@ export interface TypeBadgeProps {
 export interface CandidateTableProps {
   candidates: Candidates;
   onSelect?: (name: string) => void;
+  /**
+   * Optional "Show all N" affordance, shown only when the result set is
+   * truncated. Clicking it sends a follow-up turn asking for the full list, so a
+   * truncated table is never a dead-end.
+   */
+  onShowAll?: () => void;
 }
 
 /** `citations[]` — the PokeAPI data relied on. Collapsible "Sources" list. */

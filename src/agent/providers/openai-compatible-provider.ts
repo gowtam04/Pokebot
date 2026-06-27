@@ -8,10 +8,15 @@
  *  - System segments are joined into ONE `{role:"system"}` message (Chat
  *    Completions has no separate system field), and there is NO `cache_control`
  *    (OpenAI/xAI cache a stable prefix automatically).
- *  - Tools are `{type:"function", function:{...}}`, NON-strict (the PokebotAnswer
- *    schema's unions/optionals don't satisfy strict structured output — the
- *    loop's Zod re-emit budget is the safety net), with `tool_choice:"auto"` and
- *    `parallel_tool_calls`.
+ *  - Tools are `{type:"function", function:{...}}` with `tool_choice:"auto"`.
+ *    NOTE: xAI tool-call arguments are ALWAYS implicitly strict (there is no
+ *    non-strict mode) and DO support unions/optionals — the one construct its
+ *    strict validator can reject is an open `additionalProperties:{}` map, so the
+ *    submit_answer schema keeps its free-form maps typed (schemas.ts
+ *    `jsonScalarSchema`). The loop's Zod re-emit budget remains the safety net for
+ *    any residual mismatch. `parallel_tool_calls`, `max_completion_tokens`, and
+ *    `temperature` are configurable per model (the reasoning models disable
+ *    parallel tool calls, raise the token budget, and pin a low temperature).
  *  - The streamed `delta.tool_calls[].function.arguments` fragments are fed into
  *    the SAME runtime AnswerMarkdownExtractor as the Anthropic `input_json_delta`
  *    feed. (xAI streams a tool call as a single chunk, so for Grok the answer
@@ -23,6 +28,7 @@
 import OpenAI from "openai";
 
 import { MAX_TOKENS } from "@/agent/providers/constants";
+import { ProviderTransportError } from "@/agent/providers/errors";
 import type {
   FinalTurn,
   LLMProvider,
@@ -54,6 +60,17 @@ export interface OpenAICompatibleProviderConfig {
   baseURL?: string;
   /** Reasoning effort; mapped to `reasoning_effort`. Omit to use model default. */
   effort?: ReasoningEffort;
+  /**
+   * Sampling temperature. Omit to inherit the provider default — which on Grok
+   * 4.3 is 0.7 (more random than a battle-math agent wants), so the factory pins
+   * a low value for the reasoning models.
+   */
+  temperature?: number;
+  /** Output-token budget (`max_completion_tokens`); defaults to {@link MAX_TOKENS}. */
+  maxOutputTokens?: number;
+  /** Allow parallel tool calls. Defaults to true; the factory disables it for the
+   * reasoning models so submit_answer can't be returned alongside a data tool. */
+  parallelToolCalls?: boolean;
 }
 
 /** Minimal surface of the OpenAI client the provider uses (injectable for tests). */
@@ -72,6 +89,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
   readonly kind: ProviderKind;
   readonly apiModelId: string;
   private readonly effort?: ReasoningEffort;
+  private readonly temperature?: number;
+  private readonly maxOutputTokens: number;
+  private readonly parallelToolCalls: boolean;
   private readonly client: OpenAIClientLike;
 
   constructor(
@@ -81,6 +101,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.kind = config.kind;
     this.apiModelId = config.apiModelId;
     this.effort = config.effort;
+    this.temperature = config.temperature;
+    this.maxOutputTokens = config.maxOutputTokens ?? MAX_TOKENS;
+    this.parallelToolCalls = config.parallelToolCalls ?? true;
     this.client =
       client ??
       new OpenAI({ apiKey: config.apiKey, baseURL: config.baseURL });
@@ -106,7 +129,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         name: tool.name,
         description: tool.description,
         parameters: tool.parameters as Record<string, unknown>,
-        // NON-strict on purpose — see file header.
+        // xAI tool args are always implicitly strict — see file header.
       },
     }));
 
@@ -120,12 +143,15 @@ export class OpenAICompatibleProvider implements LLMProvider {
       messages,
       tools,
       tool_choice: "auto",
-      parallel_tool_calls: true,
-      max_completion_tokens: MAX_TOKENS,
+      parallel_tool_calls: this.parallelToolCalls,
+      max_completion_tokens: this.maxOutputTokens,
       stream: true,
       // Mandatory to receive a usage chunk while streaming.
       stream_options: { include_usage: true },
       ...(this.effort ? { reasoning_effort: this.effort } : {}),
+      ...(this.temperature !== undefined
+        ? { temperature: this.temperature }
+        : {}),
     };
 
     const created = this.client.chat.completions.create(body, {
@@ -161,6 +187,24 @@ interface AccumToolCall {
   id: string;
   name: string;
   args: string;
+  /** Whether a tool_call_start has been emitted for this index yet. */
+  started: boolean;
+}
+
+/**
+ * Classify a thrown upstream error. An OpenAI/xAI `APIError` (4xx/5xx — bad key,
+ * unsupported param, rate limit, model-not-found) becomes a
+ * {@link ProviderTransportError} carrying its status so the route can show a
+ * model-scoped message; anything else propagates unchanged.
+ */
+function toTransportError(err: unknown): unknown {
+  if (err instanceof OpenAI.APIError) {
+    return new ProviderTransportError(
+      typeof err.status === "number" ? err.status : undefined,
+      err.message,
+    );
+  }
+  return err;
 }
 
 /** Best-effort JSON parse; `undefined` on malformed args (loop re-emit handles). */
@@ -195,8 +239,23 @@ function adaptOpenAIStream(
   let usage: ChatChunk["usage"] | null = null;
 
   async function* iterate(): AsyncGenerator<ProviderStreamEvent> {
-    const stream = await created;
-    for await (const chunk of stream) {
+    let stream: AsyncIterable<ChatChunk>;
+    try {
+      stream = await created;
+    } catch (err) {
+      throw toTransportError(err);
+    }
+    let chunks: AsyncIterator<ChatChunk> | undefined;
+    for (;;) {
+      let res: IteratorResult<ChatChunk>;
+      try {
+        chunks ??= stream[Symbol.asyncIterator]();
+        res = await chunks.next();
+      } catch (err) {
+        throw toTransportError(err);
+      }
+      if (res.done) break;
+      const chunk = res.value;
       if (chunk.usage) usage = chunk.usage;
       const choice = chunk.choices[0];
       if (!choice) continue;
@@ -224,21 +283,21 @@ function adaptOpenAIStream(
             id: tc.id ?? "",
             name: tc.function?.name ?? "",
             args: "",
+            started: false,
           };
           calls.set(index, acc);
-          // First fragment for this index carries id + name → start event.
-          if (acc.id && acc.name) {
-            yield {
-              type: "tool_call_start",
-              index,
-              id: acc.id,
-              name: acc.name,
-            };
-          }
         } else {
           // Late-arriving id/name (defensive; usually present on the first).
           if (!acc.id && tc.id) acc.id = tc.id;
           if (!acc.name && tc.function?.name) acc.name = tc.function.name;
+        }
+        // Emit tool_call_start the FIRST time both id and name are known —
+        // whether they arrive together (the usual case) or split across
+        // fragments. Without this, a split id/name would never start the
+        // submit_answer stream, silently dropping answer_delta streaming.
+        if (!acc.started && acc.id && acc.name) {
+          acc.started = true;
+          yield { type: "tool_call_start", index, id: acc.id, name: acc.name };
         }
         const argChunk = tc.function?.arguments;
         if (typeof argChunk === "string" && argChunk.length > 0) {

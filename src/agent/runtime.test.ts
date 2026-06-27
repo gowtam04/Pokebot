@@ -43,6 +43,13 @@ vi.mock("@/agent/tools", () => ({
   dispatch: (...args: unknown[]) => mockDispatch(...args),
 }));
 
+// Enrichment is integration-tested separately (enrich-answer.integration.test.ts).
+// Stub it to a pass-through here so this unit test never pulls the data layer
+// (@/data/repos/* → @/data/db is `server-only`).
+vi.mock("@/agent/enrich-answer", () => ({
+  enrichAnswer: async (answer: unknown) => answer,
+}));
+
 import {
   AnswerMarkdownExtractor,
   describeToolCall,

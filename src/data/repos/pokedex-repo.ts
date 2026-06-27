@@ -313,8 +313,13 @@ export async function queryPokedex(
   }
 
   const order: "asc" | "desc" = f.order ?? "desc";
-  const limit = Math.min(Math.max(f.limit ?? 20, 1), 100);
-  const sort = f.sortBy ? `${f.sortBy} ${order}` : null;
+  const limit = Math.min(Math.max(f.limit ?? 50, 1), 100);
+  // When the caller gives no sort field, rank by base_stat_total desc so every
+  // list comes back ranked AND labeled (the UI's "sorted by" chip reads `sort`) —
+  // regardless of which model composed the query. Callers that want dex order
+  // pass sort_by: "national_dex_number" explicitly.
+  const sortField: StatKey | "national_dex_number" = f.sortBy ?? "base_stat_total";
+  const sort = `${sortField} ${order}`;
 
   // --- WHERE: dynamic AND of all filter groups -----------------------------
   // Every query is scoped to the active format.
@@ -367,11 +372,8 @@ export async function queryPokedex(
   const total_count = countRows[0]?.value ?? 0;
 
   // --- page of rows --------------------------------------------------------
-  const primaryOrder = f.sortBy
-    ? order === "asc"
-      ? asc(sortColumn(f.sortBy))
-      : desc(sortColumn(f.sortBy))
-    : asc(pokemon.national_dex_number);
+  const primaryOrder =
+    order === "asc" ? asc(sortColumn(sortField)) : desc(sortColumn(sortField));
 
   const selectBase = db.select().from(pokemon).$dynamic();
   const rows = await (whereExpr ? selectBase.where(whereExpr) : selectBase)
@@ -480,6 +482,106 @@ export async function getPokemon(
     source_generation: row.source_generation,
   };
   return profile;
+}
+
+// ===========================================================================
+// spriteRefsByNames — backs server-side answer enrichment (sprite/dex backfill)
+// ===========================================================================
+
+/** Index reference for one Pokémon: the fields the answer UI renders. */
+export interface SpriteRef {
+  sprite_url: string;
+  dex_number: number;
+  types: string[];
+}
+
+/**
+ * Minimal display-name → slug, mirroring `gen-provider.slugify`. Kept LOCAL so
+ * the request-path repo never imports the @pkmn-heavy gen-provider just to slugify
+ * a name. (`makeDisplayName` is titleCase+parens, so this round-trips to `id`.)
+ */
+function slugifyName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/['.]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Resolve a batch of Pokémon display names (as the model copied them into an
+ * answer, e.g. "Delphox (Mega)") to their index refs for `format`, in ONE query.
+ * Used by server-side answer enrichment to backfill sprite_url/dex_number/types
+ * so sprites are model-independent. Matches each name by exact (case-insensitive)
+ * `display_name` OR by `slugify(name)` → `id`, so it works whether the model
+ * emitted a display name or a slug. Unknown names are simply absent from the map
+ * (the caller leaves those fields unset). Never throws (an unreadable index → an
+ * empty map).
+ */
+export async function spriteRefsByNames(
+  names: string[],
+  format: Format,
+  db: PokebotDb,
+): Promise<Map<string, SpriteRef>> {
+  const out = new Map<string, SpriteRef>();
+  const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (wanted.length === 0) return out;
+
+  const lowerNames = wanted.map((n) => n.toLowerCase());
+  const slugs = wanted.map(slugifyName);
+
+  let rows: {
+    id: string;
+    display_name: string;
+    national_dex_number: number;
+    type1: string;
+    type2: string | null;
+    sprite_url: string;
+  }[];
+  try {
+    rows = await db
+      .select({
+        id: pokemon.id,
+        display_name: pokemon.display_name,
+        national_dex_number: pokemon.national_dex_number,
+        type1: pokemon.type1,
+        type2: pokemon.type2,
+        sprite_url: pokemon.sprite_url,
+      })
+      .from(pokemon)
+      .where(
+        and(
+          eq(pokemon.format, format),
+          or(
+            inArray(sql`lower(${pokemon.display_name})`, lowerNames),
+            inArray(pokemon.id, slugs),
+          ),
+        ),
+      );
+  } catch {
+    // Index unreadable (table missing) — caller keeps model-supplied fields.
+    return out;
+  }
+
+  // Index each fetched row under both its lowercased display name and its slug id,
+  // so a lookup by either form hits.
+  const byKey = new Map<string, SpriteRef>();
+  for (const r of rows) {
+    const ref: SpriteRef = {
+      sprite_url: r.sprite_url,
+      dex_number: r.national_dex_number,
+      types: r.type2 ? [r.type1, r.type2] : [r.type1],
+    };
+    byKey.set(r.display_name.toLowerCase(), ref);
+    byKey.set(r.id, ref);
+  }
+  for (const name of wanted) {
+    const ref = byKey.get(name.toLowerCase()) ?? byKey.get(slugifyName(name));
+    if (ref) out.set(name, ref);
+  }
+  return out;
 }
 
 // ===========================================================================

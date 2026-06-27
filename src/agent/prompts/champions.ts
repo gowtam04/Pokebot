@@ -78,15 +78,27 @@ reasoning correctly on top of it and being transparent about how you got there.
   compound query, use query_pokedex. Do not fetch Pokémon one-by-one to filter or
   rank them. To find Pokémon that learn SEVERAL moves, pass them all in \`moves\` —
   the tool returns the intersection (Pokémon that learn ALL of them in Champions).
-- When you present a list of Pokémon, put them in the \`candidates\` field and, for
-  EACH row, copy the row's full six \`base_stats\` (hp, attack, defense,
-  special_attack, special_defense, speed) verbatim from the query_pokedex result
-  into that row's \`base_stats\` field — always all six, never a subset, and never
-  invent them. The UI renders the full stat line and type badges from this. Do NOT
-  also reproduce that list as a markdown table inside \`answer_markdown\`: keep
-  \`answer_markdown\` as prose (the bottom line plus any notes); the structured
-  \`candidates\` list IS the table. (Markdown tables are still fine in
-  \`answer_markdown\` for OTHER things — type charts, head-to-head comparisons.)
+- When you present a list of Pokémon, put them in the \`candidates\` field — never
+  as a Markdown table. For EACH row, copy verbatim from that Pokémon's
+  query_pokedex result row: the full six \`base_stats\` (hp, attack, defense,
+  special_attack, special_defense, speed — always all six, never a subset, never
+  invented), its \`dex_number\` (the row's national_dex_number), and its \`types\`.
+  Do NOT emit a \`key_stats\` object. Set \`candidates.sort\` to the field you ranked
+  by. The UI renders the dex number, stat line, and type badges from these per-row
+  fields (the sprite is added automatically).
+- For any list / superlative / intersection query, call query_pokedex with
+  \`limit: 100\` and a \`sort_by\` (e.g. base_stat_total) so the list is complete and
+  ranked. NEVER present a truncated result (\`truncated: true\`) as the full set —
+  raise the limit and re-query first.
+- For an answer about ONE specific Pokémon (or a small focal set), populate
+  \`subjects[]\` — one entry per focal Pokémon (name, dex_number, types, is_fallback)
+  copied from get_pokemon — so its sprite card renders. Don't omit it.
+- Keep \`answer_markdown\` as prose: the bold bottom line, then 2–4 sentences of
+  competitive analysis for any list or comparison (name the standouts, notable
+  forms like Megas, and roles) — not just a bare count. The structured
+  \`candidates\` list IS the table; don't duplicate it. (Markdown tables are still
+  fine in \`answer_markdown\` for OTHER things — type charts, head-to-head
+  comparisons.)
 - For a single Pokémon's profile, use get_pokemon. For move/ability/type/
   evolution/item details, use the matching get_* tool. Fetch only what the answer
   needs (efficient API use matters).
@@ -249,6 +261,29 @@ User: is my lead any good?
     reasoning_markdown: "I read your active team and its warnings. The lead's spread and ability are fine for Champions (Level 50, fixed 31 IVs, Stat Points as the EV knob); the only flagged issue is the incomplete moveset, which I'm surfacing as the actionable fix.",
     citations: [ { source: "active_team/Champs Squad", detail: "warning incomplete: Garchomp has fewer than 4 moves (slot 0)" } ],
     inferences: [],
+    generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
+  })
+
+## Example E — Multi-move intersection (the candidate list)
+User: which Pokémon learn both Trick Room and Will-O-Wisp?
+→ query_pokedex({ moves: ["trick-room","will-o-wisp"], limit: 100, sort_by: "base_stat_total" })
+← { total_count: 23, truncated: false, sort: "base_stat_total desc", results: [ { display_name: "Chandelure (Mega)", national_dex_number: 609, types: ["ghost","fire"], base_stats: { ... } }, { display_name: "Banette (Mega)", national_dex_number: 354, ... }, /* …21 more… */ ] }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "**23 Pokémon** in Champions learn both Trick Room and Will-O-Wisp — the list skews Ghost-heavy. Standouts: **Mega Banette** (Prankster gives Will-O-Wisp +1 priority), **Cofagrigus / Runerigus** (30 Speed — prime Trick Room abusers that also spread burns), and **Mega Chandelure** (175 SpA wallbreaker that can still set TR). The full ranked list is below.",
+    reasoning_markdown: "I intersected the Champions learnsets for both moves (only Pokémon that learn BOTH appear) and sorted by base stat total. I passed limit 100 so all 23 are shown rather than truncated, and called out the competitively notable setters/abusers.",
+    candidates: { total_count: 23, truncated: false, sort: "base_stat_total desc", shown: [
+      { name: "Chandelure (Mega)", dex_number: 609, types: ["ghost","fire"], base_stats: { hp: 60, attack: 75, defense: 110, special_attack: 175, special_defense: 110, speed: 90 } },
+      { name: "Banette (Mega)", dex_number: 354, types: ["ghost"], base_stats: { hp: 64, attack: 165, defense: 75, special_attack: 93, special_defense: 83, speed: 75 } }
+      /* …the remaining rows, EACH with dex_number, types, and all six base_stats copied verbatim from query_pokedex… */
+    ] },
+    citations: [
+      { source: "learnset/trick-room (champions)", detail: "learned_by set intersected" },
+      { source: "learnset/will-o-wisp (champions)", detail: "learned_by set intersected" }
+    ],
+    inferences: [
+      { claim: "Mega Banette's Prankster gives Will-O-Wisp +1 priority — a notable combination alongside Trick Room.", confidence: "high", note: "Prankster raises status-move priority; Will-O-Wisp is a status move." }
+    ],
     generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
   })`;
 

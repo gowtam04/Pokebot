@@ -93,6 +93,23 @@ export const abilitiesSchema = z.object({
   hidden: z.string().nullish(),
 });
 
+/**
+ * A JSON scalar value (string | number | boolean | null) — the value type for the
+ * free-form maps inside `submit_answer` (candidate `key_stats`, `damage_calc`
+ * assumptions/result). Closed on purpose: `z.record(z.unknown())` generates an
+ * open `additionalProperties: {}` in the tool's JSON Schema, which xAI's
+ * always-strict tool-argument validator can reject at stream-open (and the loop's
+ * Zod re-emit budget does NOT cover a request-time schema rejection). These maps
+ * only ever hold scalars, so a typed value schema keeps them permissive while
+ * emitting a concrete `additionalProperties` xAI accepts.
+ */
+export const jsonScalarSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
 // ===========================================================================
 // T1 — resolve_entity
 // ===========================================================================
@@ -133,7 +150,9 @@ export const queryPokedexInputSchema = z.object({
   stat_filters: z.array(statFilterSchema).optional(),
   sort_by: statKeySchema.or(z.literal("national_dex_number")).optional(),
   order: z.enum(["asc", "desc"]).default("desc"),
-  limit: z.number().int().min(1).max(100).default(20),
+  // Default 50 (was 20): a 20-row default silently truncated common
+  // intersection queries (e.g. 23 results → "20 of 23"). Max stays 100.
+  limit: z.number().int().min(1).max(100).default(50),
 });
 
 /** One row in a query_pokedex result set. */
@@ -460,7 +479,7 @@ export const candidateRowSchema = z
     // strict keeps older `key_stats`-only payloads valid (CandidateTable falls
     // back to key_stats when base_stats is absent).
     base_stats: baseStatsSchema.optional(),
-    key_stats: z.record(z.unknown()).optional(),
+    key_stats: z.record(jsonScalarSchema).optional(),
     ability: z.string().optional(),
   })
   .strict();
@@ -476,8 +495,8 @@ export const candidatesSchema = z
 
 export const damageCalcSchema = z
   .object({
-    assumptions: z.record(z.unknown()),
-    result: z.record(z.unknown()),
+    assumptions: z.record(jsonScalarSchema),
+    result: z.record(jsonScalarSchema),
     is_estimate: z.literal(true),
     breakdown: z.string().optional(),
   })

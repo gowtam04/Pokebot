@@ -275,10 +275,10 @@ describe("queryPokedex — sort / limit / truncation", () => {
     expect(r.truncated).toBe(true);
   });
 
-  it("sort is null when no sort_by is given", async () => {
+  it("defaults to base_stat_total desc when no sort_by is given (always ranked + labeled)", async () => {
     const r = await queryPokedex({ types: ["fire"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
-    expect(r.sort).toBeNull();
+    expect(r.sort).toBe("base_stat_total desc");
   });
 });
 
@@ -304,7 +304,7 @@ describe("queryPokedex — multi-move Gen-9 intersection (BR-7)", () => {
     expect(r).toEqual({
       total_count: 0,
       truncated: false,
-      sort: null,
+      sort: "base_stat_total desc",
       results: [],
     });
   });

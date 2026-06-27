@@ -31,6 +31,12 @@ export interface ResolvedModel {
   apiModelId: string;
   /** Reasoning effort for OpenAI/xAI (Anthropic ignores it). */
   effort?: ReasoningEffort;
+  /** Sampling temperature for OpenAI/xAI (Anthropic ignores it). */
+  temperature?: number;
+  /** Output-token budget for OpenAI/xAI (defaults to MAX_TOKENS). */
+  maxOutputTokens?: number;
+  /** Allow parallel tool calls for OpenAI/xAI (defaults to true). */
+  parallelToolCalls?: boolean;
 }
 
 /**
@@ -40,11 +46,34 @@ export interface ResolvedModel {
  */
 const MODEL_CONFIG: Record<
   ModelKey,
-  { apiModelId: () => string; effort?: ReasoningEffort }
+  {
+    apiModelId: () => string;
+    effort?: ReasoningEffort;
+    temperature?: number;
+    maxOutputTokens?: number;
+    parallelToolCalls?: boolean;
+  }
 > = {
   claude: { apiModelId: () => env.ANTHROPIC_MODEL },
-  "gpt-5.5": { apiModelId: () => "gpt-5.5", effort: "medium" },
-  "grok-4.3": { apiModelId: () => "grok-4.3", effort: "high" },
+  // OpenAI-compatible reasoning models: pin a LOW temperature (Grok 4.3 defaults
+  // to 0.7 — too random for battle-math/eval stability), RAISE the output budget
+  // (reasoning + a full candidate list can exceed the 16k default and truncate
+  // submit_answer into invalid JSON), and DISABLE parallel tool calls so
+  // submit_answer can't be returned in the same batch as a data tool.
+  "gpt-5.5": {
+    apiModelId: () => "gpt-5.5",
+    effort: "medium",
+    temperature: 0.2,
+    maxOutputTokens: 32000,
+    parallelToolCalls: false,
+  },
+  "grok-4.3": {
+    apiModelId: () => "grok-4.3",
+    effort: "high",
+    temperature: 0.2,
+    maxOutputTokens: 32000,
+    parallelToolCalls: false,
+  },
 };
 
 /** Resolve a (possibly missing/unknown) key to its wiring; defaults to Claude. */
@@ -57,6 +86,9 @@ export function resolveModel(key: string | undefined | null): ResolvedModel {
     provider: option.provider,
     apiModelId: config.apiModelId(),
     effort: config.effort,
+    temperature: config.temperature,
+    maxOutputTokens: config.maxOutputTokens,
+    parallelToolCalls: config.parallelToolCalls,
   };
 }
 
@@ -102,5 +134,8 @@ export function providerFor(key: string | undefined | null): LLMProvider {
     apiKey,
     baseURL: model.provider === "xai" ? env.XAI_BASE_URL : env.OPENAI_BASE_URL,
     effort: model.effort,
+    temperature: model.temperature,
+    maxOutputTokens: model.maxOutputTokens,
+    parallelToolCalls: model.parallelToolCalls,
   });
 }

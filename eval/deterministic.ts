@@ -449,8 +449,11 @@ const PLANS: Record<string, DeterministicPlan> = {
         reasoning_markdown:
           "Garchomp's base Speed is 102. The exact in-game formula (per-step flooring) is applied by compute_stat, not by hand.",
         damage_calc: {
+          // `value ?? 0`: the free-form damage_calc maps are now typed as JSON
+          // scalars (no undefined) so the submit_answer schema stays xAI-strict-
+          // safe; the real compute_stat tool always returns a number here.
           assumptions: { level: 50, ev: 252, iv: 31, nature: "Jolly (+Spe)" },
-          result: { stat: "speed", value },
+          result: { stat: "speed", value: value ?? 0 },
           is_estimate: true,
           breakdown: c?.breakdown ?? "",
         },
