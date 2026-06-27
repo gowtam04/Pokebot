@@ -279,7 +279,8 @@ img {
 .chat-page {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   background: radial-gradient(
       120% 60% at 50% -10%,
       color-mix(in srgb, var(--poke-red) 7%, var(--bg)),
