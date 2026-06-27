@@ -38,4 +38,35 @@ describe("env", () => {
   it("exposes an eagerly-parsed env (dummy key injected by the test runner)", () => {
     expect(env.ANTHROPIC_API_KEY.length).toBeGreaterThan(0);
   });
+
+  it("treats OPENAI/XAI keys as optional and defaults the xAI base URL", () => {
+    // Boots with ONLY the Anthropic key — the alternate providers are opt-in.
+    const parsed = parseEnv({ ANTHROPIC_API_KEY: "sk-test" });
+    expect(parsed.OPENAI_API_KEY).toBeUndefined();
+    expect(parsed.XAI_API_KEY).toBeUndefined();
+    expect(parsed.OPENAI_BASE_URL).toBeUndefined();
+    expect(parsed.XAI_BASE_URL).toBe("https://api.x.ai/v1");
+  });
+
+  it("treats an empty provider key as absent (compose env_file safety)", () => {
+    const parsed = parseEnv({
+      ANTHROPIC_API_KEY: "sk-test",
+      OPENAI_API_KEY: "",
+      XAI_API_KEY: "   ",
+    });
+    expect(parsed.OPENAI_API_KEY).toBeUndefined();
+    expect(parsed.XAI_API_KEY).toBeUndefined();
+  });
+
+  it("accepts supplied provider keys and base URLs", () => {
+    const parsed = parseEnv({
+      ANTHROPIC_API_KEY: "sk-test",
+      OPENAI_API_KEY: "sk-openai",
+      XAI_API_KEY: "xai-key",
+      XAI_BASE_URL: "https://example.test/v1",
+    });
+    expect(parsed.OPENAI_API_KEY).toBe("sk-openai");
+    expect(parsed.XAI_API_KEY).toBe("xai-key");
+    expect(parsed.XAI_BASE_URL).toBe("https://example.test/v1");
+  });
 });

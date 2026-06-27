@@ -25,6 +25,23 @@ const EnvSchema = z
       .string({ required_error: "ANTHROPIC_API_KEY is required" })
       .min(1, "ANTHROPIC_API_KEY must not be empty"),
     ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+
+    // --- Optional alternate model providers (model switcher) ---------------
+    // OpenAI (GPT-5.5) and xAI (Grok 4.3) are OPTIONAL: Claude remains the
+    // default and the only required key. A provider's key is validated ON USE
+    // (the provider factory throws a typed model_unavailable, surfaced by the
+    // route as a clean 503) — NOT at module load — so the app still boots with
+    // only ANTHROPIC_API_KEY. An empty value (`OPENAI_API_KEY=` in a compose
+    // env_file) is treated as absent, like RESEND_API_KEY below.
+    OPENAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    XAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    // Base URLs. xAI is OpenAI-SDK-compatible; its API lives behind a different
+    // host, so it has a sensible default. OpenAI uses the SDK default when unset.
+    OPENAI_BASE_URL: z.preprocess(
+      emptyToUndefined,
+      z.string().url().optional(),
+    ),
+    XAI_BASE_URL: z.string().url().default("https://api.x.ai/v1"),
     DATABASE_URL: z
       .string()
       .url()

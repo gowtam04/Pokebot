@@ -34,6 +34,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
 
+import { DEFAULT_MODEL_KEY, type ModelKey } from "@/agent/models";
 import type { AgentContext, AgentMode, DbCtx } from "@/agent/types";
 import type { PokebotDb } from "@/data/db";
 import type { ActiveTeam } from "@/server/teams/active-team";
@@ -55,8 +56,13 @@ export interface CreateAgentContextOptions {
    */
   mode?: AgentMode;
   /**
+   * Which LLM answers the turn (server-controlled). Defaults to the Claude key
+   * so every existing caller/test keeps today's behavior unchanged.
+   */
+  model?: ModelKey;
+  /**
    * Inbound request abort signal, threaded onto the context so the runtime can
-   * abort the Anthropic stream and bail between loop iterations when the client
+   * abort the provider stream and bail between loop iterations when the client
    * disconnects (user pressed Stop). Optional — defaults to undefined.
    */
   signal?: AbortSignal;
@@ -105,11 +111,13 @@ export async function createAgentContext(
   const handle: PokebotDb = opts.db ?? (await import("@/data/db")).db;
   const requestId = opts.requestId ?? randomUUID();
   const mode: AgentMode = opts.mode ?? "standard";
+  const model: ModelKey = opts.model ?? DEFAULT_MODEL_KEY;
 
   const baseLogger = opts.logger ?? defaultLogger;
   const logger = baseLogger.child({
     request_id: requestId,
     mode,
+    model,
     ...(opts.sessionId ? { session_id: opts.sessionId } : {}),
   });
 
@@ -118,6 +126,7 @@ export async function createAgentContext(
     logger,
     requestId,
     mode,
+    model,
     signal: opts.signal,
     activeTeam: opts.activeTeam,
   };

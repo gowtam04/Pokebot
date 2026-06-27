@@ -36,6 +36,13 @@ export interface ChatRequestBody {
    * true). Optional ⇒ old clients that omit it default to standard / Gen 9.
    */
   champions_mode?: boolean;
+  /**
+   * Which LLM answers this turn (a model registry key — "claude" | "gpt-5.5" |
+   * "grok-4.3"). Wire type is `string`; the route whitelist-validates it to a
+   * known key and falls back to the default. Optional ⇒ old clients default to
+   * Claude.
+   */
+  model?: string;
 }
 
 /** `event: tool_activity` payload — progress shown while the loop runs. */

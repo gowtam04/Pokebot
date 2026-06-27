@@ -12,6 +12,7 @@
  */
 
 import type { Logger } from "pino";
+import type { ModelKey } from "@/agent/models";
 import type { JsonSchema, PokebotAnswer } from "@/agent/schemas";
 
 /**
@@ -53,9 +54,17 @@ export interface AgentContext {
    */
   mode: AgentMode;
   /**
+   * Which LLM answers this turn (server-controlled; defaults to the Claude key).
+   * Derived from the validated request body, bound here, and read by the runtime
+   * to select the provider — exactly like {@link mode}, NEVER an LLM-visible tool
+   * input. Cross-turn history is plain text, so switching models per turn is
+   * correctness-safe.
+   */
+  model: ModelKey;
+  /**
    * Per-request abort handle (the inbound request's `signal`). When the client
    * disconnects (e.g. the user presses Stop), the runtime forwards this to the
-   * Anthropic SDK so generation halts immediately and checks it between loop
+   * provider SDK so generation halts immediately and checks it between loop
    * iterations. Undefined for callers/tests that don't supply one.
    */
   signal?: AbortSignal;

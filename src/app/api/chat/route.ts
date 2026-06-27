@@ -35,6 +35,11 @@
 import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
+import {
+  DEFAULT_MODEL_KEY,
+  isModelKey,
+  type ModelKey,
+} from "@/agent/models";
 import type {
   AgentMode,
   ChatMessage,
@@ -129,11 +134,15 @@ function clientIp(req: Request): string {
  * phase's edit scope). Always present after parsing: a non-empty string id or
  * `null` (guests / old clients / explicit deselect).
  */
-type ParsedChatBody = ChatRequestBody & { active_team_id: string | null };
+type ParsedChatBody = ChatRequestBody & {
+  active_team_id: string | null;
+  /** Always a resolved registry key — never the raw client string. */
+  model: ModelKey;
+};
 
 function parseBody(value: unknown): ParsedChatBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode, active_team_id } =
+  const { session_id, message, champions_mode, active_team_id, model } =
     value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   if (typeof message !== "string" || message.length === 0) return null;
@@ -147,11 +156,16 @@ function parseBody(value: unknown): ParsedChatBody | null {
     typeof active_team_id === "string" && active_team_id.length > 0
       ? active_team_id
       : null;
+  // Whitelist-validate the model against the registry: an unknown/missing/non-
+  // string key falls back to the default (Claude). Never forward the raw client
+  // string downstream — the runtime keys the provider off this resolved value.
+  const modelKey: ModelKey = isModelKey(model) ? model : DEFAULT_MODEL_KEY;
   return {
     session_id,
     message,
     champions_mode: champions_mode === true,
     active_team_id: teamId,
+    model: modelKey,
   };
 }
 
@@ -335,6 +349,24 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
+  // 3c. Fail fast if the selected model's provider isn't configured on this
+  //     server (its API key is absent) — a clean 503 BEFORE the stream opens, so
+  //     the client sees a real HTTP status rather than a mid-stream error. The
+  //     default (Claude) is always configured, so old clients never hit this.
+  //     Dynamic import defers the factory's env/SDK evaluation to request time
+  //     (the same reason the runtime import below is deferred). `body.model` is
+  //     already a validated registry key.
+  {
+    const { isModelConfigured } = await import("@/agent/providers/factory");
+    if (!isModelConfigured(body.model)) {
+      return jsonError(
+        503,
+        "model_unavailable",
+        "The selected model isn't configured on this server. Pick a different model and try again.",
+      );
+    }
+  }
+
   // 4. Build the SSE stream. Return the Response SYNCHRONOUSLY; emit from the
   //    async task inside start() (never await the whole loop first).
   const encoder = new TextEncoder();
@@ -370,6 +402,11 @@ export async function POST(req: Request): Promise<Response> {
             requestId,
             sessionId: session_id,
             mode,
+            // Which LLM answers this turn — validated registry key, authoritative
+            // for guests and signed-in users every turn (unlike `mode`, NOT
+            // overridden from the stored conversation; history is plain text, so
+            // switching models per turn is correctness-safe).
+            model: body.model,
             // Server-bound active team (already resolved + authorized above).
             // `undefined` ⇒ no team is bound; the model only ever sees it via the
             // arg-less `get_active_team` tool, never as an input it can widen.

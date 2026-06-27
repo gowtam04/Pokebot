@@ -6,6 +6,8 @@ import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ChampionsToggle from "@/components/ChampionsToggle";
+import ModelSelector from "@/components/ModelSelector";
+import { DEFAULT_MODEL_KEY, isModelKey, type ModelKey } from "@/agent/models";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
@@ -20,6 +22,9 @@ import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
 const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
+
+/** localStorage key for the persisted model choice (global preference). */
+const MODEL_STORAGE_KEY = "pokebot-model";
 
 /** localStorage key for the persisted history-sidebar collapsed choice. */
 const SIDEBAR_STORAGE_KEY = "pokebot-sidebar-collapsed";
@@ -90,6 +95,31 @@ export default function Home() {
     setChampionsMode(next);
     try {
       localStorage.setItem(CHAMPIONS_STORAGE_KEY, String(next));
+    } catch {
+      /* storage unavailable (private mode) — fall back to in-session only */
+    }
+  }, []);
+
+  // Selected model: a GLOBAL preference (not conversation-scoped) sent on every
+  // request as `model`. Default to the Claude key so SSR markup is deterministic,
+  // then resolve the stored choice AFTER mount (same hydration pattern as
+  // championsMode), validating it through `isModelKey` so a stale/garbage value
+  // falls back to the default rather than being trusted.
+  const [selectedModel, setSelectedModel] =
+    useState<ModelKey>(DEFAULT_MODEL_KEY);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(MODEL_STORAGE_KEY);
+      if (stored && isModelKey(stored)) setSelectedModel(stored);
+    } catch {
+      /* storage unavailable (private mode) — keep the default (Claude) */
+    }
+  }, []);
+
+  const setSelectedModelPersisted = useCallback((next: ModelKey) => {
+    setSelectedModel(next);
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, next);
     } catch {
       /* storage unavailable (private mode) — fall back to in-session only */
     }
@@ -220,10 +250,11 @@ export default function Home() {
         message,
         champions_mode: championsMode,
         active_team_id: activeTeamId,
+        model: selectedModel,
       };
       send(body);
     },
-    [send, sessionId, championsMode, activeTeamId],
+    [send, sessionId, championsMode, activeTeamId, selectedModel],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
@@ -353,6 +384,10 @@ export default function Home() {
               Teams
             </a>
           )}
+          <ModelSelector
+            value={selectedModel}
+            onChange={setSelectedModelPersisted}
+          />
           <ChampionsToggle
             checked={championsMode}
             onChange={handleChampionsToggle}
