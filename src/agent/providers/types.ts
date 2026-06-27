@@ -145,6 +145,14 @@ export interface LLMProvider {
   streamTurn(req: TurnRequest): ProviderStream;
 
   /**
+   * Build a plain user message to append to the running transcript — e.g. a
+   * corrective nudge after the model ended a turn without calling submit_answer.
+   * The loop pushes this OPAQUELY, so each provider returns its own user-message
+   * shape (Anthropic + OpenAI: `{role:"user", content:text}`).
+   */
+  buildUserMessage(text: string): ProviderMessage;
+
+  /**
    * Map this turn's tool results into transcript element(s):
    *   Anthropic → ONE user message of tool_result blocks;
    *   OpenAI    → N `{role:"tool", tool_call_id, content}` messages.

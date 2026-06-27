@@ -180,5 +180,13 @@ describe("AnthropicProvider — tool result messages", () => {
       { type: "tool_result", tool_use_id: "t2", content: "bad", is_error: true },
     ]);
   });
+
+  it("builds a plain user message for buildUserMessage", () => {
+    const provider = new AnthropicProvider({}, fakeClient({ content: [], usage: usage() }).client);
+    expect(provider.buildUserMessage("nudge")).toEqual({
+      role: "user",
+      content: "nudge",
+    });
+  });
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */

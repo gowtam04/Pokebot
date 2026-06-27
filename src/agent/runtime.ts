@@ -77,6 +77,23 @@ export const MAX_ITERATIONS = 10;
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
 export const MAX_SUBMIT_RETRIES = 2;
 
+/**
+ * Re-prompt budget when the model ends a turn with no tool call at all (it wrote
+ * prose instead of calling submit_answer). `tool_choice` is never forced (the
+ * Sonnet-4.6 thinking + forced-tool_choice 400), so the model occasionally skips
+ * the tool — especially on a terse follow-up after a clarification turn, where the
+ * plain-text history makes the exchange look like an ordinary chat. We nudge it
+ * back to submit_answer rather than discarding the answer.
+ */
+export const MAX_EMPTY_TURN_NUDGES = 2;
+
+/** The corrective user turn appended after an empty (no-tool) model turn. */
+const EMPTY_TURN_NUDGE =
+  "You ended your turn without calling submit_answer. submit_answer is the " +
+  "ONLY way to reply. Call submit_answer now with your complete answer (or a " +
+  "clarification_needed payload if you genuinely still need to ask). Do not " +
+  "reply with plain text.";
+
 // ---------------------------------------------------------------------------
 // Provider-neutral tool definitions (T1..T11 plus the inlined T12
 // get_active_team). `name` / `parameters` come straight from the tool layer
@@ -534,6 +551,27 @@ function synthesizeInsufficientData(reason: string): PokebotAnswer {
   };
 }
 
+/**
+ * Last-resort recovery when the model keeps ending its turn with prose and never
+ * calls submit_answer (nudge budget exhausted). Rather than discard the prose and
+ * show the generic apology, wrap it in a schema-valid `answered` payload — flagged
+ * so the trace records that it bypassed the structured tool path. No citations or
+ * inferences are available (the model never supplied them).
+ */
+function synthesizeFromProse(prose: string): PokebotAnswer {
+  return {
+    status: "answered",
+    answer_markdown: prose,
+    reasoning_markdown:
+      "The model produced this answer as plain text without calling " +
+      "submit_answer, so it carries no structured citations or inferences.",
+    citations: [],
+    inferences: [],
+    generation_basis: { generation: "gen-9", fallback: false },
+    uncertainty_flags: ["recovered_prose_no_submit_answer"],
+  };
+}
+
 /** Read the session id off the (correlation-tagged) child logger, if present. */
 function sessionIdOf(ctx: AgentContext): string {
   const logger = ctx.logger as { bindings?: () => Record<string, unknown> };
@@ -634,6 +672,7 @@ export async function runWithProvider(
   });
 
   let submitRetries = 0;
+  let emptyTurnNudges = 0;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Bail if the client disconnected (user pressed Stop) during the prior tool
@@ -659,6 +698,8 @@ export async function runWithProvider(
     // → fresh onAnswerStart → the client resets its buffer.
     let submitIndex: number | null = null;
     let extractor: AnswerMarkdownExtractor | null = null;
+    // Captured for the prose fallback if this turn ends with no tool call.
+    let assistantText = "";
     for await (const event of stream) {
       if (event.type === "tool_call_start") {
         if (event.name === "submit_answer") {
@@ -679,6 +720,8 @@ export async function runWithProvider(
       ) {
         submitIndex = null;
         extractor = null;
+      } else if (event.type === "text_delta") {
+        assistantText += event.text;
       }
     }
 
@@ -695,10 +738,21 @@ export async function runWithProvider(
     const toolCalls = final.toolCalls;
 
     // Model ended its turn without calling any tool — it never submitted an
-    // answer. Surface insufficient_data (integration.md error surface).
+    // answer. Nudge it back to submit_answer (the assistant turn was already
+    // echoed above, so appending a user message keeps the transcript valid).
+    // Only after the nudge budget is spent do we give up: surface the prose the
+    // model wrote if we have any, else the generic insufficient_data apology.
     if (toolCalls.length === 0) {
+      if (emptyTurnNudges < MAX_EMPTY_TURN_NUDGES) {
+        emptyTurnNudges += 1;
+        transcript.push(provider.buildUserMessage(EMPTY_TURN_NUDGE));
+        continue;
+      }
+      const prose = assistantText.trim();
       return finalize(
-        synthesizeInsufficientData("model_ended_turn_without_submit_answer"),
+        prose.length > 0
+          ? synthesizeFromProse(prose)
+          : synthesizeInsufficientData("model_ended_turn_without_submit_answer"),
         state,
         ctx,
       );

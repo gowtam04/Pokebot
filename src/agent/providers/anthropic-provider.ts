@@ -133,6 +133,10 @@ export class AnthropicProvider implements LLMProvider {
     return adaptAnthropicStream(stream);
   }
 
+  buildUserMessage(text: string): ProviderMessage {
+    return { role: "user", content: text } satisfies Anthropic.MessageParam;
+  }
+
   buildToolResultMessages(results: ToolResult[]): ProviderMessage[] {
     // ONE user message carrying all tool_result blocks (splitting them across
     // messages trains the model off parallel tool use).

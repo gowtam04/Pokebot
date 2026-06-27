@@ -336,5 +336,13 @@ describe("OpenAICompatibleProvider — tool result messages", () => {
       { role: "tool", tool_call_id: "call_2", content: '{"ok":true}' },
     ]);
   });
+
+  it("builds a plain user message for buildUserMessage", () => {
+    const provider = makeProvider(fakeClient([]).client);
+    expect(provider.buildUserMessage("nudge")).toEqual({
+      role: "user",
+      content: "nudge",
+    });
+  });
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */

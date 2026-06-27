@@ -46,6 +46,7 @@ vi.mock("@/agent/tools", () => ({
 import {
   AnswerMarkdownExtractor,
   describeToolCall,
+  MAX_EMPTY_TURN_NUDGES,
   MAX_ITERATIONS,
   runPokebotWith,
 } from "./runtime";
@@ -170,6 +171,13 @@ function submitAnswerEvents(input: unknown, index = 0, chunkSize = 7): any[] {
     },
     ...deltas,
     { type: "content_block_stop", index },
+  ];
+}
+
+/** Raw stream events for an assistant text block (drives text_delta capture). */
+function textEvents(text: string, index = 0): any[] {
+  return [
+    { type: "content_block_delta", index, delta: { type: "text_delta", text } },
   ];
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -407,13 +415,52 @@ describe("orchestration fallbacks", () => {
     expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
   });
 
-  it("synthesizes insufficient_data when the model ends a turn without submitting", async () => {
-    const { client } = scriptedClient([
+  it("nudges back to submit_answer when a turn ends with no tool call, then accepts the submit", async () => {
+    const { client, stream, snapshots } = scriptedClient([
       message([textBlock("here is some prose")], "end_turn"),
+      message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
     const result = await runPokebotWith(client, "q", [], ctx);
 
+    expect(result).toEqual(validAnswer);
+    expect(stream).toHaveBeenCalledTimes(2);
+    // The retry transcript ends with the corrective nudge as a user message.
+    const tail = snapshots[1].messages.at(-1);
+    expect(tail.role).toBe("user");
+    expect(tail.content).toContain("without calling submit_answer");
+  });
+
+  it("surfaces the model's prose once the empty-turn nudge budget is spent", async () => {
+    const proseTurn = (text: string) => ({
+      message: message([textBlock(text)], "end_turn"),
+      events: textEvents(text),
+    });
+    const { client, stream } = scriptedClient(
+      // budget + 1 empty turns: the last one's prose is what we surface.
+      Array.from({ length: MAX_EMPTY_TURN_NUDGES + 1 }, (_, i) =>
+        proseTurn(i === MAX_EMPTY_TURN_NUDGES ? "final prose answer" : `draft ${i}`),
+      ),
+    );
+
+    const result = await runPokebotWith(client, "q", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_EMPTY_TURN_NUDGES + 1);
+    expect(result.status).toBe("answered");
+    expect(result.answer_markdown).toBe("final prose answer");
+    expect(result.uncertainty_flags).toContain("recovered_prose_no_submit_answer");
+  });
+
+  it("falls back to insufficient_data when the empty turns carry no prose", async () => {
+    const { client, stream } = scriptedClient(
+      Array.from({ length: MAX_EMPTY_TURN_NUDGES + 1 }, () =>
+        message([], "end_turn"),
+      ),
+    );
+
+    const result = await runPokebotWith(client, "q", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_EMPTY_TURN_NUDGES + 1);
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain(
       "model_ended_turn_without_submit_answer",

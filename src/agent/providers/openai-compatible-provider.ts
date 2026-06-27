@@ -135,6 +135,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
     return adaptOpenAIStream(created);
   }
 
+  buildUserMessage(text: string): ProviderMessage {
+    return { role: "user", content: text } satisfies ChatMessageParam;
+  }
+
   buildToolResultMessages(results: ToolResult[]): ProviderMessage[] {
     // OpenAI requires one {role:"tool"} message per tool_call_id in the
     // preceding assistant message before the next turn.
