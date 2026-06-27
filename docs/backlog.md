@@ -90,7 +90,18 @@ into an ongoing workflow.
 
 ## B-3 — Chat history
 
-> **Status: SPECIFIED** (not yet built) — refined into a buildable spec at
+> **Status: BUILT** — implemented per
+> `docs/features/chat-history/architecture/design.md` (HIST-AD-1..5). Two Postgres
+> tables (`conversation`, `conversation_message`) scoped by `account_id`; the
+> client `session_id` IS the conversation id (HIST-AD-1); the chat route persists
+> each signed-in turn (full `PokebotAnswer` as JSON) off the SSE critical path and
+> re-feeds DB history (trimmed) on resume; `/api/conversations/*` backs list /
+> open / rename / pin / delete / format-filter / search (ILIKE title+text); the
+> guest→sign-in thread is bulk-imported idempotently. Guests, the agent, the
+> 11-tool contract, the Champions toggle, and the SSE contract are unchanged.
+> Original spec/decision history retained below.
+>
+> **Status (spec): SPECIFIED** — refined into a buildable spec at
 > `docs/features/chat-history/requirements/requirements.md` (HIST-US-1..12,
 > BR-H1..11, AC-*). Decisions locked: **signed-in users only** (guests stay
 > ephemeral/in-memory); store the **full structured `PokebotAnswer`** per turn
@@ -131,6 +142,26 @@ which are the point of the product) and the ability to resume threads.
 
 ## B-4 — Artifact viewer
 
+> **Status: SPECIFIED** (not yet built) — refined into a buildable spec at
+> `docs/features/artifact-viewer/requirements/requirements.md` (AV-US-1..11, BR-AV-1..10,
+> AC-*). Decisions locked: a **docked side panel** (desktop) / **full-screen overlay**
+> (mobile) showing **one artifact at a time** with **mini-browser back-stack navigation**
+> (drill-down + back); **ephemeral / session-only** (confirmed — no B-1/B-3 dependency);
+> **user-triggered** only (BR-AV-2). Two open paths: **click a structured entity**
+> (Pokémon / move / ability / item / type — in sprite cards, candidate rows, comparison
+> cells, type badges, and Sources entries) → a **full entity-detail profile**; and a
+> **per-section "open in viewer"** button on rich answer blocks → team sheet / comparison /
+> damage-calc / type-grid artifacts. Entity detail is a **full profile** (everything the
+> index holds for the active format), carries **full grounding** (per-datum sources,
+> format/generation tag, caveats), and **requires a fresh index read on click** — a
+> deliberate reversal of the "no fresh read / purely frontend-derived" framing below
+> (and in B-6), now the key input for the architect. Free-text prose names are **not**
+> clickable (structured spots only). Actions: close + "ask about this in chat"; no
+> copy/share/export. **This item absorbs B-6** (clickable sources open entity-detail
+> artifacts). The four original open questions below are resolved by the spec; the
+> schema/output-shape question is handed to the architect. Original framing retained
+> below as history.
+>
 > **Decisions (open questions resolved):** Artifacts are **ephemeral / session-only —
 > they will not persist** (no per-account storage, not shareable), so this item has **no
 > B-1/B-3 dependency**. Emission is **user-triggered** — the user opens a rendered answer
@@ -226,6 +257,17 @@ benefits from B-1 (per-account).
 
 ## B-6 — Clickable sources → source-detail artifact
 
+> **Status: ABSORBED INTO B-4** — the B-4 spec
+> (`docs/features/artifact-viewer/requirements/requirements.md`, AV-US-3) makes Sources
+> entries clickable, opening the cited resource as a **full entity-detail artifact** with
+> the cited datum (`citation.detail`) shown in context. This **resolves B-6's central open
+> question in the opposite direction** from the note below: the richer detail comes from a
+> **fresh index read for a full profile**, *not* from carrying the full datum in the answer
+> payload — so the citation schema does **not** need enriching for this. The external `↗`
+> PokeAPI link is retained alongside the new in-app click. Still open (deferred to the
+> architect): whether source-detail is a distinct artifact type or just the entity-detail
+> artifact with the cited datum highlighted. Original framing retained below as history.
+>
 > **Decisions (open questions resolved):** Built **after B-4**, reusing its artifact
 > viewer (open / pin / dismiss, ephemeral/session-only per B-4). The source-detail comes
 > from the **full underlying datum carried in the answer payload** — *not* a fresh
