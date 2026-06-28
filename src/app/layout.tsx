@@ -19,10 +19,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#161311" },
-    { media: "(prefers-color-scheme: light)", color: "#ee5a5a" },
-  ],
+  // Light is the app default, so the browser chrome tint is the light brand
+  // color regardless of OS preference (matches the unconditional light theme).
+  themeColor: "#ee5a5a",
 };
 
 // Display / body / mono — exposed as CSS variables consumed by globals.css.
@@ -46,8 +45,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 // Set the manual theme (if the user picked one) before first paint to avoid a
-// flash of the wrong theme. No stored choice → CSS falls back to the system
-// `prefers-color-scheme`. Keep in sync with ThemeToggle's storage key.
+// flash of the wrong theme. No stored choice → CSS falls back to the light
+// default. Keep in sync with ThemeToggle's storage key.
 const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {

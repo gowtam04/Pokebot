@@ -7,8 +7,9 @@ import { useEffect, useState } from "react";
  *
  * Writes `data-theme` on <html> and mirrors it to `localStorage` under
  * `oak-theme` (the same key the no-flash inline script in `layout.tsx`
- * reads on load). With no stored choice, CSS falls back to the system
- * `prefers-color-scheme`. Single user → no server state (design-system.md).
+ * reads on load). Light is the default — with no stored choice we stay on
+ * light regardless of the system `prefers-color-scheme`; dark is opt-in via
+ * the toggle. Single user → no server state (design-system.md).
  */
 type Theme = "light" | "dark";
 
@@ -18,7 +19,6 @@ function getInitialTheme(): Theme {
   if (typeof document === "undefined") return "light";
   const attr = document.documentElement.getAttribute("data-theme");
   if (attr === "light" || attr === "dark") return attr;
-  if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
   return "light";
 }
 

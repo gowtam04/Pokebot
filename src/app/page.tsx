@@ -91,15 +91,19 @@ export default function Home() {
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
 
   // Champions mode: server-controlled scope sent on every request as
-  // `champions_mode`. Resolve from localStorage only AFTER mount so the SSR
-  // markup stays stable (mirrors ThemeToggle's `getInitialTheme` + mounted
-  // guard) and we avoid a hydration mismatch.
+  // `champions_mode`. Defaults to ON — resolve from localStorage only AFTER
+  // mount so the SSR markup stays stable (mirrors ThemeToggle's
+  // `getInitialTheme` + mounted guard) and we avoid a hydration mismatch. A
+  // never-set value (null) means the user hasn't chosen, so default to on; an
+  // explicit "false" (the user turned it off) is honored.
   const [championsMode, setChampionsMode] = useState(false);
   useEffect(() => {
     try {
-      setChampionsMode(localStorage.getItem(CHAMPIONS_STORAGE_KEY) === "true");
+      const stored = localStorage.getItem(CHAMPIONS_STORAGE_KEY);
+      setChampionsMode(stored === null ? true : stored === "true");
     } catch {
-      /* storage unavailable (private mode) — keep the default (off) */
+      /* storage unavailable (private mode) — fall back to the default (on) */
+      setChampionsMode(true);
     }
   }, []);
 
