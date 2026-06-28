@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import {
   getPokemon as getPokemonRaw,
   queryPokedex as queryPokedexRaw,
@@ -27,9 +27,9 @@ import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 // format here so the call sites stay focused on filters/slugs; the format
 // threading itself is covered by the format-scoping checks below.
 const SV = "scarlet-violet" as const;
-const queryPokedex = (f: PokedexFilters, db: PokebotDb) =>
+const queryPokedex = (f: PokedexFilters, db: OakDb) =>
   queryPokedexRaw(f, SV, db);
-const getPokemon = (slug: string, db: PokebotDb) => getPokemonRaw(slug, SV, db);
+const getPokemon = (slug: string, db: OakDb) => getPokemonRaw(slug, SV, db);
 
 type MonInput = Partial<typeof pokemon.$inferSelect> &
   Pick<
@@ -48,7 +48,7 @@ type MonInput = Partial<typeof pokemon.$inferSelect> &
     | "stat_speed"
   >;
 
-async function insertMon(db: PokebotDb, mon: MonInput): Promise<void> {
+async function insertMon(db: OakDb, mon: MonInput): Promise<void> {
   const bst =
     mon.base_stat_total ??
     mon.stat_hp +
@@ -74,7 +74,7 @@ async function insertMon(db: PokebotDb, mon: MonInput): Promise<void> {
 }
 
 /** Seed a small, fully-controlled fixture index + an ingest_meta marker. */
-async function seed(db: PokebotDb): Promise<void> {
+async function seed(db: OakDb): Promise<void> {
   await insertMon(db, {
     id: "garchomp",
     species_name: "garchomp",
@@ -194,7 +194,7 @@ async function seed(db: PokebotDb): Promise<void> {
 // ---------------------------------------------------------------------------
 
 let sharedFix: PgFixture;
-let db: PokebotDb;
+let db: OakDb;
 
 beforeAll(async () => {
   sharedFix = await createPgSchema({ seed: "none" });
@@ -435,7 +435,7 @@ describe("format scoping (standard vs champions)", () => {
    * confirm each format only ever sees its own row. Each test provisions its own
    * isolated schema because the per-format ingest_meta expectations differ.
    */
-  async function seedBothFormats(database: PokebotDb): Promise<void> {
+  async function seedBothFormats(database: OakDb): Promise<void> {
     // A champions-only build of "garchomp" with a deliberately different type so
     // a leak across formats would be obvious.
     await database.insert(pokemon).values({

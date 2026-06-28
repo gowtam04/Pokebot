@@ -5,7 +5,7 @@ import "./globals.css";
 import "./artifact-viewer.css";
 
 export const metadata: Metadata = {
-  title: "Pokebot",
+  title: "Oak",
   description: "Natural-language Pokémon question answering agent",
 };
 
@@ -32,7 +32,7 @@ const jetBrainsMono = JetBrains_Mono({
 // Set the manual theme (if the user picked one) before first paint to avoid a
 // flash of the wrong theme. No stored choice → CSS falls back to the system
 // `prefers-color-scheme`. Keep in sync with ThemeToggle's storage key.
-const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('pokebot-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
+const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

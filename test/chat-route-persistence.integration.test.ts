@@ -7,7 +7,7 @@
  * but here `getCurrentAccount` resolves a real account and the conversation-repo
  * writes/reads a real migrated Postgres schema (Testcontainers). Asserts:
  *   - a signed-in turn creates the conversation (title from message) + stores the
- *     full PokebotAnswer,
+ *     full OakAnswer,
  *   - a follow-up feeds the DB-derived history to the model and continues the
  *     SAME conversation (seq advances),
  *   - a resumed conversation's mode follows its stored format (BR-H6),
@@ -29,7 +29,7 @@ import {
 } from "vitest";
 
 import type { ChatMessage } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { Account } from "@/data/repos/accounts-repo";
 
 vi.mock("server-only", () => ({}));
@@ -37,12 +37,12 @@ vi.mock("server-only", () => ({}));
 const { meMock } = vi.hoisted(() => ({ meMock: vi.fn() }));
 vi.mock("@/server/auth/current-user", () => ({ getCurrentAccount: meMock }));
 
-const { mockRunPokebot, capturedHistories, capturedModes } = vi.hoisted(() => ({
-  mockRunPokebot: vi.fn(),
+const { mockRunOak, capturedHistories, capturedModes } = vi.hoisted(() => ({
+  mockRunOak: vi.fn(),
   capturedHistories: [] as ChatMessage[][],
   capturedModes: [] as string[],
 }));
-vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+vi.mock("@/agent/runtime", () => ({ runOak: mockRunOak }));
 vi.mock("@/agent/context", () => ({
   createAgentContext: vi.fn(async (opts: { mode: string }) => {
     capturedModes.push(opts.mode);
@@ -65,9 +65,9 @@ let repo: Repo;
 
 const ACCT: Account = { id: "acct-persist", email: "p@x.com", createdAt: 1 };
 
-let nextAnswer: PokebotAnswer;
+let nextAnswer: OakAnswer;
 
-function makeAnswer(markdown: string): PokebotAnswer {
+function makeAnswer(markdown: string): OakAnswer {
   return {
     status: "answered",
     answer_markdown: markdown,
@@ -95,7 +95,7 @@ beforeEach(async () => {
   capturedModes.length = 0;
   nextAnswer = makeAnswer("default answer");
   meMock.mockResolvedValue(ACCT);
-  mockRunPokebot.mockImplementation(async (_message: string, history: ChatMessage[]) => {
+  mockRunOak.mockImplementation(async (_message: string, history: ChatMessage[]) => {
     capturedHistories.push(history);
     return nextAnswer;
   });

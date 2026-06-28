@@ -1,8 +1,8 @@
-# Pokebot — Agent Design Overview
+# Oak — Agent Design Overview
 
 ## Problem
 
-Pokebot is a personal, single-user, web-based chat agent that answers
+Oak is a personal, single-user, web-based chat agent that answers
 natural-language questions about Pokémon — moves, abilities, types, stats,
 evolutions, items, and **game-mechanic interactions**. The defining trait is
 that it _reasons on top of data_: PokeAPI supplies raw building blocks (move

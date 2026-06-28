@@ -50,7 +50,7 @@ import { env } from "@/env";
 // ---------------------------------------------------------------------------
 
 /** Cookie carrying the opaque session token (httpOnly; § API Design). */
-export const SESSION_COOKIE = "pokebot_session";
+export const SESSION_COOKIE = "oak_session";
 
 /** Session lifetime: 30 days, fixed window from issuance (BR-A7, AD-3). */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;

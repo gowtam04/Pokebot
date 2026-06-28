@@ -5,7 +5,7 @@
  * (AV-US-5/6): every open pushes, `back` pops, `close` clears. Two artifact
  * sources (TD-2): ENTITY artifacts are fetched from `/api/entity`; STRUCTURED
  * artifacts (comparison, damage-calc) are derived from the committed
- * `PokebotAnswer` payload (no fetch). The current data `format` is snapshotted
+ * `OakAnswer` payload (no fetch). The current data `format` is snapshotted
  * onto each view at open time (BR-AV-7).
  *
  * Type-only module — safe for client + isolation tests.

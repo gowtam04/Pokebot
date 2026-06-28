@@ -4,7 +4,7 @@
  *
  * At sign-in the on-screen thread's full-fidelity turns live only on the client,
  * so this is the ONE client-driven write path (HIST-AD-3). It validates every
- * assistant turn's `answer` against `pokebotAnswerSchema` before storing
+ * assistant turn's `answer` against `oakAnswerSchema` before storing
  * (malformed → 400 `invalid_turns`), then upserts the conversation and inserts
  * the rows idempotently (ON CONFLICT keyed by the client turn ids).
  *
@@ -14,7 +14,7 @@
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import { pokebotAnswerSchema } from "@/agent/schemas";
+import { oakAnswerSchema } from "@/agent/schemas";
 import { formatForMode } from "@/data/formats";
 import type { ChatTurn } from "@/components/types";
 import { currentAccount, conversationRepo } from "../_lib/route-helpers";
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 /**
  * Validate the client-sent turns into a clean ChatTurn[] (dropping any extra
  * fields), or return `null` if any turn is malformed. Assistant answers are
- * validated against the canonical PokebotAnswer schema (BR-H3).
+ * validated against the canonical OakAnswer schema (BR-H3).
  */
 function validateTurns(raw: unknown): ChatTurn[] | null {
   if (!Array.isArray(raw)) return null;
@@ -39,7 +39,7 @@ function validateTurns(raw: unknown): ChatTurn[] | null {
       if (typeof t.content !== "string") return null;
       turns.push({ id: t.id, role: "user", content: t.content });
     } else if (t.role === "assistant") {
-      const parsed = pokebotAnswerSchema.safeParse(t.answer);
+      const parsed = oakAnswerSchema.safeParse(t.answer);
       if (!parsed.success) return null;
       turns.push({ id: t.id, role: "assistant", answer: parsed.data });
     } else {

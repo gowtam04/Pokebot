@@ -20,7 +20,7 @@
  * readers. The Drizzle handle is threaded in by the caller (the per-request
  * DbCtx assembled in src/agent/context.ts) rather than imported here, so this
  * module has no eager DB-connection side effect and stays trivially testable
- * against a fixture database. `PokebotDb` is imported type-only for that reason.
+ * against a fixture database. `OakDb` is imported type-only for that reason.
  *
  * node-postgres is asynchronous — these functions are `async` and `await` their
  * Drizzle queries (Promise<string[]> / Promise<number>).
@@ -28,7 +28,7 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
 import { learnset } from "@/data/schema";
 
@@ -62,7 +62,7 @@ import { learnset } from "@/data/schema";
 export async function pokemonLearningAll(
   moveIds: string[],
   format: Format,
-  database: PokebotDb,
+  database: OakDb,
 ): Promise<string[]> {
   const distinctMoveIds = [...new Set(moveIds)];
   if (distinctMoveIds.length === 0) {
@@ -100,7 +100,7 @@ export async function pokemonLearningAll(
 export async function gen9LearnerCount(
   moveId: string,
   format: Format,
-  database: PokebotDb,
+  database: OakDb,
 ): Promise<number> {
   // count(distinct …) is a Postgres bigint, which node-postgres returns as a
   // string; `.mapWith(Number)` coerces it back to a JS number.
@@ -136,7 +136,7 @@ export interface LearnedMove {
 export async function movesForPokemon(
   pokemonId: string,
   format: Format,
-  database: PokebotDb,
+  database: OakDb,
 ): Promise<LearnedMove[]> {
   const rows = await database
     .select({ moveSlug: learnset.move_slug, method: learnset.method })

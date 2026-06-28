@@ -5,15 +5,15 @@
  * web route all share. Concrete implementations live elsewhere:
  *  - `AgentContext` is assembled in src/agent/context.ts (Phase 4),
  *  - `ToolDef[]` / `dispatch` are built in src/agent/tools/index.ts (Phase 4),
- *  - `runPokebot` is implemented in src/agent/runtime.ts (Phase 5).
+ *  - `runOak` is implemented in src/agent/runtime.ts (Phase 5).
  *
- * Schemas + the `PokebotAnswer` type are owned by src/agent/schemas.ts — import
+ * Schemas + the `OakAnswer` type are owned by src/agent/schemas.ts — import
  * from there, never redefine.
  */
 
 import type { Logger } from "pino";
 import type { ModelKey } from "@/agent/models";
-import type { JsonSchema, PokebotAnswer } from "@/agent/schemas";
+import type { JsonSchema, OakAnswer } from "@/agent/schemas";
 
 /**
  * Query scope for a turn. Server-controlled (derived from the request body's
@@ -38,7 +38,7 @@ export type DbCtx = {
 
 /**
  * Per-request agent context. Built in src/agent/context.ts; threaded into every
- * tool `run` call and into `runPokebot`.
+ * tool `run` call and into `runOak`.
  */
 export interface AgentContext {
   /** Bound repos (the sole SQLite readers). */
@@ -152,16 +152,16 @@ export type OnAnswerDelta = (text: string) => void;
 /**
  * The agent entry point (src/agent/runtime.ts).
  *
- * Always resolves to a schema-valid `PokebotAnswer` for in-domain conditions
+ * Always resolves to a schema-valid `OakAnswer` for in-domain conditions
  * (never throws for unresolved entities / clarification / PokeAPI-down / loop-max
- * / invalid-after-retry — those surface as a `PokebotAnswer` with the right
+ * / invalid-after-retry — those surface as a `OakAnswer` with the right
  * `status`). Transport/API faults propagate as exceptions to the route.
  */
-export type RunPokebot = (
+export type RunOak = (
   message: string,
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: OnProgress,
   onAnswerStart?: OnAnswerStart,
   onAnswerDelta?: OnAnswerDelta,
-) => Promise<PokebotAnswer>;
+) => Promise<OakAnswer>;

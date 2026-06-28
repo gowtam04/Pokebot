@@ -27,7 +27,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OpenAICompatibleProvider } from "@/agent/providers/openai-compatible-provider";
 import type { OpenAIClientLike } from "@/agent/providers/openai-compatible-provider";
 import type { AgentContext, AgentMode } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 import {
   createPgSchema,
@@ -141,7 +141,7 @@ async function buildCtx(mode: AgentMode): Promise<AgentContext> {
   return contextMod.createAgentContext({
     requestId: "enrich-it",
     mode,
-    db: fix.db as unknown as import("@/data/db").PokebotDb,
+    db: fix.db as unknown as import("@/data/db").OakDb,
   });
 }
 
@@ -152,7 +152,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
     // A "Grok" answer: candidate rows with NO sprite_url and NO dex_number
     // (exactly what the reported Grok payloads looked like). Includes a
     // parenthesized form name to prove the display-name match handles it.
-    const answer: PokebotAnswer = {
+    const answer: OakAnswer = {
       status: "answered",
       answer_markdown: "**2 Pokémon** match.",
       reasoning_markdown: "Queried the index.",
@@ -212,7 +212,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
 
   it("synthesizes subjects[] from the turn's get_pokemon profile when omitted", async () => {
     // A "Grok" single-entity answer with NO subjects[] — the Farigiraf case.
-    const answer: PokebotAnswer = {
+    const answer: OakAnswer = {
       status: "answered",
       answer_markdown: "**No**, if Farigiraf has Armor Tail.",
       reasoning_markdown: "Read the ability.",
@@ -244,7 +244,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
   it("leaves a Claude-style answer (already has sprites) unchanged", async () => {
     // Enrichment only ADDS missing fields — an answer that already carries
     // sprite_url/dex_number is returned as-is (no regression to the Claude path).
-    const answer: PokebotAnswer = {
+    const answer: OakAnswer = {
       status: "answered",
       answer_markdown: "**Garchomp**.",
       reasoning_markdown: "Looked it up.",

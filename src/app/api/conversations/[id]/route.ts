@@ -18,7 +18,7 @@
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
 import type { ChatTurn } from "@/components/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import { currentAccount, conversationRepo } from "../_lib/route-helpers";
 
 export const runtime = "nodejs";
@@ -53,12 +53,12 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     if (t.role === "user") {
       turns.push({ id: t.id, role: "user", content: t.textContent });
     } else if (t.answerJson) {
-      // Rehydrate the full PokebotAnswer so it re-renders via the normal answer
+      // Rehydrate the full OakAnswer so it re-renders via the normal answer
       // card tree, not a plain-text fallback (BR-H3 / AC-4.1).
       turns.push({
         id: t.id,
         role: "assistant",
-        answer: JSON.parse(t.answerJson) as PokebotAnswer,
+        answer: JSON.parse(t.answerJson) as OakAnswer,
       });
     }
   }

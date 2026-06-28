@@ -13,7 +13,7 @@ sources, with a clean split:
   resolves the name→slug and composes the existing repo reads. This is the only part that
   touches a new data path.
 - **Structured-view artifacts** (damage-calc breakdown, comparison) — **derived from the
-  `PokebotAnswer` payload already in the committed turn** via a per-section "open in viewer"
+  `OakAnswer` payload already in the committed turn** via a per-section "open in viewer"
   button. No fetch.
 
 The viewer shows **one artifact at a time** with a **back stack** (mini-browser): entity
@@ -223,7 +223,7 @@ type AssembleResult =
   | { status: "unavailable" };
 
 export async function assembleEntityProfile(
-  kind: EntityKind, slug: string, format: Format, db: PokebotDb
+  kind: EntityKind, slug: string, format: Format, db: OakDb
 ): Promise<AssembleResult>;
 ```
 Composition per kind:
@@ -240,13 +240,13 @@ Composition per kind:
 ### New repo reads
 ```ts
 // learnset-repo.ts
-export async function movesForPokemon(pokemonId: string, format: Format, db: PokebotDb):
+export async function movesForPokemon(pokemonId: string, format: Format, db: OakDb):
   Promise<{ moveSlug: string; method: string }[]>;
 // pokedex-repo.ts
-export async function pokemonWithAbility(abilitySlug: string, format: Format, db: PokebotDb):
+export async function pokemonWithAbility(abilitySlug: string, format: Format, db: OakDb):
   Promise<{ slug: string; display_name: string }[]>;
 // reference-cache.ts  (one query over reference_cache; parses payloads for display_name+type)
-export async function moveSummaries(moveSlugs: string[], format: Format, db: PokebotDb):
+export async function moveSummaries(moveSlugs: string[], format: Format, db: OakDb):
   Promise<Map<string, { display_name: string; type: TypeName }>>;
 ```
 
@@ -254,7 +254,7 @@ export async function moveSummaries(moveSlugs: string[], format: Format, db: Pok
 ```ts
 type ArtifactRef =
   | { source: "entity"; kind: EntityKind; query: string; format: Format }     // needs fetch
-  | { source: "structured"; view: "comparison" | "damage"; payload: unknown   // from PokebotAnswer
+  | { source: "structured"; view: "comparison" | "damage"; payload: unknown   // from OakAnswer
       ; title: string; format: Format };
 
 interface ArtifactViewerApi {
@@ -427,7 +427,7 @@ integration_checkpoints:
 ## Technical Decisions
 
 **TD-1 — Dedicated read endpoint over the repo layer (not the tool layer, not payload
-enrichment).** Full profiles need data absent from `PokebotAnswer` (BR-AV-3), so a fresh read
+enrichment).** Full profiles need data absent from `OakAnswer` (BR-AV-3), so a fresh read
 is required. The endpoint goes through repos (the sole DB readers per CLAUDE.md), keeping the
 agent's 11-tool contract and tool-loop untouched. *Alternatives:* reuse the agent tool
 run-functions (rejected — couples the UI fetch path to the agent layer); enrich the citation

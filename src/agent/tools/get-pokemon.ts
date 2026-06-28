@@ -14,7 +14,7 @@ import {
 } from "@/agent/schemas";
 import { getPokemon } from "@/data/repos/pokedex-repo";
 import { formatForMode } from "@/data/formats";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 
 const description =
   "Get the full profile of one specific Pokémon form: its types, all abilities " +
@@ -34,7 +34,7 @@ export const getPokemonTool: ToolDef = {
     return getPokemon(
       parsed.data.name,
       formatForMode(ctx.mode),
-      ctx.db as unknown as PokebotDb,
+      ctx.db as unknown as OakDb,
     );
   },
 };

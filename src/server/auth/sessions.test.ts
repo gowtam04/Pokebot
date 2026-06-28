@@ -104,8 +104,8 @@ async function seedAccount(email = "ash@pallet.town") {
 // ---------------------------------------------------------------------------
 
 describe("session constants", () => {
-  it("names the cookie pokebot_session", () => {
-    expect(sessions.SESSION_COOKIE).toBe("pokebot_session");
+  it("names the cookie oak_session", () => {
+    expect(sessions.SESSION_COOKIE).toBe("oak_session");
   });
 
   it("uses a 30-day fixed session window (BR-A7)", () => {

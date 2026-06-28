@@ -4,7 +4,7 @@
  * `assembleEntityProfile(kind, slug, format, db)` is the single composition point
  * behind `GET /api/entity`. It reads the existing format-scoped index through the
  * repo layer (the sole DB readers, per CLAUDE.md) and assembles the full profile a
- * full-screen artifact needs — data that the `PokebotAnswer` payload does not
+ * full-screen artifact needs — data that the `OakAnswer` payload does not
  * carry (BR-AV-3): a Pokémon's combined defensive grid (via the shared
  * `type-chart` formula) and grouped movepool, an ability's roster of holders.
  *
@@ -19,7 +19,7 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import { CHAMPIONS_REGULATION, type Format } from "@/data/formats";
 import { ingest_meta } from "@/data/schema";
 import type {
@@ -145,7 +145,7 @@ function groupMovepool(
  */
 export async function isIndexAvailable(
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<boolean> {
   try {
     const rows = await db
@@ -172,7 +172,7 @@ export async function assembleEntityProfile(
   kind: EntityKind,
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   if (!(await isIndexAvailable(format, db))) {
     return { status: "unavailable", kind, format };
@@ -194,7 +194,7 @@ export async function assembleEntityProfile(
 async function assemblePokemon(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   const profile = await getPokemon(slug, format, db);
   if (!profile.found) {
@@ -256,7 +256,7 @@ async function assemblePokemon(
 async function assembleMove(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   const ref = await getReference("move", slug, format, { db });
   if (!isFoundRecord(ref)) {
@@ -289,7 +289,7 @@ async function assembleMove(
 async function assembleAbility(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   const ref = await getReference("ability", slug, format, { db });
   if (!isFoundRecord(ref)) {
@@ -324,7 +324,7 @@ async function assembleAbility(
 async function assembleItem(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   const ref = await getReference("item", slug, format, { db });
   if (!isFoundRecord(ref)) {
@@ -352,7 +352,7 @@ async function assembleItem(
 async function assembleType(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EntityArtifactResponse> {
   const ref = await getReference("type", slug, format, { db });
   if (!isFoundRecord(ref) || !("defensive" in ref)) {

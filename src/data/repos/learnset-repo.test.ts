@@ -13,7 +13,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import { learnset } from "@/data/schema";
 
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
@@ -47,7 +47,7 @@ const SEED: Row[] = [
 ];
 
 let fix: PgFixture;
-let db: PokebotDb;
+let db: OakDb;
 
 beforeAll(async () => {
   fix = await createPgSchema({ seed: "none" });

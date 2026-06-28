@@ -34,7 +34,7 @@ export default defineConfig({
           // Placeholder so `@/env` validates in workers; the @/data/db singleton
           // is injected by the test harness and never connects with this value.
           env: {
-            DATABASE_URL: "postgres://pokebot:pokebot@127.0.0.1:5432/placeholder",
+            DATABASE_URL: "postgres://oak:oak@127.0.0.1:5432/placeholder",
           },
         },
       },
@@ -43,7 +43,7 @@ export default defineConfig({
         test: {
           name: "jsdom",
           environment: "jsdom",
-          // Component tests render PokebotAnswer fixtures only — never import
+          // Component tests render OakAnswer fixtures only — never import
           // db/repos/runtime (native better-sqlite3 fails under jsdom).
           // `test/**/*.test.tsx` is the full-stack-e2e AnswerCard checkpoint
           // (test/answercard.fullstack.test.tsx) — same jsdom constraints.

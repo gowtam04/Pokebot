@@ -9,13 +9,13 @@
  *   entry (G4)" ... exercised against "real tools/fixture DB".
  *
  * It records a 4-step tool transcript (get_move -> get_pokemon -> get_ability ->
- * submit_answer) and replays it through `runPokebotWith(client, ...)`, where the
+ * submit_answer) and replays it through `runOakWith(client, ...)`, where the
  * tool calls are dispatched by the genuine tool layer reading the seeded fixture.
  * We assert BOTH:
  *   (1) the real tools returned the grounding FACTS (Fake Out priority 3;
  *       Farigiraf has armor-tail; Armor Tail negates positive-priority moves) —
  *       by inspecting the tool_result blocks fed back to the model; and
- *   (2) the produced PokebotAnswer is schema-valid, status "answered", and
+ *   (2) the produced OakAnswer is schema-valid, status "answered", and
  *       carries an inferences[] entry about Armor Tail blocking priority (BR-3).
  *
  * Wiring mirrors the *.oracle.test.ts harness: neutralize `server-only`, migrate
@@ -25,10 +25,10 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { pokebotAnswerSchema } from "@/agent/schemas";
+import { oakAnswerSchema } from "@/agent/schemas";
 import { reference_cache } from "@/data/schema";
 import type { AgentContext, ChatMessage } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 import { loadToolSurface } from "./fixtures/tools-fixture";
@@ -65,20 +65,20 @@ const ARMOR_TAIL_ABILITY = {
     "The Pokémon and its allies cannot be targeted by opposing moves that have positive priority (e.g. Fake Out, Quick Attack, Extreme Speed).",
 };
 
-let runPokebotWith: (
+let runOakWith: (
   client: unknown,
   message: string,
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: (e: { tool: string; label: string }) => void,
-) => Promise<PokebotAnswer>;
+) => Promise<OakAnswer>;
 let ctx: AgentContext;
 let loadError: unknown = null;
 let fix: PgFixture;
 
 beforeAll(async () => {
   try {
-    // runPokebotWith takes the client directly, so no real Anthropic client is
+    // runOakWith takes the client directly, so no real Anthropic client is
     // built — but importing the env-validated modules wants a key present.
     process.env.ANTHROPIC_API_KEY ??= "test-dummy-key";
 
@@ -116,9 +116,9 @@ beforeAll(async () => {
     ctx = surface.ctx;
     // ...and the real runtime (NOT mocking @/agent/tools — that is the point).
     const rt = (await import("@/agent/runtime")) as {
-      runPokebotWith: typeof runPokebotWith;
+      runOakWith: typeof runOakWith;
     };
-    runPokebotWith = rt.runPokebotWith;
+    runOakWith = rt.runOakWith;
   } catch (e) {
     loadError = e;
   }
@@ -211,7 +211,7 @@ function lastToolResultText(params: any): string {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 // The conditional, inference-bearing G4 answer the model submits last.
-const G4_ANSWER: PokebotAnswer = {
+const G4_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown:
     "It depends on Farigiraf's ability. Fake Out is a +3 priority move, and **Armor Tail negates moves with increased priority** — so if Farigiraf has Armor Tail, Fake Out fails. With Cud Chew or Sap Sipper, Fake Out works normally (and flinches).",
@@ -261,7 +261,7 @@ describe("G4 integration: Fake Out vs Farigiraf through the real runtime + tools
     ]);
 
     const progress: string[] = [];
-    const result = await runPokebotWith(
+    const result = await runOakWith(
       client,
       "does Fake Out work on Farigiraf?",
       [],
@@ -284,8 +284,8 @@ describe("G4 integration: Fake Out vs Farigiraf through the real runtime + tools
       "submit_answer",
     ]);
 
-    // (2) The produced PokebotAnswer is valid and carries the conditional inference.
-    expect(pokebotAnswerSchema.safeParse(result).success).toBe(true);
+    // (2) The produced OakAnswer is valid and carries the conditional inference.
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
     expect(result.status).toBe("answered");
     expect(result.generation_basis).toEqual({
       generation: "gen-9",

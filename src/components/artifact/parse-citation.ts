@@ -1,5 +1,5 @@
 /**
- * Parse a `PokebotAnswer` citation `source` into an openable entity (B-4,
+ * Parse a `OakAnswer` citation `source` into an openable entity (B-4,
  * AV-US-3 — clicking a Sources entry opens that resource as an entity artifact).
  *
  * `source` is `"<kind>/<slug>"`, e.g. "ability/armor-tail", "pokemon/garchomp",

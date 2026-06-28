@@ -3,7 +3,7 @@
  *
  * This module is the ONLY definition of:
  *  - the input/output shapes for all 11 tools (T1..T11, tools.md), and
- *  - the `PokebotAnswer` object emitted by `submit_answer` (T11 / output-formats.md).
+ *  - the `OakAnswer` object emitted by `submit_answer` (T11 / output-formats.md).
  *
  * TS types are inferred from these schemas; the Anthropic SDK tool `input_schema`
  * values and the `submit_answer` JSON Schema are GENERATED from them via
@@ -428,10 +428,10 @@ export const estimateDamageOutputSchema = z.union([
 ]);
 
 // ===========================================================================
-// T11 — submit_answer / PokebotAnswer (output-formats.md)
+// T11 — submit_answer / OakAnswer (output-formats.md)
 // ===========================================================================
 
-// PokebotAnswer sub-objects are `.strict()` so runtime validation rejects
+// OakAnswer sub-objects are `.strict()` so runtime validation rejects
 // unknown keys — mirroring `additionalProperties: false` in the generated JSON
 // Schema (output-formats.md). Free-form objects (assumptions/result/key_stats)
 // stay open via z.record.
@@ -548,7 +548,7 @@ export const savedTeamSchema = z
   })
   .strict();
 
-export const pokebotAnswerSchema = z
+export const oakAnswerSchema = z
   .object({
     status: z.enum([
       "answered",
@@ -682,7 +682,7 @@ export type StatKey = z.infer<typeof statKeySchema>;
 export type EntityKind = z.infer<typeof entityKindSchema>;
 
 /** The single structured output the agent emits per turn (T11). */
-export type PokebotAnswer = z.infer<typeof pokebotAnswerSchema>;
+export type OakAnswer = z.infer<typeof oakAnswerSchema>;
 
 // ===========================================================================
 // JSON-Schema generation for the Anthropic SDK
@@ -730,16 +730,16 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   get_item: toJsonSchema(getItemInputSchema),
   compute_stat: toJsonSchema(computeStatInputSchema),
   estimate_damage: toJsonSchema(estimateDamageInputSchema),
-  // submit_answer's input IS the PokebotAnswer object.
-  submit_answer: toJsonSchema(pokebotAnswerSchema),
+  // submit_answer's input IS the OakAnswer object.
+  submit_answer: toJsonSchema(oakAnswerSchema),
   // T12 — no team-selecting argument (server-bound active team).
   get_active_team: toJsonSchema(getActiveTeamInputSchema),
   // T13 — save a proposed team to the user's Teams on approval.
   save_team: toJsonSchema(saveTeamInputSchema),
 };
 
-/** The generated `submit_answer` (PokebotAnswer) JSON Schema. */
-export const pokebotAnswerJsonSchema: JsonSchema =
+/** The generated `submit_answer` (OakAnswer) JSON Schema. */
+export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
 /** Canonical tool name list (T1..T12), in order. */

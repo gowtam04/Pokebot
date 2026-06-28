@@ -8,7 +8,7 @@
  * Samples:
  *  - Garchomp query_pokedex output  (tools.md T2)
  *  - Farigiraf get_pokemon output   (tools.md T3)
- *  - PokebotAnswer Examples A..E     (prompts.md few-shot / output-formats.md)
+ *  - OakAnswer Examples A..E     (prompts.md few-shot / output-formats.md)
  */
 
 import { describe, expect, it } from "vitest";
@@ -16,13 +16,13 @@ import {
   TOOL_NAMES,
   computeStatInputSchema,
   getPokemonOutputSchema,
-  pokebotAnswerJsonSchema,
-  pokebotAnswerSchema,
+  oakAnswerJsonSchema,
+  oakAnswerSchema,
   queryPokedexOutputSchema,
   resolveEntityInputSchema,
   toJsonSchema,
   toolInputJsonSchemas,
-  type PokebotAnswer,
+  type OakAnswer,
 } from "@/agent/schemas";
 
 // ---------------------------------------------------------------------------
@@ -84,11 +84,11 @@ const FARIGIRAF_GET_POKEMON = {
 };
 
 // ---------------------------------------------------------------------------
-// Canonical PokebotAnswer samples (prompts.md few-shot Examples A..E)
+// Canonical OakAnswer samples (prompts.md few-shot Examples A..E)
 // ---------------------------------------------------------------------------
 
 // Example A — mechanics interaction with a conditional (US-7, BR-3).
-const EXAMPLE_A: PokebotAnswer = {
+const EXAMPLE_A: OakAnswer = {
   status: "answered",
   answer_markdown:
     "It depends on Farigiraf's ability.\n\n- **If it has Armor Tail:** Fake Out **fails**.\n- **Otherwise:** Fake Out **works** normally.",
@@ -126,7 +126,7 @@ const EXAMPLE_A: PokebotAnswer = {
 };
 
 // Example B — multi-move intersection filter (US-1, BR-7).
-const EXAMPLE_B: PokebotAnswer = {
+const EXAMPLE_B: OakAnswer = {
   status: "answered",
   answer_markdown:
     "**6 Pokémon** can learn both Trick Room and Will-O-Wisp in Gen 9.",
@@ -166,7 +166,7 @@ const EXAMPLE_B: PokebotAnswer = {
 };
 
 // Example C — resolve-or-clarify on a misspelling (AC-1.3, BR-9).
-const EXAMPLE_C: PokebotAnswer = {
+const EXAMPLE_C: OakAnswer = {
   status: "clarification_needed",
   answer_markdown:
     'I couldn\'t find a move called "Will-o-Whisp" — did you mean **Will-O-Wisp**?',
@@ -179,7 +179,7 @@ const EXAMPLE_C: PokebotAnswer = {
 };
 
 // Example D — stat math with stated assumptions (US-9, BR-6).
-const EXAMPLE_D: PokebotAnswer = {
+const EXAMPLE_D: OakAnswer = {
   status: "answered",
   answer_markdown:
     "**169 Speed** at Level 50, with 252 Speed EVs, a 31 Speed IV, and a Jolly nature (+Speed).",
@@ -206,7 +206,7 @@ const EXAMPLE_D: PokebotAnswer = {
 };
 
 // Example E — out-of-scope decline (pure scope-decline; empty citations allowed).
-const EXAMPLE_E: PokebotAnswer = {
+const EXAMPLE_E: OakAnswer = {
   status: "answered",
   answer_markdown:
     "Egg moves and breeding are outside what I cover. I can help with Dratini's level-up/TM learnset, stats, abilities, evolutions, or type matchups.",
@@ -220,7 +220,7 @@ const EXAMPLE_E: PokebotAnswer = {
 // Example F — proactive "stop and ask" with structured question.options. The
 // agent declines to answer generally and presents mutually-exclusive choices;
 // each option label is sent verbatim as the user's reply when clicked.
-const EXAMPLE_F: PokebotAnswer = {
+const EXAMPLE_F: OakAnswer = {
   status: "clarification_needed",
   answer_markdown:
     "Trick Room teams differ a lot by format — are you building for **Singles** or **Doubles**?",
@@ -237,7 +237,7 @@ const EXAMPLE_F: PokebotAnswer = {
   generation_basis: { generation: "gen-9", fallback: false },
 };
 
-const POKEBOT_ANSWER_EXAMPLES: Array<[string, PokebotAnswer]> = [
+const OAK_ANSWER_EXAMPLES: Array<[string, OakAnswer]> = [
   ["Example A (conditional mechanics)", EXAMPLE_A],
   ["Example B (intersection candidates)", EXAMPLE_B],
   ["Example C (clarification)", EXAMPLE_C],
@@ -287,10 +287,10 @@ describe("contracts gate — canonical tool outputs validate", () => {
   });
 });
 
-describe("contracts gate — canonical PokebotAnswer examples validate", () => {
-  for (const [label, example] of POKEBOT_ANSWER_EXAMPLES) {
+describe("contracts gate — canonical OakAnswer examples validate", () => {
+  for (const [label, example] of OAK_ANSWER_EXAMPLES) {
     it(`validates ${label}`, () => {
-      const parsed = pokebotAnswerSchema.safeParse(example);
+      const parsed = oakAnswerSchema.safeParse(example);
       if (!parsed.success) {
         throw new Error(
           `${label} failed: ${JSON.stringify(parsed.error.issues, null, 2)}`,
@@ -301,10 +301,10 @@ describe("contracts gate — canonical PokebotAnswer examples validate", () => {
   }
 });
 
-describe("PokebotAnswer rejects invalid payloads", () => {
+describe("OakAnswer rejects invalid payloads", () => {
   it("rejects an unknown status", () => {
     expect(
-      pokebotAnswerSchema.safeParse({ ...EXAMPLE_E, status: "made_up" })
+      oakAnswerSchema.safeParse({ ...EXAMPLE_E, status: "made_up" })
         .success,
     ).toBe(false);
   });
@@ -321,18 +321,18 @@ describe("PokebotAnswer rejects invalid payloads", () => {
         },
       ],
     };
-    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(bad).success).toBe(false);
   });
 
   it("rejects a missing required field (generation_basis)", () => {
     const { generation_basis, ...rest } = EXAMPLE_E;
     void generation_basis;
-    expect(pokebotAnswerSchema.safeParse(rest).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(rest).success).toBe(false);
   });
 
   it("rejects unknown top-level keys (additionalProperties: false)", () => {
     expect(
-      pokebotAnswerSchema.safeParse({ ...EXAMPLE_E, surprise: 1 }).success,
+      oakAnswerSchema.safeParse({ ...EXAMPLE_E, surprise: 1 }).success,
     ).toBe(false);
   });
 
@@ -341,12 +341,12 @@ describe("PokebotAnswer rejects invalid payloads", () => {
       ...EXAMPLE_A,
       inferences: [{ claim: "x", confidence: "definitely" }],
     };
-    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(bad).success).toBe(false);
   });
 
   it("rejects a question with fewer than 2 options (.min(2))", () => {
     const bad = { ...EXAMPLE_F, question: { options: [{ label: "Only one" }] } };
-    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(bad).success).toBe(false);
   });
 
   it("rejects a question with more than 4 options (.max(4))", () => {
@@ -362,7 +362,7 @@ describe("PokebotAnswer rejects invalid payloads", () => {
         ],
       },
     };
-    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(bad).success).toBe(false);
   });
 
   it("rejects an option with an unknown key (.strict())", () => {
@@ -375,7 +375,7 @@ describe("PokebotAnswer rejects invalid payloads", () => {
         ],
       },
     };
-    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+    expect(oakAnswerSchema.safeParse(bad).success).toBe(false);
   });
 });
 
@@ -398,10 +398,10 @@ describe("JSON-Schema generation for the Anthropic SDK", () => {
     }
   });
 
-  it("the submit_answer schema IS the PokebotAnswer schema with the required core fields", () => {
-    expect(pokebotAnswerJsonSchema).toBe(toolInputJsonSchemas.submit_answer);
-    expect(pokebotAnswerJsonSchema.type).toBe("object");
-    const required = pokebotAnswerJsonSchema.required as string[];
+  it("the submit_answer schema IS the OakAnswer schema with the required core fields", () => {
+    expect(oakAnswerJsonSchema).toBe(toolInputJsonSchemas.submit_answer);
+    expect(oakAnswerJsonSchema.type).toBe("object");
+    const required = oakAnswerJsonSchema.required as string[];
     expect(required).toEqual(
       expect.arrayContaining([
         "status",

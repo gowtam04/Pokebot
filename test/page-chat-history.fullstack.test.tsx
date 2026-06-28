@@ -26,7 +26,7 @@ import {
 import Home from "@/app/page";
 import { formatSseEvent } from "@/lib/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
-import type { ChatTurn, PokebotAnswer } from "@/components/types";
+import type { ChatTurn, OakAnswer } from "@/components/types";
 
 const EMAIL = "ash@pallet.town";
 
@@ -43,7 +43,7 @@ let serverConvos: ServerConvo[];
 let meState: { signedIn: boolean; email?: string };
 let clock: number;
 
-function makeAnswer(markdown: string): PokebotAnswer {
+function makeAnswer(markdown: string): OakAnswer {
   return { ...MINIMAL_ANSWER, answer_markdown: markdown };
 }
 
@@ -72,7 +72,7 @@ function jsonResponse(status: number, body: unknown): Response {
   } as unknown as Response;
 }
 
-function sseAnswerResponse(answer: PokebotAnswer): Response {
+function sseAnswerResponse(answer: OakAnswer): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new TextEncoder().encode(formatSseEvent("answer", { answer })));
@@ -314,14 +314,14 @@ describe("Home — chat-history sidebar", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(sidebar).toHaveClass("chat-page__sidebar--collapsed");
     expect(inner).toHaveAttribute("inert");
-    expect(localStorage.getItem("pokebot-sidebar-collapsed")).toBe("true");
+    expect(localStorage.getItem("oak-sidebar-collapsed")).toBe("true");
 
     // Expand again.
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(sidebar).not.toHaveClass("chat-page__sidebar--collapsed");
     expect(inner).not.toHaveAttribute("inert");
-    expect(localStorage.getItem("pokebot-sidebar-collapsed")).toBe("false");
+    expect(localStorage.getItem("oak-sidebar-collapsed")).toBe("false");
   });
 
   it("deleting the open conversation resets to a new chat (AC-8.2)", async () => {

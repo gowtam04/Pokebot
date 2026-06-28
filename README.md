@@ -1,4 +1,4 @@
-# Pokebot
+# Oak
 
 A personal, single-user web chat agent that answers natural-language questions
 about Pokémon — moves, abilities, types, stats, evolutions, items, and

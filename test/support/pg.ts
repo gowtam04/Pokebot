@@ -9,7 +9,7 @@
  *   - `createPgSchema({ seed })` — make an isolated, migrated (optionally seeded)
  *     schema and return a Drizzle handle + a `DbBundle`-shaped value + cleanup.
  *   - `installAsSingleton(fix)` — install that bundle as the `@/data/db`
- *     singleton (`globalThis.__pokebotDb`) and reset the resolve-index cache, so
+ *     singleton (`globalThis.__oakDb`) and reset the resolve-index cache, so
  *     `resolve_entity` (which reads the SINGLETON, not ctx.db) sees this schema.
  *
  * This module does NOT `import "server-only"`; tests that need the tool layer
@@ -34,7 +34,7 @@ declare module "vitest" {
   }
 }
 
-/** A Drizzle handle typed over the full Pokebot schema (node-postgres). */
+/** A Drizzle handle typed over the full Oak schema (node-postgres). */
 export type PgDb = NodePgDatabase<typeof schema>;
 
 /** Matches the `DbBundle` shape that `@/data/db` memoizes on globalThis. */
@@ -141,7 +141,7 @@ export async function createPgSchema(
  * dynamic, inside `beforeAll`) so the captured `db` binding is this handle.
  */
 export async function installAsSingleton(fix: PgFixture): Promise<void> {
-  (globalThis as { __pokebotDb?: PgBundle }).__pokebotDb = fix.bundle;
+  (globalThis as { __oakDb?: PgBundle }).__oakDb = fix.bundle;
   const { resetResolveIndex } = await import("@/data/repos/resolve-index");
   resetResolveIndex();
 }

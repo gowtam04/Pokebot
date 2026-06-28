@@ -86,7 +86,7 @@ describe("getEmailTransport — factory selection (AD-6, AC-2.1)", () => {
   it("returns the Resend transport when a RESEND_API_KEY is present", () => {
     const transport = getEmailTransport({
       apiKey: "re_test_123",
-      from: "Pokebot <test@example.com>",
+      from: "Oak <test@example.com>",
     });
     expect(transport).toBeInstanceOf(ResendEmailTransport);
     expect(transport).not.toBeInstanceOf(ConsoleEmailTransport);
@@ -96,7 +96,7 @@ describe("getEmailTransport — factory selection (AD-6, AC-2.1)", () => {
 describe("ResendEmailTransport.sendOtpEmail — HTTP request (AC-2.1)", () => {
   it("POSTs the code to Resend with the correct endpoint, auth, and payload", async () => {
     const apiKey = "re_test_456";
-    const from = "Pokebot <auth@pokebot.test>";
+    const from = "Oak <auth@oak.test>";
     const to = "alice@example.com";
     const code = "012345";
 
@@ -197,7 +197,7 @@ describe("env additions — AUTH_SECRET / RESEND_API_KEY / EMAIL_FROM", () => {
     const parsed = parseEnv({ ANTHROPIC_API_KEY: "sk-test" });
     expect(parsed.AUTH_SECRET).toBe("dev-insecure-auth-secret-change-me");
     expect(parsed.RESEND_API_KEY).toBeUndefined();
-    expect(parsed.EMAIL_FROM).toBe("Pokebot <onboarding@resend.dev>");
+    expect(parsed.EMAIL_FROM).toBe("Oak <onboarding@resend.dev>");
   });
 
   it("treats an empty RESEND_API_KEY as absent (→ undefined)", () => {

@@ -9,7 +9,7 @@
  *  - multi-turn input (G19) is correctly shaped
  *  - deterministic subset matches the design.md spec
  *  - tool-efficiency cases (G1/G5/G6/G8) specify query_pokedex + maxPerPokemonFetches=0
- *  - status values are valid PokebotAnswer status strings
+ *  - status values are valid OakAnswer status strings
  *  - key requirement IDs are covered across the suite
  *  - derived exports (caseById, deterministicCases, rebuildRegressionCases) are consistent
  */
@@ -153,11 +153,11 @@ describe("eval/cases", () => {
       expect(typeof c.expect).toBe("object");
       expect(c.expect).not.toBeNull();
 
-      // status (optional) must be a valid PokebotAnswer status
+      // status (optional) must be a valid OakAnswer status
       if (c.expect.status !== undefined) {
         expect(
           VALID_STATUSES.has(c.expect.status),
-          `${c.id} status "${c.expect.status}" is not a valid PokebotAnswer status`,
+          `${c.id} status "${c.expect.status}" is not a valid OakAnswer status`,
         ).toBe(true);
       }
 

@@ -15,7 +15,7 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 vi.mock("server-only", () => ({}));
 
@@ -36,7 +36,7 @@ let route: typeof import("./route");
 let convRepo: typeof import("@/data/repos/conversation-repo");
 let teamRepo: typeof import("@/data/repos/team-repo");
 
-const ANSWER: PokebotAnswer = {
+const ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "ok",
   reasoning_markdown: "—",

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Pokebot — Design System
+   Oak — Design System
    Single source of truth. Tokens (light + dark) → base → app shell → components.
    Implements docs/design-system/design-system.md. Component styles target the
    existing BEM class names; nothing here references a raw hex outside the token

@@ -12,12 +12,12 @@
  *     RubricScore       — per-dimension score (0/1/2 + reason)
  *     JudgeResult       — full result: structural failures + LLM rubric + timing
  *     JudgeClientLike   — injectable judge-client seam
- *     RunPokebotFn      — injectable runPokebot seam
+ *     RunOakFn      — injectable runOak seam
  *   Functions:
  *     runStructural     — structural assertions only (fast, no LLM).
  *                         Exported for eval/deterministic.ts CI subset.
  *     runJudgedWith     — full pipeline with injected clients (used in tests).
- *     runJudged         — production entry point (real Anthropic + real runPokebot).
+ *     runJudged         — production entry point (real Anthropic + real runOak).
  *
  * Risk-directive note:
  *   The judge uses `tool_choice: { type: "tool", name: "submit_judgment" }` WITHOUT
@@ -29,9 +29,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import { env } from "@/env";
-import { runPokebot as defaultRunPokebot } from "@/agent/runtime";
+import { runOak as defaultRunOak } from "@/agent/runtime";
 import type { AgentContext, ChatMessage } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +50,8 @@ export interface GoldenCase {
    */
   input: string | string[];
   expect: {
-    /** Expected PokebotAnswer.status value. */
-    status?: PokebotAnswer["status"];
+    /** Expected OakAnswer.status value. */
+    status?: OakAnswer["status"];
     /** candidates.total_count must be >= this value. */
     minCandidates?: number;
     /**
@@ -86,7 +86,7 @@ export interface AssertResult {
   caseId: string;
   pass: boolean;
   failures: string[];
-  answer: PokebotAnswer;
+  answer: OakAnswer;
 }
 
 /**
@@ -117,7 +117,7 @@ export interface RubricScore {
 export interface JudgeResult {
   caseId: string;
   input: string | string[];
-  answer: PokebotAnswer;
+  answer: OakAnswer;
   /** Tool names in call order, captured from onProgress during the agent run. */
   toolCalls: string[];
   /** Structural assertion failures (empty = all structural checks pass). */
@@ -145,8 +145,8 @@ export interface JudgeClientLike {
   };
 }
 
-/** The runPokebot signature the judge depends on (mirrors @/agent/runtime). */
-export type RunPokebotFn = typeof defaultRunPokebot;
+/** The runOak signature the judge depends on (mirrors @/agent/runtime). */
+export type RunOakFn = typeof defaultRunOak;
 
 // ─── Structural assertions ────────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ export type RunPokebotFn = typeof defaultRunPokebot;
  *   7. Generation correctness — fallback flag consistent with subjects (BR-1)
  */
 export function runStructural(
-  answer: PokebotAnswer,
+  answer: OakAnswer,
   gc: GoldenCase,
   toolCalls: string[],
 ): string[] {
@@ -263,8 +263,8 @@ export function runStructural(
 
 // ─── LLM judge prompt & tool ──────────────────────────────────────────────────
 
-const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator for Pokebot, a Pokémon knowledge agent built on Gen 9 (Scarlet/Violet) data.
-Your task: given a user question, a description of the expected behavior, and the agent's PokebotAnswer JSON, score the answer on five rubric dimensions.
+const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator for Oak, a Pokémon knowledge agent built on Gen 9 (Scarlet/Violet) data.
+Your task: given a user question, a description of the expected behavior, and the agent's OakAnswer JSON, score the answer on five rubric dimensions.
 Each dimension gets an integer score: 0 (fail), 1 (partial pass), or 2 (full pass).
 
 RUBRIC DIMENSIONS
@@ -374,7 +374,7 @@ function clampScore(raw: number | undefined): 0 | 1 | 2 {
   return 1;
 }
 
-function buildJudgeUserMessage(gc: GoldenCase, answer: PokebotAnswer): string {
+function buildJudgeUserMessage(gc: GoldenCase, answer: OakAnswer): string {
   const questionText = Array.isArray(gc.input)
     ? gc.input.map((q, i) => `Turn ${i + 1}: ${JSON.stringify(q)}`).join("\n")
     : `Question: ${JSON.stringify(gc.input)}`;
@@ -398,7 +398,7 @@ function buildJudgeUserMessage(gc: GoldenCase, answer: PokebotAnswer): string {
     "## Expected Behavior",
     ...expectLines,
     "",
-    "## Actual PokebotAnswer (JSON)",
+    "## Actual OakAnswer (JSON)",
     "```json",
     JSON.stringify(answer, null, 2),
     "```",
@@ -415,7 +415,7 @@ function buildJudgeUserMessage(gc: GoldenCase, answer: PokebotAnswer): string {
 async function callJudge(
   client: JudgeClientLike,
   gc: GoldenCase,
-  answer: PokebotAnswer,
+  answer: OakAnswer,
 ): Promise<RubricScore[]> {
   const response = await client.messages.create({
     model: env.ANTHROPIC_MODEL,
@@ -473,7 +473,7 @@ function getJudgeClient(): Anthropic {
 // ─── Core per-case engine ─────────────────────────────────────────────────────
 
 /** Minimal placeholder answer used when the agent loop is initialised. */
-function notStartedAnswer(): PokebotAnswer {
+function notStartedAnswer(): OakAnswer {
   return {
     status: "insufficient_data",
     answer_markdown: "Agent did not produce an answer.",
@@ -488,7 +488,7 @@ async function runOneCase(
   gc: GoldenCase,
   ctx: AgentContext,
   judgeClient: JudgeClientLike,
-  runPokebot: RunPokebotFn,
+  runOak: RunOakFn,
 ): Promise<JudgeResult> {
   const toolCalls: string[] = [];
   const inputs = Array.isArray(gc.input) ? gc.input : [gc.input];
@@ -496,10 +496,10 @@ async function runOneCase(
   // ── 1. Run the agent (supports multi-turn via sequential calls) ──────────
   const agentStart = Date.now();
   let history: ChatMessage[] = [];
-  let lastAnswer: PokebotAnswer = notStartedAnswer();
+  let lastAnswer: OakAnswer = notStartedAnswer();
 
   for (const message of inputs) {
-    lastAnswer = await runPokebot(message, history, ctx, (event) => {
+    lastAnswer = await runOak(message, history, ctx, (event) => {
       toolCalls.push(event.tool);
     });
     // Build history for the next turn (multi-turn: each assistant reply is the
@@ -542,25 +542,25 @@ async function runOneCase(
 
 /**
  * Injectable entry point: run the full pipeline with supplied judge client and
- * runPokebot function. Use in tests (pass mocked clients); can also be used by
+ * runOak function. Use in tests (pass mocked clients); can also be used by
  * advanced callers that need custom injection.
  */
 export async function runJudgedWith(
   cases: GoldenCase[],
   ctx: AgentContext,
   judgeClient: JudgeClientLike,
-  runPokebot: RunPokebotFn,
+  runOak: RunOakFn,
 ): Promise<JudgeResult[]> {
   const results: JudgeResult[] = [];
   for (const gc of cases) {
-    results.push(await runOneCase(gc, ctx, judgeClient, runPokebot));
+    results.push(await runOneCase(gc, ctx, judgeClient, runOak));
   }
   return results;
 }
 
 /**
  * Production entry point. Runs the full golden suite with the real Anthropic
- * judge client and the real runPokebot. Called by eval/run.ts (nightly / on release).
+ * judge client and the real runOak. Called by eval/run.ts (nightly / on release).
  *
  * WIRED here but NOT invoked in the current build phase — see module header.
  */
@@ -568,5 +568,5 @@ export async function runJudged(
   cases: GoldenCase[],
   ctx: AgentContext,
 ): Promise<JudgeResult[]> {
-  return runJudgedWith(cases, ctx, getJudgeClient(), defaultRunPokebot);
+  return runJudgedWith(cases, ctx, getJudgeClient(), defaultRunOak);
 }

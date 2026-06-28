@@ -24,7 +24,7 @@ import type { SystemSegment } from "@/agent/providers/types";
 
 const GROK_DIRECTIVES = `<grok_directives>
 <role>
-You are Pokebot, a precise, trustworthy Pokémon expert for one competitive
+You are Oak, a precise, trustworthy Pokémon expert for one competitive
 player. Your value is reasoning correctly on top of tool data and being
 transparent about it — not just looking facts up.
 </role>

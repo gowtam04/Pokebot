@@ -13,7 +13,7 @@
  *
  * HOW IT STAYS DETERMINISTIC ("MOCKED Anthropic client / pure tools")
  * -------------------------------------------------------------------
- * Each case is driven through the REAL agent runtime (`runPokebotWith`) but with
+ * Each case is driven through the REAL agent runtime (`runOakWith`) but with
  * a *scripted* Anthropic client injected in place of the model. The scripted
  * client:
  *   1. On its first turn, emits the exact `tool_use` block(s) a correct agent
@@ -34,20 +34,20 @@
  * is the whole point of the deterministic subset.
  *
  * No real Anthropic client is ever constructed here (the client is injected via
- * `runPokebotWith`), so this module never reaches the network.
+ * `runOakWith`), so this module never reaches the network.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
 
 import {
-  runPokebotWith,
+  runOakWith,
   type AnthropicClientLike,
   type MessageStreamLike,
 } from "@/agent/runtime";
 import type { AgentContext } from "@/agent/types";
 import type {
   Candidates,
-  PokebotAnswer,
+  OakAnswer,
   QueryPokedexResult,
   ResolveEntityOutput,
   TypeMatchupsDetail,
@@ -75,7 +75,7 @@ interface ToolUseBlockLike {
  */
 interface DeterministicPlan {
   reads: Array<{ name: string; input: unknown }>;
-  compose: (outputs: Record<string, unknown>) => PokebotAnswer;
+  compose: (outputs: Record<string, unknown>) => OakAnswer;
 }
 
 /** Build a minimal-but-valid Anthropic.Message carrying the given blocks. */
@@ -170,7 +170,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
 
         // Turn 2 — compose submit_answer from the real tool outputs.
         const outputs = extractToolOutputs(params, idToName);
-        let answer: PokebotAnswer;
+        let answer: OakAnswer;
         try {
           answer = plan.compose(outputs);
         } catch (err) {
@@ -204,7 +204,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
 // Compose helpers
 // ---------------------------------------------------------------------------
 
-const GEN9_BASIS: PokebotAnswer["generation_basis"] = {
+const GEN9_BASIS: OakAnswer["generation_basis"] = {
   generation: "gen-9",
   fallback: false,
 };
@@ -218,7 +218,7 @@ function isQueryResult(o: unknown): o is QueryPokedexResult {
   );
 }
 
-/** Map a query_pokedex result to the PokebotAnswer `candidates` block. */
+/** Map a query_pokedex result to the OakAnswer `candidates` block. */
 function candidatesFrom(q: QueryPokedexResult): Candidates {
   return {
     total_count: q.total_count,
@@ -518,7 +518,7 @@ export async function runDeterministic(
 
     const toolCalls: string[] = [];
     const client = makeScriptedClient(plan);
-    const answer = await runPokebotWith(
+    const answer = await runOakWith(
       client,
       primaryInput(gc),
       [],

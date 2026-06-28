@@ -8,7 +8,7 @@
 
 ## Overview
 
-Today Pokebot can *reason about* a competitive team but cannot *save* one — every
+Today Oak can *reason about* a competitive team but cannot *save* one — every
 answer is a one-off. The Team Builder lets the user create, name, and revisit
 **fully-specified competitive teams**, and lets the chat agent reason against a
 chosen team ("is my team weak to Trick Room?") instead of a team the user has to
@@ -56,7 +56,7 @@ per-format split.
 ## Users and Personas
 
 Unchanged from the core product: a single persona, **the Owner** — a
-competitively-literate Pokémon fan, technically comfortable, using Pokebot for both
+competitively-literate Pokémon fan, technically comfortable, using Oak for both
 serious team-building and casual curiosity. With B-1, accounts exist and all data is
 per-account, but there is still **no admin/owner role and no cross-account sharing** —
 every account is a peer and sees only its own teams.
@@ -221,7 +221,7 @@ every account is a peer and sees only its own teams.
 ### Agent-Assisted Building (chat)
 
 - The agent can propose a new team or an edit to the active team in response to a
-  chat request, expressed in the normal `PokebotAnswer` form (reasoning, citations,
+  chat request, expressed in the normal `OakAnswer` form (reasoning, citations,
   flags, generation tag).
 - A proposal is **inert** until the user applies it; applying writes a new team or
   updates an existing one (TEAM-US-6, TEAM-US-7, BR-T8).

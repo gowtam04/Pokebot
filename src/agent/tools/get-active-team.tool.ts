@@ -15,7 +15,7 @@
  */
 
 import type { ToolDef } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import {
   getActiveTeamInputSchema,
   toJsonSchema,
@@ -41,7 +41,7 @@ export const getActiveTeamTool: ToolDef = {
     try {
       const team = await enrichActiveTeam(
         ctx.activeTeam,
-        ctx.db as unknown as PokebotDb,
+        ctx.db as unknown as OakDb,
       );
       return { active: true, team };
     } catch {

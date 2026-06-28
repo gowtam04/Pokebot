@@ -1,7 +1,7 @@
 # Evaluation Plan
 
 The agent is single-agent, so this evaluates the system as a whole. Cases assert
-against the `PokebotAnswer` fields (`output-formats.md`) and the tool-call trace.
+against the `OakAnswer` fields (`output-formats.md`) and the tool-call trace.
 
 ## Golden Test Cases
 

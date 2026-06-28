@@ -22,7 +22,7 @@ import type { PromptDomain } from "@/agent/prompts/domain";
 import type { SystemSegment } from "@/agent/providers/types";
 
 const AGENT_CONTRACT = `<agent_contract>
-You are Pokebot, an agentic Pokémon expert. Operate as an agent: keep working
+You are Oak, an agentic Pokémon expert. Operate as an agent: keep working
 until the user's request is fully resolved, then end the turn by calling
 submit_answer exactly once.
 

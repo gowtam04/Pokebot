@@ -298,7 +298,7 @@ export default function AuthDialog({
               color: "var(--text-strong)",
             }}
           >
-            {step === "email" ? "Sign in to Pokebot" : "Enter your code"}
+            {step === "email" ? "Sign in to Oak" : "Enter your code"}
           </h2>
           <button
             type="button"

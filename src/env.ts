@@ -45,7 +45,7 @@ const EnvSchema = z
     DATABASE_URL: z
       .string()
       .url()
-      .default("postgres://pokebot:pokebot@localhost:5432/pokebot"),
+      .default("postgres://oak:oak@localhost:5432/oak"),
     POKEAPI_BASE_URL: z.string().url().default("https://pokeapi.co/api/v2"),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
@@ -68,7 +68,7 @@ const EnvSchema = z
     ),
     // From-address for transactional OTP email. The default delivers only to
     // the Resend account owner; a verified domain is needed for real sends.
-    EMAIL_FROM: z.string().min(1).default("Pokebot <onboarding@resend.dev>"),
+    EMAIL_FROM: z.string().min(1).default("Oak <onboarding@resend.dev>"),
   })
   .superRefine((value, ctx) => {
     // AUTH_SECRET must be an explicit, non-default secret in production.

@@ -21,7 +21,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // loaded.
 vi.mock("server-only", () => ({}));
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import { reference_cache, searchable_names } from "@/data/schema";
 import { getReference } from "@/data/repos/reference-cache";
 import type {
@@ -40,7 +40,7 @@ const CH = "champions";
 // ---------------------------------------------------------------------------
 
 let fix: PgFixture;
-let db: PokebotDb;
+let db: OakDb;
 
 beforeEach(async () => {
   fix = await createPgSchema({ seed: "none" });
@@ -95,7 +95,7 @@ const EEVEE_CHAIN: EvolutionChainDetail = {
 
 /** Seed a reference_cache row for a format. */
 async function seedRef(
-  database: PokebotDb,
+  database: OakDb,
   format: string,
   key: string,
   kind: string,
@@ -113,7 +113,7 @@ async function seedRef(
 
 /** Seed a searchable_names row for a format (backs miss suggestions). */
 async function seedName(
-  database: PokebotDb,
+  database: OakDb,
   format: string,
   kind: string,
   slug: string,

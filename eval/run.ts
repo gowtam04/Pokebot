@@ -8,7 +8,7 @@
  *
  *   tsx eval/run.ts                  Full LLM-judge suite (G1..G24), LIVE Sonnet
  *                                    for both the agent and the judge, against
- *                                    the built on-disk index (data/pokebot.sqlite,
+ *                                    the built on-disk index (data/oak.sqlite,
  *                                    or the fixture if no index exists yet).
  *                                    Nightly / on-release; NOT PR-blocking.
  *
@@ -75,9 +75,9 @@ if (!process.env.VITEST) {
   const req = createRequire(import.meta.url);
   const Mod = req("node:module") as {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown;
-    __pokebotServerOnlyPatched?: boolean;
+    __oakServerOnlyPatched?: boolean;
   };
-  if (!Mod.__pokebotServerOnlyPatched) {
+  if (!Mod.__oakServerOnlyPatched) {
     const orig = Mod._load;
     Mod._load = function patched(
       this: unknown,
@@ -89,7 +89,7 @@ if (!process.env.VITEST) {
       }
       return orig.call(this, request, ...rest);
     } as typeof Mod._load;
-    Mod.__pokebotServerOnlyPatched = true;
+    Mod.__oakServerOnlyPatched = true;
   }
 }
 
@@ -196,7 +196,7 @@ interface BuiltContext {
 /**
  * Build an AgentContext bound to either an isolated, seeded Postgres fixture
  * schema or the live Postgres index. Both paths INSTALL the chosen handle as the
- * @/data/db singleton (globalThis.__pokebotDb) so resolve_entity — which reads
+ * @/data/db singleton (globalThis.__oakDb) so resolve_entity — which reads
  * the singleton, not ctx.db — sees the same data as ctx.db.
  */
 async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
@@ -208,7 +208,7 @@ async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
     const uri = opts.liveIndexUri ?? env.DATABASE_URL;
     const pool = new Pool({ connectionString: uri });
     const db = drizzle(pool, { schema });
-    (globalThis as { __pokebotDb?: { pool: Pool; db: typeof db } }).__pokebotDb =
+    (globalThis as { __oakDb?: { pool: Pool; db: typeof db } }).__oakDb =
       { pool, db };
     (await import("@/data/repos/resolve-index")).resetResolveIndex();
     const ctx = await createAgentContext();

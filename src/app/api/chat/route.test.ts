@@ -12,7 +12,7 @@
  *
  * Real migrated+seeded Postgres (Testcontainers) so `resolveActiveTeam`
  * (team-repo) and `appendTurnPair` (conversation-repo) run for real against the
- * `@/data/db` singleton; only `getCurrentAccount`, `runPokebot`, and
+ * `@/data/db` singleton; only `getCurrentAccount`, `runOak`, and
  * `createAgentContext` are mocked (no model / network) — `createAgentContext` is
  * mocked so we can CAPTURE the `activeTeam` it was bound with.
  */
@@ -20,7 +20,7 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 vi.mock("server-only", () => ({}));
 
@@ -29,12 +29,12 @@ const cu = vi.hoisted(() => ({
 }));
 vi.mock("@/server/auth/current-user", () => cu);
 
-const { mockRunPokebot } = vi.hoisted(() => ({ mockRunPokebot: vi.fn() }));
-vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+const { mockRunOak } = vi.hoisted(() => ({ mockRunOak: vi.fn() }));
+vi.mock("@/agent/runtime", () => ({ runOak: mockRunOak }));
 
 // createAgentContext is mocked so we can capture the options it was called with
 // (the route binds the resolved active team there). It returns a minimal ctx the
-// mocked runPokebot ignores.
+// mocked runOak ignores.
 const { mockCreateCtx, captured } = vi.hoisted(() => ({
   mockCreateCtx: vi.fn(),
   captured: { options: null as Record<string, unknown> | null },
@@ -57,7 +57,7 @@ let route: typeof import("./route");
 let teamRepo: typeof import("@/data/repos/team-repo");
 let convRepo: typeof import("@/data/repos/conversation-repo");
 
-const ANSWER: PokebotAnswer = {
+const ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "ok",
   reasoning_markdown: "—",
@@ -83,8 +83,8 @@ beforeEach(async () => {
     sql`TRUNCATE TABLE team, conversation, conversation_message RESTART IDENTITY`,
   );
   cu.getCurrentAccount.mockReset();
-  mockRunPokebot.mockReset();
-  mockRunPokebot.mockResolvedValue(ANSWER);
+  mockRunOak.mockReset();
+  mockRunOak.mockResolvedValue(ANSWER);
   mockCreateCtx.mockReset();
   mockCreateCtx.mockImplementation(async (options: Record<string, unknown>) => {
     captured.options = options;

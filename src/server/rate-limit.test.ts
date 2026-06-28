@@ -7,21 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // can be asserted while the genuine fixed-window logic still runs (the direct
 // unit suites in this file exercise that same real implementation).
 const {
-  mockRunPokebot,
+  mockRunOak,
   mockCreateAgentContext,
   mockGetCurrentAccount,
   mockGetConversation,
   mockGetMessages,
   mockAppendTurnPair,
 } = vi.hoisted(() => ({
-  mockRunPokebot: vi.fn(),
+  mockRunOak: vi.fn(),
   mockCreateAgentContext: vi.fn(),
   mockGetCurrentAccount: vi.fn(),
   mockGetConversation: vi.fn(),
   mockGetMessages: vi.fn(),
   mockAppendTurnPair: vi.fn(),
 }));
-vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+vi.mock("@/agent/runtime", () => ({ runOak: mockRunOak }));
 vi.mock("@/agent/context", () => ({
   createAgentContext: mockCreateAgentContext,
 }));
@@ -470,8 +470,8 @@ const ACCOUNT = { id: "acct-42", email: "ash@pallet.town", createdAt: 0 };
 
 describe("POST /api/chat — tiered rate-limit keying", () => {
   beforeEach(() => {
-    mockRunPokebot.mockReset();
-    mockRunPokebot.mockResolvedValue(ROUTE_ANSWER);
+    mockRunOak.mockReset();
+    mockRunOak.mockResolvedValue(ROUTE_ANSWER);
     mockCreateAgentContext.mockReset();
     mockCreateAgentContext.mockResolvedValue({});
     mockGetCurrentAccount.mockReset();
@@ -569,7 +569,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     expect(res.status).toBe(413);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe("input_too_long");
-    expect(mockRunPokebot).not.toHaveBeenCalled();
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 
   it("keeps the 2000-char input cap for a SIGNED-IN user → 413 (BR-A11)", async () => {
@@ -578,7 +578,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     expect(res.status).toBe(413);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe("input_too_long");
-    expect(mockRunPokebot).not.toHaveBeenCalled();
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 
   it("enforces the guest cap at the route (20/60s) → 429 + Retry-After, while the account pool stays independent (AC-1.3, AC-7.3, BR-A8)", async () => {
@@ -599,7 +599,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     const limitedBody = (await limited.json()) as { code: string };
     expect(limitedBody.code).toBe("rate_limited");
     // Runtime ran for the 20 allowed posts only — never for the blocked one.
-    expect(mockRunPokebot).toHaveBeenCalledTimes(
+    expect(mockRunOak).toHaveBeenCalledTimes(
       GUEST_CONFIG.maxRequestsPerWindow,
     );
 
@@ -615,12 +615,12 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
   });
 
   it("leaves the conversation session_id + SSE contract unchanged across sign-in (BR-A10, AC-6.2)", async () => {
-    mockRunPokebot.mockReset();
-    mockRunPokebot.mockResolvedValueOnce({
+    mockRunOak.mockReset();
+    mockRunOak.mockResolvedValueOnce({
       ...ROUTE_ANSWER,
       answer_markdown: "first answer",
     });
-    mockRunPokebot.mockResolvedValueOnce(ROUTE_ANSWER);
+    mockRunOak.mockResolvedValueOnce(ROUTE_ANSWER);
 
     // Turn 1 — as a guest (keyed ip:5.5.5.5).
     mockGetCurrentAccount.mockResolvedValueOnce(null);
@@ -655,7 +655,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     // The conversation is keyed by session_id, NOT auth tier: the prior turn
     // pair threads into turn 2 (now DB-sourced) even though the rate-limit key
     // changed ip→acct.
-    const secondCall = mockRunPokebot.mock.calls[1]! as [
+    const secondCall = mockRunOak.mock.calls[1]! as [
       string,
       { role: string; content: string }[],
     ];

@@ -10,10 +10,10 @@
  * ── The `db` binding (why it is self-referential) ──────────────────────────
  * The Phase-4 repos diverged on how they take the Drizzle handle:
  *   - pokedex-repo (`queryPokedex`, `getPokemon`) and learnset-repo
- *     (`gen9LearnerCount`, `pokemonLearningAll`) take the RAW `PokebotDb` and use
+ *     (`gen9LearnerCount`, `pokemonLearningAll`) take the RAW `OakDb` and use
  *     it directly (`db.select()...`).
  *   - reference-cache (`getReference`) takes a `ReferenceCacheCtx` whose `.db`
- *     property is the `PokebotDb` (`resolveDb(ctx)` reads `ctx.db`).
+ *     property is the `OakDb` (`resolveDb(ctx)` reads `ctx.db`).
  * Every tool forwards the SAME value — `ctx.db` — to its repo. To satisfy both
  * contracts with one value we bind `ctx.db` to the handle itself AND give it a
  * non-enumerable `db` property pointing back at the handle. Then:
@@ -36,14 +36,14 @@ import type { Logger } from "pino";
 
 import { DEFAULT_MODEL_KEY, type ModelKey } from "@/agent/models";
 import type { AgentContext, AgentMode, DbCtx } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { ActiveTeam } from "@/server/teams/active-team";
 import { logger as defaultLogger } from "@/server/logger";
 
 /** Overrides for {@link createAgentContext}; every field defaults sensibly. */
 export interface CreateAgentContextOptions {
   /** Drizzle handle to bind. Defaults to the `@/data/db` process singleton. */
-  db?: PokebotDb;
+  db?: OakDb;
   /** Base pino logger. Defaults to the shared `@/server/logger` instance. */
   logger?: Logger;
   /** Correlation id for the turn trace. Defaults to a fresh UUID. */
@@ -84,12 +84,12 @@ export interface CreateAgentContextOptions {
 }
 
 /**
- * Bind a `PokebotDb` so it satisfies BOTH repo handle contracts (see file
+ * Bind a `OakDb` so it satisfies BOTH repo handle contracts (see file
  * header). Adds a non-enumerable, idempotent self-reference and returns it typed
  * as the contract-level `DbCtx`.
  */
-function bindDbCtx(handle: PokebotDb): DbCtx {
-  const withSelf = handle as PokebotDb & { db?: PokebotDb };
+function bindDbCtx(handle: OakDb): DbCtx {
+  const withSelf = handle as OakDb & { db?: OakDb };
   if (withSelf.db !== handle) {
     Object.defineProperty(withSelf, "db", {
       value: handle,
@@ -116,7 +116,7 @@ export async function createAgentContext(
   const opts: CreateAgentContextOptions =
     typeof options === "object" && options !== null ? options : {};
 
-  const handle: PokebotDb = opts.db ?? (await import("@/data/db")).db;
+  const handle: OakDb = opts.db ?? (await import("@/data/db")).db;
   const requestId = opts.requestId ?? randomUUID();
   const mode: AgentMode = opts.mode ?? "standard";
   const model: ModelKey = opts.model ?? DEFAULT_MODEL_KEY;

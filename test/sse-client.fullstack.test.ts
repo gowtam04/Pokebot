@@ -5,7 +5,7 @@
  * hook with a SIMULATED SSE stream framed exactly like the route
  * (`formatSseEvent`, design.md § API Design): several `tool_activity` frames then
  * one terminal `answer` frame. Asserts the hook surfaces the progress labels in
- * order and then exposes the final `PokebotAnswer`.
+ * order and then exposes the final `OakAnswer`.
  *
  * Mirrors the backend checkpoint (test/api-chat.integration.test.ts) from the
  * client side: there the route emits frames; here the hook parses them. `fetch`
@@ -20,13 +20,13 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 
 import { useSseClient } from "@/lib/sse-client";
 import { formatSseEvent } from "@/lib/sse-types";
-import type { PokebotAnswer } from "@/components/types";
+import type { OakAnswer } from "@/components/types";
 
 // ---------------------------------------------------------------------------
 // Fixtures + helpers
 // ---------------------------------------------------------------------------
 
-const ANSWERED: PokebotAnswer = {
+const ANSWERED: OakAnswer = {
   status: "answered",
   answer_markdown:
     "Only **Ninetales** can learn both Trick Room and Will-O-Wisp in Gen 9.",
@@ -47,7 +47,7 @@ const ANSWERED: PokebotAnswer = {
   },
 };
 
-const RESOLUTION_FAILED: PokebotAnswer = {
+const RESOLUTION_FAILED: OakAnswer = {
   status: "resolution_failed",
   answer_markdown: "I couldn't find 'Garchoph'. Did you mean Garchomp?",
   reasoning_markdown: "Fuzzy match failed above threshold.",
@@ -136,7 +136,7 @@ describe("useSseClient — full-stack SSE consumption", () => {
       "query_pokedex",
     ]);
 
-    // The terminal PokebotAnswer is exposed; no transport error.
+    // The terminal OakAnswer is exposed; no transport error.
     expect(result.current.answer).toEqual(ANSWERED);
     expect(result.current.answer?.candidates?.total_count).toBe(1);
     expect(result.current.error).toBeNull();

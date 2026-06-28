@@ -281,7 +281,7 @@ inference/uncertainty flags where applicable, format/generation tag).
   the agent's `resolution_failed` / `insufficient_data` behavior (BR-9, NFR reliability).
 - **BR-AV-6 — Grounded like answers.** Entity-detail artifacts carry per-datum sources, a
   format/generation tag, and fallback/uncertainty caveats where applicable, consistent with
-  the `PokebotAnswer` rendering conventions.
+  the `OakAnswer` rendering conventions.
 - **BR-AV-7 — Format snapshot + always tagged.** An artifact reflects the active format at
   the moment it is opened and always displays its format/generation tag. Re-rendering an
   already-open artifact when the format toggle changes is **not required** (re-opening
@@ -342,7 +342,7 @@ inference/uncertainty flags where applicable, format/generation tag).
 These are inputs for the solution architect — not decisions made here.
 
 - **Fresh-read on click (key architectural input).** Full entity profiles (BR-AV-3) need
-  data that is **not** in the `PokebotAnswer` payload, so opening an artifact will generally
+  data that is **not** in the `OakAnswer` payload, so opening an artifact will generally
   require reading the index at click time. This diverges from the prior B-4/B-6 "no fresh
   read / purely frontend-derived" framing in `docs/backlog.md`. The architect must decide
   the read path. Hard constraints to respect while doing so:

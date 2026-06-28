@@ -19,7 +19,7 @@ import {
 } from "@/agent/schemas";
 import { queryPokedex, type PokedexFilters } from "@/data/repos/pokedex-repo";
 import { formatForMode } from "@/data/formats";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 
 const description =
   "Search the local Pokédex index for Pokémon matching structured filters, " +
@@ -58,7 +58,7 @@ export const queryPokedexTool: ToolDef = {
     return queryPokedex(
       filters,
       formatForMode(ctx.mode),
-      ctx.db as unknown as PokebotDb,
+      ctx.db as unknown as OakDb,
     );
   },
 };

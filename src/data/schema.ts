@@ -1,5 +1,5 @@
 /**
- * Drizzle ORM table definitions for Pokebot's Postgres store.
+ * Drizzle ORM table definitions for Oak's Postgres store.
  *
  * The five Pokédex-index tables (design.md § Data Model) each carry a `format`
  * discriminator ("scarlet-violet" | "champions") so one physical schema holds
@@ -368,7 +368,7 @@ export const conversation_message = pgTable(
      */
     text_content: text("text_content").notNull(),
     /**
-     * Full `PokebotAnswer` JSON (assistant rows only; NULL for user rows) —
+     * Full `OakAnswer` JSON (assistant rows only; NULL for user rows) —
      * powers exact re-render (BR-H3). TEXT JSON, like reference_cache.payload.
      */
     answer_json: text("answer_json"),

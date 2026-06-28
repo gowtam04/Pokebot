@@ -11,6 +11,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      "postgres://pokebot:pokebot@localhost:5432/pokebot",
+      "postgres://oak:oak@localhost:5432/oak",
   },
 });

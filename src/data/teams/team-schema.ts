@@ -16,7 +16,7 @@
  *     warn-but-allow validator (server/teams/validate-team.ts) flags >252 / a
  *     total >508 / IVs outside 0..31 — the schema itself never blocks them.
  *   - `.strict()` rejects unknown keys (every team object is strict, matching the
- *     PokebotAnswer sub-object convention).
+ *     OakAnswer sub-object convention).
  *   - Cosmetic fields (nickname/gender/shiny) are `.optional()` — preserved on
  *     import/export but not competitively significant (BR-T1).
  */

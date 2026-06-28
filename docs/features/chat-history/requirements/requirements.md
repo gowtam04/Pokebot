@@ -16,7 +16,7 @@
 
 ## Overview
 
-Pokebot's answers are the product's point: each carries reasoning, cited
+Oak's answers are the product's point: each carries reasoning, cited
 sources, explicit inference/uncertainty flags, and the generation/format it's
 based on. Today those answers are disposable — once a conversation scrolls away
 or the server restarts, the work is gone, and nothing is visible across devices.
@@ -37,7 +37,7 @@ limit from B-1).
 ### Goals
 
 - Give signed-in users a durable, cross-device record of past conversations —
-  with the full reasoning/citations/flags that make Pokebot's answers
+  with the full reasoning/citations/flags that make Oak's answers
   meaningful, not just plain text.
 - Let users resume any past conversation as a live thread, with the agent
   retaining that conversation's earlier context.
@@ -208,7 +208,7 @@ There is **no admin/owner role** and no shared or cross-account history.
 ### Persistence
 
 - For signed-in users, each successfully delivered turn is auto-persisted: the
-  user message and the **full structured `PokebotAnswer`** for that turn
+  user message and the **full structured `OakAnswer`** for that turn
   (BR-H2, BR-H3). Turns that fail with a transport fault or are aborted are not
   persisted (AC-1.2).
 - Persistence must not block or delay the streamed answer to the user — writing
@@ -270,7 +270,7 @@ There is **no admin/owner role** and no shared or cross-account history.
   fault or is aborted (client disconnect / Stop) is not persisted, leaving the
   conversation clean for retry.
 - **BR-H3 — Stored fidelity is the full structured answer.** Each assistant turn
-  is stored as the complete `PokebotAnswer` payload — every field needed to
+  is stored as the complete `OakAnswer` payload — every field needed to
   re-render exactly as first generated (reasoning, cited sources,
   inference/uncertainty flags, generation/format tag, sprites, tables, candidate
   data). The live **tool-activity trace is not persisted** and is not replayable
@@ -327,7 +327,7 @@ There is **no admin/owner role** and no shared or cross-account history.
   designed for many concurrent accounts each with a modest number of
   conversations, not for very-high-volume tenants.
 - **Rendering durability.** Stored answers must remain renderable as the
-  `PokebotAnswer` schema evolves over time (see Open Questions on schema
+  `OakAnswer` schema evolves over time (see Open Questions on schema
   evolution).
 
 ## UI/UX Vision
@@ -379,7 +379,7 @@ There is **no admin/owner role** and no shared or cross-account history.
   relates to the transient `session_id` and the auth/account session — the
   mapping is the architect's call.
 - **Structured-answer storage shape.** The stored unit is the full
-  `PokebotAnswer` (BR-H3); how it is serialized/stored and how schema evolution
+  `OakAnswer` (BR-H3); how it is serialized/stored and how schema evolution
   is handled is the architect's call (the Zod schema in `src/agent/schemas.ts`
   is the source of truth for that shape).
 - **Auto-title mechanism.** Whether the auto-title is derived from the first user
@@ -402,7 +402,7 @@ There is **no admin/owner role** and no shared or cross-account history.
 - **Concurrent append.** Desired behavior when the same conversation is continued
   from two devices/tabs simultaneously (interleave, last-write-wins, soft lock?).
 - **Schema evolution of stored answers.** Policy for rendering older stored
-  `PokebotAnswer` payloads after the schema changes (version field? lenient
+  `OakAnswer` payloads after the schema changes (version field? lenient
   render? backfill?).
 - **Past-turn tool-activity.** Tool-activity is intentionally not persisted
   (BR-H3); should reopened past turns show a subtle indication that the live

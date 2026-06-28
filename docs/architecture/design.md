@@ -1,16 +1,16 @@
-# Pokebot — Technical Design
+# Oak — Technical Design
 
 ## Overview
 
 Mode: Developer
 Budget Tier: hobby
 
-Pokebot is a personal, single-user web chat agent that answers natural-language
+Oak is a personal, single-user web chat agent that answers natural-language
 Pokémon questions (filters, lookups, mechanics reasoning, battle math), with every
 answer carrying its reasoning, cited PokeAPI data, inference flags, and the
 generation it's based on. The **agent itself is already fully designed** in
 `docs/agent-design/` (Mode B — "the agent IS the product"): one Sonnet-4.6
-tool-loop with 11 fixed tools, a fixed `PokebotAnswer` output schema, and a fixed
+tool-loop with 11 fixed tools, a fixed `OakAnswer` output schema, and a fixed
 eval spec. **This document does not redesign any of that.**
 
 This is a **thin architecture pass**: it designs the _surrounding system_ the
@@ -67,7 +67,7 @@ throughout this doc — recorded here as well so the divergence is explicit:
   - `overview.md` (topology, decisions D1–D10, dependency list), `tools.md`
     (the 11 tool contracts), `data-sources.md` (DS-1…DS-5 logical schemas),
     `integration.md` (invocation signature, error surface, observability hooks,
-    guardrails), `output-formats.md` (the `PokebotAnswer` JSON Schema + consumer
+    guardrails), `output-formats.md` (the `OakAnswer` JSON Schema + consumer
     contract), `ux-design.md` (UI interaction contract), `prompts.md` (system
     prompt + few-shot — transcribed into code, not authored here),
     `evaluation.md` (golden cases G1–G24 + metrics — the spec the eval _harness_
@@ -208,11 +208,11 @@ code lives and how it's wired_, not _what the agent does_.
 | **Data-access repositories** (`src/data/repos/`)       | Typed reads over SQLite, scoped to the turn's format. `PokedexRepo` (dynamic filter/sort/threshold SQL for `query_pokedex`), `LearnsetRepo` (intersection), `ReferenceCache` (reads the pre-built rows), `ResolveIndex` (in-memory fuzzy).                                                                             | Repo methods returning Result unions.                           | Drizzle.                           |
 | **Formula functions** (`src/agent/formulas/`)          | Deterministic `compute_stat` / `estimate_damage` (D5) — pure functions, per-step flooring.                                                                                                                                                                                                                             | `computeStat(...)`, `estimateDamage(...)`.                      | none.                              |
 | **Tool layer** (`src/agent/tools/`)                    | The 11 tool implementations (T1–T11) wrapping repos + formulas; each returns the exact structured shape in `tools.md`; Zod input/output schemas → JSON Schema for the SDK.                                                                                                                                             | `tools: ToolDef[]`; `submitAnswerSchema`.                       | repos, formulas, Zod.              |
-| **Agent runtime** (`src/agent/runtime.ts`)             | `runPokebot`: assemble cached prefix (system + tools + few-shot; a Champions-mode prefix variant) → append history + message → streaming Sonnet tool-loop (max 10, `tool_choice: auto` + adaptive thinking) → drive `submit_answer` via prompt + iteration guard → validate `PokebotAnswer`, retry ≤2 on schema fail → return payload. Emits progress + answer-delta callbacks; assembles the per-turn log trace. | `runPokebot(message, history, ctx, onProgress?, onAnswerStart?, onAnswerDelta?): Promise<PokebotAnswer>`. | Anthropic SDK, tool layer, logger. |
-| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; derive `AgentMode` from the body's `champions_mode`; resolve history from session store; call `runPokebot` with hooks streaming `tool_activity` then `answer_start`/`answer_delta`; emit the terminal `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
+| **Agent runtime** (`src/agent/runtime.ts`)             | `runOak`: assemble cached prefix (system + tools + few-shot; a Champions-mode prefix variant) → append history + message → streaming Sonnet tool-loop (max 10, `tool_choice: auto` + adaptive thinking) → drive `submit_answer` via prompt + iteration guard → validate `OakAnswer`, retry ≤2 on schema fail → return payload. Emits progress + answer-delta callbacks; assembles the per-turn log trace. | `runOak(message, history, ctx, onProgress?, onAnswerStart?, onAnswerDelta?): Promise<OakAnswer>`. | Anthropic SDK, tool layer, logger. |
+| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; derive `AgentMode` from the body's `champions_mode`; resolve history from session store; call `runOak` with hooks streaming `tool_activity` then `answer_start`/`answer_delta`; emit the terminal `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
 | **Session store** (`src/server/session-store.ts`)      | In-memory `Map<session_id, ChatMessage[]>` (DS-5, D9). Append turns; trim oldest when near context budget. No persistence.                                                                                                                                                                                             | `getHistory`, `appendTurn`, `trim`.                             | none.                              |
 | **Logger** (`src/server/logger.ts`)                    | pino instance + helper to assemble the per-turn trace (request_id, session_id, model, tokens, full tool-call trace, latency, status, citation count).                                                                                                                                                                  | `logger`, `logTurn(trace)`.                                     | pino.                              |
-| **Frontend renderer** (`src/app/` + `src/components/`) | Chat shell + `AnswerCard` component tree rendering `PokebotAnswer` field-by-field; SSE client hook; progress UI. **Visual styling deferred to the `frontend-design` skill.**                                                                                                                                           | React components.                                               | SSE endpoint.                      |
+| **Frontend renderer** (`src/app/` + `src/components/`) | Chat shell + `AnswerCard` component tree rendering `OakAnswer` field-by-field; SSE client hook; progress UI. **Visual styling deferred to the `frontend-design` skill.**                                                                                                                                           | React components.                                               | SSE endpoint.                      |
 | **Eval harness** (`eval/`)                             | G1–G24 cases, runner, LLM-judge, fixture DB; deterministic subset exported for Vitest CI.                                                                                                                                                                                                                              | `npm run eval`; `deterministicCases` for Vitest.                | Agent runtime, fixture DB.         |
 
 ## API Design
@@ -235,7 +235,7 @@ Response: text/event-stream, events emitted in order:
   data: { "text": "It depends on Farigiraf's…" } // newly-decoded answer_markdown fragment
 
   event: answer
-  data: { "answer": <PokebotAnswer> }          // exactly one, terminal + authoritative
+  data: { "answer": <OakAnswer> }          // exactly one, terminal + authoritative
 
   event: error                                  // only on transport failure
   data: { "code": "agent_error", "message": "…" }   // → maps to HTTP-level retry affordance
@@ -251,7 +251,7 @@ Response: text/event-stream, events emitted in order:
 
 - All non-transport conditions (unresolved entity, clarification, PokeAPI down,
   index missing, loop-max-without-answer, invalid-after-retry) are delivered as a
-  **normal `answer` event** carrying a `PokebotAnswer` with the appropriate
+  **normal `answer` event** carrying a `OakAnswer` with the appropriate
   `status` (`resolution_failed` / `clarification_needed` / `insufficient_data`) —
   never as an `error` event. The `error` event is reserved for model/API
   transport faults (`integration.md` error table, last two rows).
@@ -264,17 +264,17 @@ Ownership map — each file has one purpose; no two phases edit the same file
 (collision points are listed in the Build Manifest's `shared`).
 
 ```
-pokebot/
+oak/
 ├── package.json                       — scripts: dev, build, start, test, typecheck, lint, ingest, eval
 ├── next.config.ts                     — Next.js config (App Router, server external packages for better-sqlite3)
 ├── tsconfig.json                      — strict TS
 ├── drizzle.config.ts                  — Drizzle migration config (SQLite dialect)
 ├── vitest.config.ts                   — Vitest config (node + jsdom projects)
 ├── .eslintrc.cjs / .prettierrc        — lint/format
-├── .env.example                       — ANTHROPIC_API_KEY, POKEBOT_DB_PATH, POKEAPI_BASE_URL, etc.
+├── .env.example                       — ANTHROPIC_API_KEY, OAK_DB_PATH, POKEAPI_BASE_URL, etc.
 │
 ├── data/                              — gitignored runtime artifacts
-│   └── pokebot.sqlite                 — the built index + cache (produced by ingest)
+│   └── oak.sqlite                 — the built index + cache (produced by ingest)
 │
 ├── src/
 │   ├── env.ts                         — typed env loader (Zod-validated process.env)
@@ -300,11 +300,11 @@ pokebot/
 │   │   └── build-reference.ts         — pre-builds reference_cache (move/ability/type/evo/item) per format
 │   │
 │   ├── agent/
-│   │   ├── runtime.ts                 — runPokebot: prefix assembly, streaming tool-loop (auto + adaptive
+│   │   ├── runtime.ts                 — runOak: prefix assembly, streaming tool-loop (auto + adaptive
 │   │   │                                thinking), submit_answer validate+retry, answer-delta streaming
 │   │   ├── types.ts                   — cross-phase contract types (AgentContext, AgentMode, ToolDef, callbacks)
 │   │   ├── context.ts                 — AgentContext factory (binds db handle, logger, request_id, mode)
-│   │   ├── schemas.ts                 — Zod schemas for tool I/O + PokebotAnswer; zod-to-json-schema exports
+│   │   ├── schemas.ts                 — Zod schemas for tool I/O + OakAnswer; zod-to-json-schema exports
 │   │   ├── prompts/
 │   │   │   ├── system.ts              — standard system prompt (from agent-design/prompts.md)
 │   │   │   ├── few-shot.ts            — standard few-shot examples (from agent-design/prompts.md)
@@ -343,7 +343,7 @@ pokebot/
 │   │   ├── ChampionsToggle.tsx        — Champions-mode switch (sets champions_mode on the POST)
 │   │   ├── ThemeToggle.tsx            — light/dark theme switch
 │   │   ├── Markdown.tsx               — react-markdown + remark-gfm renderer
-│   │   ├── AnswerCard.tsx             — top-level renderer of a PokebotAnswer
+│   │   ├── AnswerCard.tsx             — top-level renderer of a OakAnswer
 │   │   ├── AnswerBody.tsx             — answer_markdown
 │   │   ├── ReasoningBlock.tsx         — reasoning_markdown (collapsible)
 │   │   ├── SpriteCard.tsx             — subjects[] sprite/artwork + name
@@ -501,7 +501,7 @@ interface ToolDef {
   run(args: unknown, ctx: AgentContext): Promise<unknown>; // returns the tools.md output shape
 }
 // index.ts exports: tools: ToolDef[]  and  dispatch(name, args, ctx): Promise<unknown>
-// Tool input/output Zod schemas + the PokebotAnswer Zod schema live in src/agent/schemas.ts;
+// Tool input/output Zod schemas + the OakAnswer Zod schema live in src/agent/schemas.ts;
 // the SDK tool list and submit_answer schema are DERIVED from those Zod definitions.
 ```
 
@@ -510,23 +510,23 @@ interface ToolDef {
 ```ts
 type ChatMessage = { role: "user" | "assistant"; content: string }; // in-session history (DS-5)
 
-async function runPokebot(
+async function runOak(
   message: string,
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: (e: { tool: string; label: string }) => void,
   onAnswerStart?: () => void, // submit_answer block began streaming
   onAnswerDelta?: (text: string) => void, // newly-decoded answer_markdown fragment
-): Promise<PokebotAnswer>;
+): Promise<OakAnswer>;
 // - Builds cached prefix: system + tool defs + few-shot (a Champions-mode variant when
 //   ctx.mode === "champions"); prompt-cached and byte-identical across turns.
 // - Streaming loop ≤10 iterations; each tool call → onProgress(label) → dispatch → append
 //   result; answer_markdown is streamed out of the submit_answer input via onAnswerStart/Delta.
 // - tool_choice: "auto" + adaptive thinking (forced tool_choice + thinking = 400 on Sonnet 4.6);
 //   submit_answer is driven by the system prompt + the iteration guard. Validates the payload
-//   against the PokebotAnswer Zod schema; on failure returns the error and re-emits ≤2 times,
-//   else synthesizes an insufficient_data PokebotAnswer.
-// - Always returns a valid PokebotAnswer (never throws for in-domain failures); transport/API
+//   against the OakAnswer Zod schema; on failure returns the error and re-emits ≤2 times,
+//   else synthesizes an insufficient_data OakAnswer.
+// - Always returns a valid OakAnswer (never throws for in-domain failures); transport/API
 //   errors propagate to the route as exceptions.
 ```
 
@@ -565,8 +565,8 @@ interface GoldenCase {
   id: string; // "G1"…"G24"
   input: string | string[]; // [] for multi-turn (e.g. G19 follow-up)
   expect: {
-    // asserted against PokebotAnswer fields + tool trace
-    status?: PokebotAnswer["status"];
+    // asserted against OakAnswer fields + tool trace
+    status?: OakAnswer["status"];
     minCandidates?: number;
     mustCite?: string[];
     mustInclude?: string[];
@@ -639,7 +639,7 @@ function runJudged(
   (D6 version-group filtering, egg moves excluded), `build-names.ts`,
   `warm-cache.ts` (optional), `run.ts` CLI + `ingest_meta` write + reuse-last-good.
 - **Depends on:** Phase 2.
-- **Produces:** a fully built `data/pokebot.sqlite`; `npm run ingest`.
+- **Produces:** a fully built `data/oak.sqlite`; `npm run ingest`.
 - **Parallel:** build-pokedex / build-learnsets / build-names can be developed in
   parallel against the Phase-2 schema; orchestration in `run.ts` joins them.
 - **Test focus:** transform correctness against recorded PokeAPI fixtures (no live
@@ -688,10 +688,10 @@ function runJudged(
 ### Phase 5 — Agent runtime _(flags: ai)_
 
 - **Builds:** `src/agent/prompts/system.ts` + `few-shot.ts` (transcribed from
-  `prompts.md` — content not authored here), `src/agent/runtime.ts` (`runPokebot`),
-  PokebotAnswer Zod validation + retry, prompt-cache prefix, per-turn log trace.
+  `prompts.md` — content not authored here), `src/agent/runtime.ts` (`runOak`),
+  OakAnswer Zod validation + retry, prompt-cache prefix, per-turn log trace.
 - **Depends on:** Phase 4.
-- **Produces:** `runPokebot(message, history, ctx, onProgress)`.
+- **Produces:** `runOak(message, history, ctx, onProgress)`.
 - **Parallel:** prompt transcription vs. loop wiring can proceed in parallel, joined at the loop.
 - **Test focus:** loop terminates on forced `submit_answer`; max-iteration guard
   synthesizes `insufficient_data`; invalid `submit_answer` triggers ≤2 re-emits
@@ -699,8 +699,8 @@ function runJudged(
   reads prior history; conditional Farigiraf answer carries an `inferences[]` entry
   (G4). Uses a **stubbed/recorded** Anthropic client for determinism.
 - **Requirement refs:** US-7/10/12/13, AC-7.x/10.x/12.x, BR-1/3/4; D2/D10; integration.md.
-- **Success criteria:** given recorded tool-call transcripts, `runPokebot` always
-  returns a schema-valid `PokebotAnswer`; the assembled log trace contains every
+- **Success criteria:** given recorded tool-call transcripts, `runOak` always
+  returns a schema-valid `OakAnswer`; the assembled log trace contains every
   field `integration.md` requires.
 - **Review / test split:** integration tests with a **mocked Anthropic client**
   (recorded tool-loop transcripts) + the real tool layer/fixture DB. Live-Sonnet
@@ -720,7 +720,7 @@ function runJudged(
   limit bounds runaway loops; history is threaded across turns in one session.
 - **Requirement refs:** US-10, integration.md (invocation + error surface + guardrails), BR-8.
 - **Success criteria:** an end-to-end request against the fixture DB streams a valid
-  `PokebotAnswer` for G1 and G4; reload drops session memory (D9).
+  `OakAnswer` for G1 and G4; reload drops session memory (D9).
 - **Review / test split:** integration (route handler + session store + mocked
   runtime). **Security-lite review gate:** input cap + rate limit present;
   confirm no `ANTHROPIC_API_KEY` leakage into responses/logs.
@@ -734,7 +734,7 @@ function runJudged(
 - **Parallel:** the leaf components (SpriteCard, TypeBadge, CandidateTable,
   SourceList, InferenceCallout, CaveatStrip, DamageReadout, SuggestionChips) are
   independent and parallelizable once `AnswerCard` defines its props.
-- **Test focus:** each `PokebotAnswer` field renders to its mapped component
+- **Test focus:** each `OakAnswer` field renders to its mapped component
   (`output-formats.md` consumer table); truncated candidates show "N of M";
   fallback/uncertainty render the caveat strip; suggestion-chip click POSTs a
   follow-up with the same `session_id`; SSE hook surfaces progress then the answer.
@@ -774,7 +774,7 @@ function runJudged(
   expected row counts and spot-check rows (Farigiraf abilities, Garchomp stats,
   non-empty Gen-9 `will-o-wisp` learner set, a flagged non-Gen-9 fallback row).
 - **After Phase 6 — `backend-stack-e2e`:** `POST /api/chat` streams a valid
-  `PokebotAnswer` for G1 (intersection) and G4 (conditional/inference) against the
+  `OakAnswer` for G1 (intersection) and G4 (conditional/inference) against the
   real fixture DB — backend proven before any frontend work.
 - **After Phase 7 — `full-stack-e2e`:** the browser renders an `AnswerCard` from a
   live SSE stream, including sprites, candidate table, citations, and an inference
@@ -830,7 +830,7 @@ phases:
     name: Ingest pipeline
     depends_on: [p2]
     owns: ["src/ingest/**"]
-    shared: ["data/pokebot.sqlite"]
+    shared: ["data/oak.sqlite"]
     requirement_refs: [BR-1, BR-2, BR-8]
     test_focus: "DS-2/DS-3 transforms on fixtures; forms (D8); gen-9 learnsets (D6); reuse-last-good"
   - id: p4
@@ -937,7 +937,7 @@ integration_checkpoints:
     verifies: "real ingest yields expected counts + spot-check rows (Farigiraf, Garchomp, will-o-wisp learners, a fallback row)"
   - after: [p6]
     name: backend-stack-e2e
-    verifies: "POST /api/chat streams a valid PokebotAnswer for G1 + G4 against the real fixture DB"
+    verifies: "POST /api/chat streams a valid OakAnswer for G1 + G4 against the real fixture DB"
   - after: [p7]
     name: full-stack-e2e
     verifies: "browser renders an AnswerCard from a live SSE stream (sprites, table, citations, inference callout)"
@@ -947,7 +947,7 @@ integration_checkpoints:
 
 | #   | Decision                                                             | Alternatives                                                      | Why / tradeoff                                                                                                                                                                                                                                                                                              |
 | --- | -------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **TypeScript / Next.js monolith**                                    | TS frontend + Express/Vite split; Python backend + React frontend | One language, one deploy; matches the TS `runPokebot` signature + React component map in agent-design. Tradeoff: ingest data-munging is slightly less ergonomic than Python — accepted, the corpus is small and the type-sharing win is larger.                                                             |
+| A1  | **TypeScript / Next.js monolith**                                    | TS frontend + Express/Vite split; Python backend + React frontend | One language, one deploy; matches the TS `runOak` signature + React component map in agent-design. Tradeoff: ingest data-munging is slightly less ergonomic than Python — accepted, the corpus is small and the type-sharing win is larger.                                                             |
 | A2  | **SQLite (better-sqlite3) on disk**                                  | in-memory + JSON snapshots; DuckDB                                | `query_pokedex` needs indexed filter/sort/threshold over ~1300 rows + a tens-of-thousands-row learnset join, and the reference cache must persist across restarts. SQLite gives all three for free. Tradeoff: a file dependency vs. pure in-memory — accepted for the query power and no re-ingest on boot. |
 | A3  | **Drizzle ORM**                                                      | raw better-sqlite3 SQL; Kysely                                    | Typed schema + queries + lightweight migrations the tools and tests lean on. Tradeoff: a thin abstraction over SQL — accepted; dynamic `query_pokedex` filters still assemble cleanly.                                                                                                                      |
 | A4  | **SSE** for `/api/chat`                                              | WebSocket                                                         | One-directional progress→answer fits SSE exactly; trivial in a Next.js route; client only POSTs discrete turns. Tradeoff: no server-push beyond the active request — not needed.                                                                                                                            |
@@ -973,7 +973,7 @@ guaranteed cost is Anthropic API tokens.
 | Concern                     | Choice                                                                                                   | Why this fits hobby tier                                                                                                                                      |
 | --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Hosting / runtime**       | Run locally (`next start`) or a single small VM / one PaaS instance (Fly.io / Railway free-ish).         | One user; no need for autoscale or a container platform. SQLite wants a persistent local disk → a single long-lived instance (not multi-instance serverless). |
-| **Database hosting**        | **Embedded SQLite file** (`data/pokebot.sqlite`) on the instance disk.                                   | No DB service to run or pay for; the corpus is a few MB. Built by `npm run ingest`.                                                                           |
+| **Database hosting**        | **Embedded SQLite file** (`data/oak.sqlite`) on the instance disk.                                   | No DB service to run or pay for; the corpus is a few MB. Built by `npm run ingest`.                                                                           |
 | **Background jobs / queue** | **None.** Ingest is a manual/scheduled CLI; reference detail is pre-built (no runtime fetches).            | No async workload requires a queue (A10).                                                                                                                     |
 | **Object storage**          | **None.** Sprites are PokeAPI URLs rendered directly by the frontend.                                    | No assets to host.                                                                                                                                            |
 | **Caching**                 | The reference cache **is** SQLite (DS-4); resolve index in memory.                                       | No Redis/managed cache needed for one user.                                                                                                                   |
@@ -1013,8 +1013,8 @@ Unresolved.)_
   domain-specific structured shapes from `tools.md` (`{found:false,suggestions}`,
   `{error:"upstream_unavailable"}`, `{error:"index_unavailable"}`, `{unresolved:[…]}`)
   and **never throw** for in-domain conditions. The route handler uses try/catch →
-  maps to a `PokebotAnswer` status (in-domain) or an `error` SSE event / HTTP 5xx
-  (transport) per `integration.md`. `runPokebot` never throws for in-domain failure.
+  maps to a `OakAnswer` status (in-domain) or an `error` SSE event / HTTP 5xx
+  (transport) per `integration.md`. `runOak` never throws for in-domain failure.
 - **Validation (A5):** Zod schemas in `src/agent/schemas.ts` are the single source;
   TS types are inferred from them and the Anthropic tool / `submit_answer` JSON
   Schemas are generated via `zod-to-json-schema`. No hand-maintained duplicate of
@@ -1042,10 +1042,10 @@ Unresolved.)_
 - **Unit vs integration split:**
   - _Unit_ — formulas (`compute_stat`/`estimate_damage`), repo query builders,
     ingest transforms, Zod schemas, logger, resolve fuzzy ranking.
-  - _Integration_ — repos against a **real fixture SQLite DB**; `runPokebot` against
+  - _Integration_ — repos against a **real fixture SQLite DB**; `runOak` against
     a **mocked Anthropic client** (recorded tool-loop transcripts) + the real tool
     layer; the `/api/chat` route + session store with a mocked runtime; component
-    tests rendering canonical `PokebotAnswer` payloads.
+    tests rendering canonical `OakAnswer` payloads.
 - **Mocking policy — what's real vs faked:**
   - _Real:_ SQLite (fixture DB), the tool layer, formulas, Zod validation.
   - _Faked in unit/integration:_ the Anthropic API (mocked client with recorded

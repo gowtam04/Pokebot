@@ -1,5 +1,5 @@
 /**
- * Claude prompt style — the canonical, unchanged Pokebot prompt.
+ * Claude prompt style — the canonical, unchanged Oak prompt.
  *
  * Produces the SAME two system segments the runtime used inline before the
  * model switcher (the domain system body, then the few-shot with the single

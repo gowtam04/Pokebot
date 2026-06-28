@@ -1,6 +1,6 @@
-# Pokebot — Design System
+# Oak — Design System
 
-> The visual language for Pokebot. Frontend teammates should read this **before**
+> The visual language for Oak. Frontend teammates should read this **before**
 > starting any UI work, alongside the `frontend-design` skill. This document
 > provides the *what* (the constraints — tokens, scales, component rules); the
 > `frontend-design` skill provides the *how* to make each component look
@@ -9,7 +9,7 @@
 
 ## Design Philosophy
 
-**A friendly Pokédex companion with a precise data core.** Pokebot is a personal
+**A friendly Pokédex companion with a precise data core.** Oak is a personal
 tool for one technically-comfortable Pokémon fan who swings between *serious
 competitive team-building* (filter tables, stat math, damage calc, mechanics
 reasoning) and *casual Pokédex curiosity* (lookups, sprites, evolutions). The
@@ -29,7 +29,7 @@ Two ideas anchor everything below:
    BR-3/4). They get real, legible, well-differentiated treatments — never buried
    gray fine-print.
 
-**Signature elements** (what makes Pokebot recognizable):
+**Signature elements** (what makes Oak recognizable):
 
 - A **Pokédex-red header band** with a rounded **Fredoka** wordmark — the app
   reads like a friendly device.
@@ -314,7 +314,7 @@ default / hover / active / disabled / focus where they apply.
 - **Focus:** border → `--azure`, plus `--focus-ring` halo. No focus → resting
   border.
 - **Disabled** (while a turn streams): input dims to `--surface-sunken`,
-  placeholder "Pokebot is thinking…", Send shows the **Poké Ball spinner**.
+  placeholder "Oak is thinking…", Send shows the **Poké Ball spinner**.
 - **Generic text input** (if needed elsewhere): same field styling; label in
   `small` weight 700 above the field at `--space-2`; **error state** = border
   `--danger`, helper text `--danger` in `small`, `--space-1` below.
@@ -383,7 +383,7 @@ dense but scannable.
 
 ### Feedback, Transparency & Overlays
 
-These transparency surfaces are core to Pokebot (US-12, BR-3/4) and each gets a
+These transparency surfaces are core to Oak (US-12, BR-3/4) and each gets a
 distinct, legible treatment — never gray fine-print.
 
 - **CaveatStrip** (`CaveatStrip.tsx`) — uncertainty / generation-fallback banner.

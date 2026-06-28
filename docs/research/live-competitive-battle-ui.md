@@ -37,7 +37,7 @@ Fixed constraints from the scoping pass:
 | Timing         | **Live-timed** — must respond within the turn clock (seconds).           |
 | Format scope   | **Both Singles and Doubles** from the start.                             |
 
-Relationship to the rest of Pokebot: this is a **new surface**, distinct from the fixed
+Relationship to the rest of Oak: this is a **new surface**, distinct from the fixed
 11-tool chat agent (`docs/agent-design/tools.md`). It does not have to honor that agent's
 tool contract; it may define its own tools/modules. It does build on the same `@pkmn`
 data layer and (for metagame data) the `ps-local` ingest that B-5 introduces.
@@ -171,7 +171,7 @@ the existing Vitest node project.
 
 Each turn, hand a structured snapshot of the battle to an LLM agent that reasons about what
 happened, updates the scouting picture, and recommends the next move — grounded by tools so
-the numbers stay exact. Built on Pokebot's existing agent runtime and "reason on top of
+the numbers stay exact. Built on Oak's existing agent runtime and "reason on top of
 data" philosophy.
 
 ### Steelman
@@ -186,14 +186,14 @@ data" philosophy.
   a strong model reasons about natively and a hand-written eval function captures poorly.
 - **It reuses the platform that already exists.** `src/agent/runtime.ts` already runs a
   Claude tool-loop with a byte-identical prompt-cached prefix, Zod-validated structured
-  output (`PokebotAnswer`), re-emit-on-failure, and an SSE token stream to a field-by-field
+  output (`OakAnswer`), re-emit-on-failure, and an SSE token stream to a field-by-field
   renderer (`AnswerCard`). A battle co-pilot is the same machine pointed at a new prompt,
   a battle-specific tool subset, and a `BattleTurnAnalysis` schema. Much of the hard
   infrastructure is built.
 - **It is grounded, not guessing.** Following the repo's core principle, the model never
   invents numbers: tools supply exact damage rolls, speed checks, usage priors, and legality;
   the model *reasons over* them and cites them. The structured output schema carries the same
-  inference/uncertainty/citation flags Pokebot answers already use, so "known vs inferred"
+  inference/uncertainty/citation flags Oak answers already use, so "known vs inferred"
   is explicit on every claim.
 - **It extends by prompt, not by code.** New considerations (a new Tera read, a format quirk)
   are prompt/few-shot changes rather than new eval heuristics — fast iteration as the
@@ -234,7 +234,7 @@ ps-local ──ws──▶ protocol parse ──▶ Battle state (@pkmn/client)
     a *new* tool set for a new surface, so the fixed 11-tool chat contract does not bind here.
   - *Output schema `BattleTurnAnalysis`:* `{ what_happened, revealed_updates[],
     recommendation{ action, rationale, ko_chance, risk }, confidence, citations[],
-    inference_flags[] }` — a battle-shaped sibling of `PokebotAnswer`, Zod-validated with the
+    inference_flags[] }` — a battle-shaped sibling of `OakAnswer`, Zod-validated with the
     same ≤2 re-emit fallback.
 - **Latency strategy (the hard part, since live-timed).** Treated as a first-class design
   problem, not an afterthought:

@@ -1,6 +1,6 @@
 /**
- * Unit tests for the agent runtime (`runPokebotWith` — the injectable seam of
- * `runPokebot`). The Anthropic client is a recorded-transcript stub and the
+ * Unit tests for the agent runtime (`runOakWith` — the injectable seam of
+ * `runOak`). The Anthropic client is a recorded-transcript stub and the
  * tool layer (`@/agent/tools`) is mocked, so these tests are deterministic and
  * never open SQLite or hit the model (design.md Phase 5 test focus).
  *
@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentContext, ChatMessage } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 // --- Mock the tool layer so importing the runtime never opens a Postgres pool.
 const { mockDispatch } = vi.hoisted(() => ({ mockDispatch: vi.fn() }));
@@ -55,12 +55,12 @@ import {
   describeToolCall,
   MAX_EMPTY_TURN_NUDGES,
   MAX_ITERATIONS,
-  runPokebotWith,
+  runOakWith,
 } from "./runtime";
 
 // --- Fixtures --------------------------------------------------------------
 
-const validAnswer: PokebotAnswer = {
+const validAnswer: OakAnswer = {
   status: "answered",
   answer_markdown: "Garchomp is Dragon/Ground.",
   reasoning_markdown: "Looked up the profile.",
@@ -202,7 +202,7 @@ describe("request shape (RISK DIRECTIVE: no forced tool_choice on Sonnet 4.6)", 
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
-    await runPokebotWith(client, "is Garchomp fast?", [], ctx);
+    await runOakWith(client, "is Garchomp fast?", [], ctx);
 
     const params = snapshots[0];
     expect(params.thinking).toEqual({ type: "adaptive" });
@@ -217,7 +217,7 @@ describe("request shape (RISK DIRECTIVE: no forced tool_choice on Sonnet 4.6)", 
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
-    await runPokebotWith(client, "q", [], ctx);
+    await runOakWith(client, "q", [], ctx);
 
     const { system } = snapshots[0];
     expect(system[0].cache_control).toBeUndefined();
@@ -239,7 +239,7 @@ describe("request shape (RISK DIRECTIVE: no forced tool_choice on Sonnet 4.6)", 
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
-    await runPokebotWith(client, "follow up", history, ctx);
+    await runOakWith(client, "follow up", history, ctx);
 
     const { messages } = snapshots[0];
     expect(messages[0]).toEqual({ role: "user", content: "prev question" });
@@ -257,7 +257,7 @@ describe("submit_answer termination", () => {
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
-    const result = await runPokebotWith(client, "q", [], ctx, onProgress);
+    const result = await runOakWith(client, "q", [], ctx, onProgress);
 
     expect(result).toEqual(validAnswer);
     expect(mockDispatch).not.toHaveBeenCalled();
@@ -296,7 +296,7 @@ describe("submit_answer termination", () => {
       message([toolUse("submit_answer", questionAnswer, "t1")]),
     ]);
 
-    const result = await runPokebotWith(client, "build a TR team", [], ctx);
+    const result = await runOakWith(client, "build a TR team", [], ctx);
 
     // The loop returns the validated answer verbatim — the new field is intact.
     expect(result).toEqual(questionAnswer);
@@ -311,7 +311,7 @@ describe("submit_answer termination", () => {
       message([toolUse("submit_answer", validAnswer, "t2")]),
     ]);
 
-    const result = await runPokebotWith(
+    const result = await runOakWith(
       client,
       "fire types",
       [],
@@ -351,7 +351,7 @@ describe("submit_answer termination", () => {
       message([toolUse("submit_answer", validAnswer, "t3")]),
     ]);
 
-    await runPokebotWith(client, "q", [], ctx);
+    await runOakWith(client, "q", [], ctx);
 
     const secondCallMessages = snapshots[1].messages;
     const lastUser = secondCallMessages[secondCallMessages.length - 1];
@@ -371,7 +371,7 @@ describe("submit_answer validation + re-emit budget", () => {
       message([toolUse("submit_answer", validAnswer, "t2")]),
     ]);
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(result).toEqual(validAnswer);
     const secondCallMessages = snapshots[1].messages;
@@ -393,7 +393,7 @@ describe("submit_answer validation + re-emit budget", () => {
       invalid(),
     ]);
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain(
@@ -415,7 +415,7 @@ describe("orchestration fallbacks", () => {
     );
     mockDispatch.mockResolvedValue({ ok: true });
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain("max_iterations_reached");
@@ -428,7 +428,7 @@ describe("orchestration fallbacks", () => {
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(result).toEqual(validAnswer);
     expect(stream).toHaveBeenCalledTimes(2);
@@ -450,7 +450,7 @@ describe("orchestration fallbacks", () => {
       ),
     );
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(stream).toHaveBeenCalledTimes(MAX_EMPTY_TURN_NUDGES + 1);
     expect(result.status).toBe("answered");
@@ -465,7 +465,7 @@ describe("orchestration fallbacks", () => {
       ),
     );
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(stream).toHaveBeenCalledTimes(MAX_EMPTY_TURN_NUDGES + 1);
     expect(result.status).toBe("insufficient_data");
@@ -481,7 +481,7 @@ describe("orchestration fallbacks", () => {
       message([toolUse("submit_answer", validAnswer, "t2")]),
     ]);
 
-    const result = await runPokebotWith(client, "q", [], ctx);
+    const result = await runOakWith(client, "q", [], ctx);
 
     expect(result).toEqual(validAnswer);
     const lastUser = snapshots[1].messages.at(-1);
@@ -495,7 +495,7 @@ describe("orchestration fallbacks", () => {
   it("propagates a transport/API fault as a thrown error", async () => {
     const { client } = scriptedClient([new Error("boom 529")]);
 
-    await expect(runPokebotWith(client, "q", [], ctx)).rejects.toThrow(
+    await expect(runOakWith(client, "q", [], ctx)).rejects.toThrow(
       "boom 529",
     );
   });
@@ -511,7 +511,7 @@ describe("client abort (Stop)", () => {
     const controller = new AbortController();
     const ctxWithSignal = { ...ctx, signal: controller.signal } as AgentContext;
 
-    await runPokebotWith(client, "q", [], ctxWithSignal);
+    await runOakWith(client, "q", [], ctxWithSignal);
 
     // Second arg is the request options carrying the abort signal.
     expect(stream.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
@@ -523,7 +523,7 @@ describe("client abort (Stop)", () => {
     ]);
     const ctxAborted = { ...ctx, signal: AbortSignal.abort() } as AgentContext;
 
-    await expect(runPokebotWith(client, "q", [], ctxAborted)).rejects.toThrow(
+    await expect(runOakWith(client, "q", [], ctxAborted)).rejects.toThrow(
       /Aborted/,
     );
     // The loop-top guard fires before the first model call.
@@ -544,7 +544,7 @@ describe("answer_markdown streaming", () => {
 
     const starts: number[] = [];
     const deltas: string[] = [];
-    const result = await runPokebotWith(
+    const result = await runOakWith(
       client,
       "q",
       [],
@@ -591,7 +591,7 @@ describe("answer_markdown streaming", () => {
 
     const starts: number[] = [];
     const deltas: string[] = [];
-    await runPokebotWith(
+    await runOakWith(
       client,
       "fire types",
       [],

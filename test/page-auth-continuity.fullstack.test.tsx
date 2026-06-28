@@ -34,7 +34,7 @@ import {
 import Home from "@/app/page";
 import { formatSseEvent } from "@/lib/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
-import type { PokebotAnswer } from "@/components/types";
+import type { OakAnswer } from "@/components/types";
 
 const EMAIL = "ash@pallet.town";
 
@@ -48,8 +48,8 @@ let chatBodies: Array<{
 /** Stateful /api/auth/me identity — flipped by verify (in) and signout (out). */
 let meState: { signedIn: boolean; email?: string };
 
-/** A distinct, renderable PokebotAnswer per turn (AnswerCard maps it field-by-field). */
-function makeAnswer(markdown: string): PokebotAnswer {
+/** A distinct, renderable OakAnswer per turn (AnswerCard maps it field-by-field). */
+function makeAnswer(markdown: string): OakAnswer {
   return { ...MINIMAL_ANSWER, answer_markdown: markdown };
 }
 
@@ -71,7 +71,7 @@ function jsonResponse(
 }
 
 /** An SSE `Response` whose body streams one terminal `answer` frame, then closes. */
-function sseAnswerResponse(answer: PokebotAnswer): Response {
+function sseAnswerResponse(answer: OakAnswer): Response {
   const frame = formatSseEvent("answer", { answer });
   const body = new ReadableStream<Uint8Array>({
     start(controller) {

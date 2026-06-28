@@ -3,9 +3,9 @@
  * by calling the exported handler directly and PARSING the streamed frames.
  *
  * This is the integration checkpoint design.md mandates after Phase 6
- * ("backend-stack-e2e: POST /api/chat streams a valid PokebotAnswer for G1 + G4")
+ * ("backend-stack-e2e: POST /api/chat streams a valid OakAnswer for G1 + G4")
  * and the Vitest RISK DIRECTIVE ("call the exported POST(new Request(...)) and
- * parse response.body frames with runPokebot mocked"). The runtime + agent
+ * parse response.body frames with runOak mocked"). The runtime + agent
  * context are mocked, so no SQLite / model / network is touched: this asserts the
  * ORCHESTRATION seam (SSE framing, event ordering, in-domain-as-answer vs.
  * transport-as-error, the guardrails, and session history threading).
@@ -13,7 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
+import { oakAnswerSchema, type OakAnswer } from "@/agent/schemas";
 
 // The chat route now resolves the current account for tiered rate-limiting (it
 // dynamically imports current-user → sessions → server-only + next/headers,
@@ -26,8 +26,8 @@ vi.mock("@/server/auth/current-user", () => ({
 }));
 
 // --- Mock the runtime + context so the route never opens SQLite / hits the model.
-const { mockRunPokebot } = vi.hoisted(() => ({ mockRunPokebot: vi.fn() }));
-vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+const { mockRunOak } = vi.hoisted(() => ({ mockRunOak: vi.fn() }));
+vi.mock("@/agent/runtime", () => ({ runOak: mockRunOak }));
 vi.mock("@/agent/context", () => ({
   createAgentContext: vi.fn(async () => ({
     db: {},
@@ -51,7 +51,7 @@ const SECRET = "sk-ant-LEAK-SENTINEL-DO-NOT-EMIT";
 
 // --- Canonical answers the mocked runtime "produces" ------------------------
 
-const G1_ANSWER: PokebotAnswer = {
+const G1_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown:
     "Only **Ninetales** can learn both Trick Room and Will-O-Wisp in Gen 9.",
@@ -77,7 +77,7 @@ const G1_ANSWER: PokebotAnswer = {
   },
 };
 
-const G4_ANSWER: PokebotAnswer = {
+const G4_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown:
     "It depends on Farigiraf's ability — Armor Tail would block Fake Out's +3 priority.",
@@ -148,7 +148,7 @@ function rawOf(events: SseEvent[]): string {
 }
 
 beforeEach(() => {
-  mockRunPokebot.mockReset();
+  mockRunOak.mockReset();
   _resetStoreForTests();
   process.env.ANTHROPIC_API_KEY = SECRET;
 });
@@ -164,8 +164,8 @@ afterEach(() => {
 // --- Happy path: streamed answer + progress --------------------------------
 
 describe("POST /api/chat — SSE happy path", () => {
-  it("streams tool_activity events then exactly one answer carrying the G1 PokebotAnswer", async () => {
-    mockRunPokebot.mockImplementation(
+  it("streams tool_activity events then exactly one answer carrying the G1 OakAnswer", async () => {
+    mockRunOak.mockImplementation(
       async (
         _message: string,
         _history: unknown,
@@ -202,14 +202,14 @@ describe("POST /api/chat — SSE happy path", () => {
     expect(errors).toHaveLength(0);
     expect(events[events.length - 1]!.event).toBe("answer");
 
-    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
-    expect(pokebotAnswerSchema.safeParse(streamed).success).toBe(true);
+    const streamed = (answers[0]!.data as { answer: OakAnswer }).answer;
+    expect(oakAnswerSchema.safeParse(streamed).success).toBe(true);
     expect(streamed).toEqual(G1_ANSWER);
     expect(streamed.candidates?.total_count).toBe(1);
   });
 
   it("emits answer_start + answer_delta frames before the terminal answer", async () => {
-    mockRunPokebot.mockImplementation(
+    mockRunOak.mockImplementation(
       async (
         _message: string,
         _history: unknown,
@@ -244,13 +244,13 @@ describe("POST /api/chat — SSE happy path", () => {
     // The terminal answer remains authoritative (full structured payload).
     const answers = events.filter((e) => e.event === "answer");
     expect(answers).toHaveLength(1);
-    expect((answers[0]!.data as { answer: PokebotAnswer }).answer).toEqual(
+    expect((answers[0]!.data as { answer: OakAnswer }).answer).toEqual(
       G1_ANSWER,
     );
   });
 
   it("streams a G4 conditional answer with its inference intact", async () => {
-    mockRunPokebot.mockResolvedValue(G4_ANSWER);
+    mockRunOak.mockResolvedValue(G4_ANSWER);
 
     const res = await post({
       session_id: "s-g4",
@@ -259,7 +259,7 @@ describe("POST /api/chat — SSE happy path", () => {
     const events = await readSse(res);
     const answers = events.filter((e) => e.event === "answer");
     expect(answers).toHaveLength(1);
-    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
+    const streamed = (answers[0]!.data as { answer: OakAnswer }).answer;
     expect(streamed.inferences.length).toBeGreaterThanOrEqual(1);
     expect(streamed.inferences[0]!.claim).toMatch(/armor.?tail/i);
   });
@@ -275,7 +275,7 @@ describe("POST /api/chat — error surface", () => {
   ] as const)(
     "delivers an in-domain '%s' result as an answer event, never an error event",
     async (status) => {
-      const inDomain: PokebotAnswer = {
+      const inDomain: OakAnswer = {
         status,
         answer_markdown: "I couldn't fully resolve that.",
         reasoning_markdown: "—",
@@ -284,7 +284,7 @@ describe("POST /api/chat — error surface", () => {
         generation_basis: { generation: "gen-9", fallback: false },
         suggestions: ["Will-O-Wisp"],
       };
-      mockRunPokebot.mockResolvedValue(inDomain);
+      mockRunOak.mockResolvedValue(inDomain);
 
       const res = await post({ session_id: "s-fail", message: "wat" });
       const events = await readSse(res);
@@ -293,13 +293,13 @@ describe("POST /api/chat — error surface", () => {
       const answers = events.filter((e) => e.event === "answer");
       expect(answers).toHaveLength(1);
       expect(
-        (answers[0]!.data as { answer: PokebotAnswer }).answer.status,
+        (answers[0]!.data as { answer: OakAnswer }).answer.status,
       ).toBe(status);
     },
   );
 
   it("delivers a stop-and-ask clarification with question.options as one answer event, intact", async () => {
-    const question: PokebotAnswer = {
+    const question: OakAnswer = {
       status: "clarification_needed",
       answer_markdown: "Singles or Doubles?",
       reasoning_markdown: "Format changes the recommendation.",
@@ -313,7 +313,7 @@ describe("POST /api/chat — error surface", () => {
         ],
       },
     };
-    mockRunPokebot.mockResolvedValue(question);
+    mockRunOak.mockResolvedValue(question);
 
     const res = await post({ session_id: "s-ask", message: "build a TR team" });
     const events = await readSse(res);
@@ -321,9 +321,9 @@ describe("POST /api/chat — error surface", () => {
     expect(events.filter((e) => e.event === "error")).toHaveLength(0);
     const answers = events.filter((e) => e.event === "answer");
     expect(answers).toHaveLength(1);
-    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
+    const streamed = (answers[0]!.data as { answer: OakAnswer }).answer;
     // The question survives JSON round-trip + schema validation unchanged.
-    expect(pokebotAnswerSchema.safeParse(streamed).success).toBe(true);
+    expect(oakAnswerSchema.safeParse(streamed).success).toBe(true);
     expect(streamed.question?.options.map((o) => o.label)).toEqual([
       "Singles",
       "Doubles",
@@ -331,7 +331,7 @@ describe("POST /api/chat — error surface", () => {
   });
 
   it("surfaces a transport/API fault as a single error event (no answer, no key leak)", async () => {
-    mockRunPokebot.mockRejectedValue(new Error("Anthropic 529 overloaded"));
+    mockRunOak.mockRejectedValue(new Error("Anthropic 529 overloaded"));
 
     const res = await post({ session_id: "s-throw", message: "hello" });
     const events = await readSse(res);
@@ -358,17 +358,17 @@ describe("POST /api/chat — guardrails", () => {
     expect(res.headers.get("Content-Type")).toMatch(/application\/json/);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe("input_too_long");
-    expect(mockRunPokebot).not.toHaveBeenCalled();
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed body with 400", async () => {
     const res = await post({ session_id: "s-g1" }); // missing message
     expect(res.status).toBe(400);
-    expect(mockRunPokebot).not.toHaveBeenCalled();
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 
   it("rate-limits a session after the per-window cap with 429 + Retry-After", async () => {
-    mockRunPokebot.mockResolvedValue(G1_ANSWER);
+    mockRunOak.mockResolvedValue(G1_ANSWER);
     // Default window cap is 20 requests; drain each stream so the task settles.
     for (let i = 0; i < 20; i++) {
       const ok = await post({ session_id: "s-g1", message: `q${i}` });
@@ -387,7 +387,7 @@ describe("POST /api/chat — guardrails", () => {
 
 describe("POST /api/chat — session history", () => {
   it("threads the prior user+assistant turn into the next call's history", async () => {
-    mockRunPokebot.mockImplementation(async () => ({
+    mockRunOak.mockImplementation(async () => ({
       ...G1_ANSWER,
       answer_markdown: "first answer",
     }));
@@ -398,16 +398,16 @@ describe("POST /api/chat — session history", () => {
     });
     await readSse(first); // ensure the turn pair is committed before turn 2
 
-    mockRunPokebot.mockResolvedValue(G1_ANSWER);
+    mockRunOak.mockResolvedValue(G1_ANSWER);
     const second = await post({
       session_id: "s-thread",
       message: "now only the Fire types",
     });
     await readSse(second);
 
-    // The SECOND runPokebot call receives the prior turn pair as history, and the
+    // The SECOND runOak call receives the prior turn pair as history, and the
     // current message is passed separately (never inside history).
-    const secondCall = mockRunPokebot.mock.calls[1]!;
+    const secondCall = mockRunOak.mock.calls[1]!;
     const [message, history] = secondCall as [
       string,
       { role: string; content: string }[],

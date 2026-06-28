@@ -30,7 +30,7 @@ The central ideas:
 3. **Validation is warn-but-allow and computed on demand** from the existing
    per-format index (no new `@pkmn` calls, no stored/staleable warnings).
 4. **The agent proposes; the user applies.** A new optional `proposed_team` field
-   on `PokebotAnswer` carries an inert suggestion; "Apply" is a normal
+   on `OakAnswer` carries an inert suggestion; "Apply" is a normal
    authenticated write to the Teams API (BR-T8) — the agent never mutates a team.
 
 > **Agent-internals note (deliberate deviation).** Per the chosen "inline it now"
@@ -190,7 +190,7 @@ boundary stays under `src/data/pkmn/`.
     No team-selecting args; returns the context-bound active team enriched with
     display names + validity warnings, or `{ active: false }`.
   - **`schemas.ts` (modified)** — `TOOL_NAMES += "get_active_team"`; the tool's
-    Zod I/O; `proposed_team` optional field on `pokebotAnswerSchema`.
+    Zod I/O; `proposed_team` optional field on `oakAnswerSchema`.
   - **`types.ts` (modified)** — `AgentContext.activeTeam?: ActiveTeam`.
   - **`context.ts` (modified)** — bind `activeTeam` when the route supplies it.
   - **`runtime.ts` (modified)** — the tool auto-joins `TOOL_DEFS`; add an
@@ -292,7 +292,7 @@ src/
 │       ├── import-export.ts              — NEW: importPaste / exportPaste (compose team-paste + name resolution)
 │       └── active-team.ts                — NEW: resolveActiveTeam (bind) + enrichActiveTeam (tool view)
 ├── agent/                                 — (INLINED agent internals; reconciled to docs/agent-design in Phase 11)
-│   ├── schemas.ts                        — MODIFY: TOOL_NAMES += get_active_team; tool I/O; proposed_team on PokebotAnswer
+│   ├── schemas.ts                        — MODIFY: TOOL_NAMES += get_active_team; tool I/O; proposed_team on OakAnswer
 │   ├── types.ts                          — MODIFY: AgentContext.activeTeam?: ActiveTeam
 │   ├── context.ts                        — MODIFY: bind activeTeam from the route
 │   ├── runtime.ts                        — MODIFY: "Active team" prompt section + few-shot (standard & champions prefixes)
@@ -387,7 +387,7 @@ computed without index reads (full warnings come from `validateTeam` on detail).
 ```ts
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { Format } from "@/data/formats";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 
 export type WarningCode =
   | "incomplete"            // informational (BR-T4)
@@ -408,7 +408,7 @@ export interface TeamWarning {
 }
 
 // Never throws; returns [] when clean. Composes getPokemon / learnset / searchable_names.
-export function validateTeam(members: TeamMember[], format: Format, db: PokebotDb): Promise<TeamWarning[]>;
+export function validateTeam(members: TeamMember[], format: Format, db: OakDb): Promise<TeamWarning[]>;
 ```
 
 ### `src/data/pkmn/team-paste.ts` (the only `@pkmn/sets` importer)
@@ -424,9 +424,9 @@ export interface ImportNote {
   slot: number; kind: "pokemon" | "move" | "ability" | "item" | "nature" | "tera";
   raw: string; resolvedTo?: string; message: string;   // resolve-or-clarify (BR-T7)
 }
-export function importPaste(paste: string, format: Format, db: PokebotDb):
+export function importPaste(paste: string, format: Format, db: OakDb):
   Promise<{ members: TeamMember[]; notes: ImportNote[] }>;
-export function exportPaste(members: TeamMember[], format: Format, db: PokebotDb):
+export function exportPaste(members: TeamMember[], format: Format, db: OakDb):
   Promise<string>;
 ```
 
@@ -438,7 +438,7 @@ export interface ActiveTeam {                  // bound onto AgentContext (raw s
 }
 // Loads account-scoped; returns null unless team.format === formatForMode(mode) (BR-T3, AC-8.3).
 export function resolveActiveTeam(
-  accountId: string, teamId: string | null | undefined, mode: AgentMode, db: PokebotDb,
+  accountId: string, teamId: string | null | undefined, mode: AgentMode, db: OakDb,
 ): Promise<ActiveTeam | null>;
 
 // The agent-facing view (display names + computed warnings); used by the T12 tool.
@@ -454,7 +454,7 @@ export interface EnrichedActiveTeam {
   }>;
   warnings: TeamWarning[];
 }
-export function enrichActiveTeam(team: ActiveTeam, db: PokebotDb): Promise<EnrichedActiveTeam>;
+export function enrichActiveTeam(team: ActiveTeam, db: OakDb): Promise<EnrichedActiveTeam>;
 ```
 
 ### Agent seam (inlined — `src/agent/types.ts`, `schemas.ts`)
@@ -472,7 +472,7 @@ export type GetActiveTeamOutput =
   | { active: false }
   | { active: true; team: EnrichedActiveTeam };
 
-// schemas.ts — additive optional field on the .strict() PokebotAnswer. Optional ⇒
+// schemas.ts — additive optional field on the .strict() OakAnswer. Optional ⇒
 // old stored answer_json stays valid (no unknown key); new answers may carry it.
 proposed_team: z.object({
   name: z.string(),
@@ -837,7 +837,7 @@ integration_checkpoints:
   refresh gotcha.
 
 - **TEAM-AD-6 — `proposed_team` is an additive optional field on the `.strict()`
-  `PokebotAnswer`.** *Why:* an optional field keeps every previously-stored
+  `OakAnswer`.** *Why:* an optional field keeps every previously-stored
   `answer_json` valid (no unknown key, no missing-required failure) and is the
   clean structured channel for an inert proposal the user applies (BR-T8) — better
   than parsing a team out of markdown. *Tradeoff:* the answer schema grows;

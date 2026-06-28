@@ -52,5 +52,5 @@ export interface TurnTrace {
  * specific destination; it defaults to the shared module logger.
  */
 export function logTurn(trace: TurnTrace, log: Logger = logger): void {
-  log.info({ event: "turn", ...trace }, "pokebot_turn");
+  log.info({ event: "turn", ...trace }, "oak_turn");
 }

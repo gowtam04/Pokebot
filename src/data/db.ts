@@ -9,7 +9,7 @@
  *     its optional native bits.
  *   - The pool + Drizzle instance are memoized on `globalThis` so Next's dev
  *     hot-reload / route re-evaluation reuses ONE pool (no connection leak), and
- *     so tests can pre-install a fixture bundle on `globalThis.__pokebotDb`
+ *     so tests can pre-install a fixture bundle on `globalThis.__oakDb`
  *     before this module is first imported.
  *
  * Unlike the old better-sqlite3 handle, node-postgres is ASYNC. Constructing the
@@ -35,15 +35,15 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { env } from "@/env";
 import * as schema from "@/data/schema";
 
-/** Drizzle handle typed over the full Pokebot schema. */
-export type PokebotDb = NodePgDatabase<typeof schema>;
+/** Drizzle handle typed over the full Oak schema. */
+export type OakDb = NodePgDatabase<typeof schema>;
 
 /** The underlying node-postgres connection pool. */
-export type PokebotPool = Pool;
+export type OakPool = Pool;
 
 export type DbBundle = {
-  pool: PokebotPool;
-  db: PokebotDb;
+  pool: OakPool;
+  db: OakDb;
 };
 
 // --- Migrations folder (absolute, independent of process.cwd) --------------
@@ -56,7 +56,7 @@ const MIGRATIONS_DIR = path.resolve(PROJECT_ROOT, "drizzle");
 
 // --- globalThis memoization ------------------------------------------------
 const globalForDb = globalThis as typeof globalThis & {
-  __pokebotDb?: DbBundle;
+  __oakDb?: DbBundle;
 };
 
 function createBundle(): DbBundle {
@@ -68,10 +68,10 @@ function createBundle(): DbBundle {
 }
 
 function getBundle(): DbBundle {
-  if (!globalForDb.__pokebotDb) {
-    globalForDb.__pokebotDb = createBundle();
+  if (!globalForDb.__oakDb) {
+    globalForDb.__oakDb = createBundle();
   }
-  return globalForDb.__pokebotDb;
+  return globalForDb.__oakDb;
 }
 
 /**
@@ -79,10 +79,10 @@ function getBundle(): DbBundle {
  * in the Next server. Created lazily on first access and cached on globalThis
  * for the process lifetime.
  */
-export const db: PokebotDb = getBundle().db;
+export const db: OakDb = getBundle().db;
 
 /** The underlying node-postgres pool (for direct/raw use, e.g. health checks). */
-export const pool: PokebotPool = getBundle().pool;
+export const pool: OakPool = getBundle().pool;
 
 /**
  * Apply pending Drizzle migrations against the singleton pool. Safe to call

@@ -1,15 +1,15 @@
 # Output Formats
 
-The agent produces exactly one structured output per turn: the **`PokebotAnswer`**
+The agent produces exactly one structured output per turn: the **`OakAnswer`**
 object, emitted as the argument to the `submit_answer` tool (T11). This is the
 contract between the agent and the frontend renderer.
 
-## `PokebotAnswer` — JSON Schema
+## `OakAnswer` — JSON Schema
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "PokebotAnswer",
+  "title": "OakAnswer",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -280,7 +280,7 @@ contract between the agent and the frontend renderer.
 ## Consumer Contract
 
 The **frontend chat renderer** (a React `AnswerCard`, per `ux-design.md`) ingests
-`PokebotAnswer`:
+`OakAnswer`:
 
 | Field                                              | Frontend component                                 |
 | -------------------------------------------------- | -------------------------------------------------- |

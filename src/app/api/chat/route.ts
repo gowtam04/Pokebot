@@ -11,14 +11,14 @@
  *      answer conditions, and rejecting before the stream opens lets the client
  *      see a real HTTP status.
  *   3. Resolve the prior in-session history from the session store (trimming it
- *      to the context budget first), then drive `runPokebot` with hooks that
+ *      to the context budget first), then drive `runOak` with hooks that
  *      stream `tool_activity` events as tools fire and `answer_start`/
  *      `answer_delta` events as the answer_markdown prose is generated.
  *   4. Emit EXACTLY ONE terminal `answer` event carrying the validated
- *      PokebotAnswer. Every in-domain failure (resolution_failed /
+ *      OakAnswer. Every in-domain failure (resolution_failed /
  *      clarification_needed / insufficient_data) rides this normal `answer`
- *      event — `runPokebot` never throws for those. ONLY a transport/API fault
- *      (an exception out of `runPokebot` / context assembly) emits an `error`
+ *      event — `runOak` never throws for those. ONLY a transport/API fault
+ *      (an exception out of `runOak` / context assembly) emits an `error`
  *      event (integration.md § Error Surface, last two rows).
  *   5. On success, record the user + assistant turn pair in the session store so
  *      multi-turn refinement works (US-10). On a transport fault we append
@@ -228,7 +228,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     // Dynamic import defers the auth chain's env evaluation (current-user →
     // sessions → @/env) to request time, not build time — the same reason the
-    // runPokebot import below is deferred. A static import would trip
+    // runOak import below is deferred. A static import would trip
     // `next build` (env's AUTH_SECRET prod guard throws at page-data collection).
     const { getCurrentAccount } = await import("@/server/auth/current-user");
     account = await getCurrentAccount();
@@ -240,7 +240,7 @@ export async function POST(req: Request): Promise<Response> {
         session_id,
         err: err instanceof Error ? err.message : String(err),
       },
-      "pokebot_chat_account_resolve_failed",
+      "oak_chat_account_resolve_failed",
     );
   }
 
@@ -268,7 +268,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3. Resolve the prior history (trim to the context budget first). The current
-  //    message is passed to runPokebot SEPARATELY — it must NOT be in `history`,
+  //    message is passed to runOak SEPARATELY — it must NOT be in `history`,
   //    which holds only prior turns (integration.md § Input Contract). We commit
   //    the user+assistant pair only on a successful answer (below), so a
   //    transport fault leaves the conversation clean for a retry.
@@ -320,7 +320,7 @@ export async function POST(req: Request): Promise<Response> {
           session_id,
           err: err instanceof Error ? err.message : String(err),
         },
-        "pokebot_chat_history_load_failed",
+        "oak_chat_history_load_failed",
       );
       history = [];
     }
@@ -365,7 +365,7 @@ export async function POST(req: Request): Promise<Response> {
           session_id,
           err: err instanceof Error ? err.message : String(err),
         },
-        "pokebot_chat_active_team_resolve_failed",
+        "oak_chat_active_team_resolve_failed",
       );
     }
   }
@@ -417,7 +417,7 @@ export async function POST(req: Request): Promise<Response> {
           // time (runtime.ts evaluates env at module load; a static import at
           // the top of this file would trigger parseEnv() during `next build`
           // even though the route is force-dynamic).
-          const { runPokebot } = await import("@/agent/runtime");
+          const { runOak } = await import("@/agent/runtime");
 
           const ctx = await createAgentContext({
             requestId,
@@ -458,7 +458,7 @@ export async function POST(req: Request): Promise<Response> {
             send("answer_delta", { text });
           };
 
-          const answer = await runPokebot(
+          const answer = await runOak(
             message,
             history,
             ctx,
@@ -520,7 +520,7 @@ export async function POST(req: Request): Promise<Response> {
                   session_id,
                   err: err instanceof Error ? err.message : String(err),
                 },
-                "pokebot_chat_persist_failed",
+                "oak_chat_persist_failed",
               );
             }
           } else {
@@ -540,8 +540,8 @@ export async function POST(req: Request): Promise<Response> {
             return;
           }
 
-          // Transport/API fault ONLY (runPokebot never throws for in-domain
-          // conditions — those return a PokebotAnswer with a status). Map to the
+          // Transport/API fault ONLY (runOak never throws for in-domain
+          // conditions — those return a OakAnswer with a status). Map to the
           // `error` SSE event per integration.md § Error Surface (last two rows).
           const detail = err instanceof Error ? err.message : String(err);
           logger.error(
@@ -552,7 +552,7 @@ export async function POST(req: Request): Promise<Response> {
               model: body.model,
               err: detail,
             },
-            "pokebot_chat_transport_error",
+            "oak_chat_transport_error",
           );
           // A typed provider fault (xAI/OpenAI 4xx/5xx — bad key, unsupported
           // param, rate limit, unknown model) gets a MODEL-SCOPED message so the

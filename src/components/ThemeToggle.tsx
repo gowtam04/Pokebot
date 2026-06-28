@@ -6,13 +6,13 @@ import { useEffect, useState } from "react";
  * ThemeToggle — flips the manual light/dark choice and persists it.
  *
  * Writes `data-theme` on <html> and mirrors it to `localStorage` under
- * `pokebot-theme` (the same key the no-flash inline script in `layout.tsx`
+ * `oak-theme` (the same key the no-flash inline script in `layout.tsx`
  * reads on load). With no stored choice, CSS falls back to the system
  * `prefers-color-scheme`. Single user → no server state (design-system.md).
  */
 type Theme = "light" | "dark";
 
-const STORAGE_KEY = "pokebot-theme";
+const STORAGE_KEY = "oak-theme";
 
 function getInitialTheme(): Theme {
   if (typeof document === "undefined") return "light";

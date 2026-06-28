@@ -32,7 +32,7 @@ import Home from "@/app/page";
 import { formatSseEvent } from "@/lib/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { TeamMember } from "@/data/teams/team-schema";
-import type { PokebotAnswer } from "@/components/types";
+import type { OakAnswer } from "@/components/types";
 
 const EMAIL = "ash@pallet.town";
 const SV = "scarlet-violet";
@@ -47,7 +47,7 @@ interface StoredTeam {
 let store: StoredTeam[];
 let nextId: number;
 let chatBodies: Array<Record<string, unknown>>;
-let nextAnswer: PokebotAnswer;
+let nextAnswer: OakAnswer;
 
 const spread = (v = 0) => ({ hp: v, atk: v, def: v, spa: v, spd: v, spe: v });
 
@@ -93,7 +93,7 @@ function jsonResponse(status: number, body: unknown): Response {
   } as unknown as Response;
 }
 
-function sseAnswerResponse(answer: PokebotAnswer): Response {
+function sseAnswerResponse(answer: OakAnswer): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(

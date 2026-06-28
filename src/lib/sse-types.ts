@@ -15,17 +15,17 @@
  *
  * IMPORTANT: every in-domain failure (unresolved entity, clarification, PokeAPI
  * down, index missing, loop-max, invalid-after-retry) is delivered as a NORMAL
- * `answer` event carrying a PokebotAnswer with the appropriate `status`
+ * `answer` event carrying a OakAnswer with the appropriate `status`
  * (resolution_failed / clarification_needed / insufficient_data) — NEVER as an
  * `error` event. The `error` event is reserved for model/API transport faults.
  *
  * `answer_start` / `answer_delta` stream the `answer_markdown` prose token-by-
  * token while the loop runs; the single terminal `answer` event always carries
- * the full validated PokebotAnswer and is authoritative (the client replaces any
+ * the full validated OakAnswer and is authoritative (the client replaces any
  * streamed buffer with it).
  */
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 /** Request body for `POST /api/chat`. */
 export interface ChatRequestBody {
@@ -65,7 +65,7 @@ export interface AnswerDeltaEvent {
 
 /** `event: answer` payload — the one terminal answer for the turn. */
 export interface AnswerEvent {
-  answer: PokebotAnswer;
+  answer: OakAnswer;
 }
 
 /** `event: error` payload — transport/API fault only (not in-domain failures). */

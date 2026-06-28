@@ -30,7 +30,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { AgentMode } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import { formatForMode, type Format } from "@/data/formats";
 import { searchable_names } from "@/data/schema";
 import type { TeamMember } from "@/data/teams/team-schema";
@@ -70,7 +70,7 @@ export async function resolveActiveTeam(
   // Part of the contract (symmetry with the route + enrichActiveTeam), but the
   // read goes through team-repo's @/data/db singleton, so it isn't used here.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<ActiveTeam | null> {
   if (!teamId) return null;
 
@@ -126,7 +126,7 @@ type NameKind = "pokemon" | "ability" | "item" | "move" | "type";
  */
 async function loadDisplayNames(
   team: ActiveTeam,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<Map<string, string>> {
   const slugs = new Set<string>();
   for (const m of team.members) {
@@ -179,7 +179,7 @@ function display(
  */
 export async function enrichActiveTeam(
   team: ActiveTeam,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<EnrichedActiveTeam> {
   const names = await loadDisplayNames(team, db);
 

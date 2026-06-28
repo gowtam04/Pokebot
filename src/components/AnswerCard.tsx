@@ -16,7 +16,7 @@ import SavedTeamCard from "@/components/teams/SavedTeamCard";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 
 /**
- * AnswerCard — the top-level renderer for a single `PokebotAnswer` (T11 /
+ * AnswerCard — the top-level renderer for a single `OakAnswer` (T11 /
  * output-formats.md). It fans each field of the payload out to its mapped leaf
  * component (ux-design.md "Surfaces / Components" table), in the reading order:
  *

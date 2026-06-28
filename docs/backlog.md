@@ -2,7 +2,7 @@
 
 Forward-looking work not yet specified in `requirements/` or `architecture/design.md`.
 Items here are **candidates**, not commitments — each needs a requirements pass before
-it moves into a design doc. Today Pokebot is **single-user and stateless** (in-memory
+it moves into a design doc. Today Oak is **single-user and stateless** (in-memory
 per-session history, no accounts, no persisted artifacts); every item below changes one
 of those assumptions, so they're listed in dependency order: accounts unlock the rest.
 
@@ -34,7 +34,7 @@ of those assumptions, so they're listed in dependency order: accounts unlock the
 >   revisit before a genuinely public launch.
 > - **Multi-instance throttle** — the OTP request throttle (and the conversation
 >   store) are in-memory, sized for a single-instance hobby deploy; a shared
->   backend is required if Pokebot ever runs multiple processes.
+>   backend is required if Oak ever runs multiple processes.
 >
 > The "auth strategy" and "where identity lives" open questions below are now
 > resolved by the design (hand-rolled email-OTP; identity in the existing
@@ -133,7 +133,7 @@ into an ongoing workflow.
 > `docs/features/chat-history/architecture/design.md` (HIST-AD-1..5). Two Postgres
 > tables (`conversation`, `conversation_message`) scoped by `account_id`; the
 > client `session_id` IS the conversation id (HIST-AD-1); the chat route persists
-> each signed-in turn (full `PokebotAnswer` as JSON) off the SSE critical path and
+> each signed-in turn (full `OakAnswer` as JSON) off the SSE critical path and
 > re-feeds DB history (trimmed) on resume; `/api/conversations/*` backs list /
 > open / rename / pin / delete / format-filter / search (ILIKE title+text); the
 > guest→sign-in thread is bulk-imported idempotently. Guests, the agent, the
@@ -143,7 +143,7 @@ into an ongoing workflow.
 > **Status (spec): SPECIFIED** — refined into a buildable spec at
 > `docs/features/chat-history/requirements/requirements.md` (HIST-US-1..12,
 > BR-H1..11, AC-*). Decisions locked: **signed-in users only** (guests stay
-> ephemeral/in-memory); store the **full structured `PokebotAnswer`** per turn
+> ephemeral/in-memory); store the **full structured `OakAnswer`** per turn
 > (not markdown-only, and the tool-activity trace is **not** persisted);
 > conversations are **resumable with in-conversation memory** (prior turns
 > re-fed within the existing context budget); **auto-save all**, auto-derived +
@@ -163,13 +163,13 @@ gives the user a durable record of past answers (with their reasoning and citati
 which are the point of the product) and the ability to resume threads.
 
 **Scope:**
-- Persist conversations (messages + the structured `PokebotAnswer` payloads) per account.
+- Persist conversations (messages + the structured `OakAnswer` payloads) per account.
 - List / open / continue / delete past conversations from the frontend.
 - Decide retention and what exactly is stored (raw markdown only, or the full
   structured answer + tool-activity trace for replay).
 
 **Open questions:**
-- Store full `PokebotAnswer` structured payloads (richer, larger) or just the rendered
+- Store full `OakAnswer` structured payloads (richer, larger) or just the rendered
   markdown?
 - Does resuming a thread re-feed prior turns to the model, and how does that interact
   with the prompt-cached prefix and `MAX_ITERATIONS`?
@@ -205,7 +205,7 @@ which are the point of the product) and the ability to resume threads.
 > they will not persist** (no per-account storage, not shareable), so this item has **no
 > B-1/B-3 dependency**. Emission is **user-triggered** — the user opens a rendered answer
 > "as an artifact"; the agent does not decide to emit one. Still open: whether an artifact
-> is a new shape in the `PokebotAnswer` schema vs. a separate output channel vs. a
+> is a new shape in the `OakAnswer` schema vs. a separate output channel vs. a
 > frontend-derived view, and which artifact type ships first.
 
 **Why:** Some answers are inherently richer than a single chat bubble — a full team
@@ -218,12 +218,12 @@ user can open, pin, and revisit as a first-class object instead of re-scrolling 
 - A dedicated panel/surface that renders a structured artifact (team sheet, comparison
   table, damage-calc result, type chart) separately from the inline chat answer.
 - Defined artifact type(s) the agent can produce, rendered field-by-field like the
-  existing `PokebotAnswer` tree — reusing the citation / inference / generation-tag
+  existing `OakAnswer` tree — reusing the citation / inference / generation-tag
   conventions so artifacts stay grounded in data.
 - Open / pin / dismiss an artifact alongside the live conversation.
 
 **Open questions:**
-- Is an artifact a new shape in the `PokebotAnswer` schema, a separate output channel,
+- Is an artifact a new shape in the `OakAnswer` schema, a separate output channel,
   or a derived view the frontend computes from an existing answer?
 - Does the agent decide when to emit an artifact, or is it user-triggered ("open this
   as an artifact") from a rendered answer?
@@ -238,7 +238,7 @@ artifacts depends on B-1 (per-account) and overlaps B-3 (what's stored per conve
 
 ## B-5 — Competitive battling page
 
-**Why:** Pokebot reasons about mechanics and legality, but it has no surface dedicated to
+**Why:** Oak reasons about mechanics and legality, but it has no surface dedicated to
 *competitive* play — the metagame layer that defines what people actually battle with.
 The two core use cases (`requirements.md` §Overview) are mechanics reasoning and team
 building; a competitive page would sit on top of both, organized around the live
@@ -342,7 +342,7 @@ attributed.
 
 **Open questions:**
 - Where does the artifact's richer detail come from — is the full underlying datum already
-  present in the `PokebotAnswer` citation payload, or does opening a source trigger a fresh
+  present in the `OakAnswer` citation payload, or does opening a source trigger a fresh
   read (a tool/repo lookup) to hydrate it? A fresh read collides with the fixed 11-tool
   contract and the "tools never throw in-domain" seam.
 - Is "source detail" a distinct artifact type, or one rendering of a more general entity
@@ -355,9 +355,9 @@ or sharing a source artifact inherits B-4's B-1/B-3 dependencies.
 
 ---
 
-## B-7 — Rename "Pokebot" → "Oak"
+## B-7 — Rename "Oak" → "Oak"
 
-**Why:** "Pokebot" reads as a generic lookup bot and leans on the trademarked "Poké-"
+**Why:** "Oak" reads as a generic lookup bot and leans on the trademarked "Poké-"
 prefix; the product's identity is a reasoning expert that explains its work. **Oak**
 (after Professor Oak — the franchise's archetypal knowledge-giver) is warmer, signals
 "ask the expert," and carries no trademarked string while still landing the Pokémon
@@ -368,23 +368,23 @@ association for fans. This is a branding/identity change, orthogonal to B-1..B-6
   sees or that identifies the product externally: page `<title>`/metadata and UI copy
   (`src/app/layout.tsx`, `src/app/page.tsx`, `src/components/*`), `README.md`, `CLAUDE.md`,
   `package.json` `name`, `.env.example`/compose comments, and the agent's **self-identity in
-  the system prompt / few-shot persona** ("You are Pokebot…"). Note the prompt persona lives
+  the system prompt / few-shot persona** ("You are Oak…"). Note the prompt persona lives
   **inline in `src/agent/runtime.ts`** for the live standard path; `src/agent/prompts/system.ts`
   + `few-shot.ts` are an orphaned tested mirror and `champions.ts` is the only imported prompt
   module — update the live inline copy plus `champions.ts`, and the mirror for consistency.
 - **Phase 2 — internal code identifiers (large, optional, separate change).** The name is
-  baked into ~85 files as identifiers: `PokebotAnswer` (×172), `runPokebot` (×60),
-  `PokebotDb` (×59), `pokebotAnswerSchema`/`pokebotAnswerJsonSchema`, `RunPokebotFn`,
-  `usePokebotChat`, etc. These are an internal refactor only — **but `PokebotAnswer` and its
+  baked into ~85 files as identifiers: `OakAnswer` (×172), `runOak` (×60),
+  `OakDb` (×59), `oakAnswerSchema`/`oakAnswerJsonSchema`, `RunOakFn`,
+  `useOakChat`, etc. These are an internal refactor only — **but `OakAnswer` and its
   fields surface through `zod-to-json-schema` into the `submit_answer` tool schema the model
   reasons against** (CLAUDE.md: "tool names and tool output field names are a contract"), so
   renaming the *schema/field* identifiers is behaviorally load-bearing and must be re-evaluated
   against the golden eval suite, not just typechecked. Recommendation: rename internal symbols
-  that are *not* model-visible freely; leave the `PokebotAnswer` schema shape/field names alone
+  that are *not* model-visible freely; leave the `OakAnswer` schema shape/field names alone
   unless there's a reason to touch the contract.
 
 **Open questions:**
-- Does Phase 2 happen at all, or do we keep `PokebotAnswer`/`runPokebot` as internal legacy
+- Does Phase 2 happen at all, or do we keep `OakAnswer`/`runOak` as internal legacy
   names and only rebrand the surface? (Phase 1 alone fully rebrands the product.)
 - Final wordmark/casing — "Oak" vs. "Oak." vs. an "Ask Oak" lockup — and a one-line tagline
   for metadata/landing copy.

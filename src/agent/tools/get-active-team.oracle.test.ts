@@ -25,7 +25,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { AgentContext } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type {
   ActiveTeam,
@@ -104,7 +104,7 @@ function ensureLoaded(): void {
 
 async function ctxWith(activeTeam?: ActiveTeam): Promise<AgentContext> {
   return createAgentContext({
-    db: fix.db as unknown as PokebotDb,
+    db: fix.db as unknown as OakDb,
     requestId: "oracle",
     activeTeam,
   });
@@ -164,7 +164,7 @@ describe("get_active_team tool (T12)", () => {
         format: "scarlet-violet",
         members: [{ ...MEMBER, item: "made-up-item" }],
       },
-      fix.db as unknown as PokebotDb,
+      fix.db as unknown as OakDb,
     );
     expect(enriched.members[0]!.item).toBe("made-up-item");
     expect(enriched.members[0]!.item_display).toBe("made-up-item");
@@ -183,7 +183,7 @@ describe("resolveActiveTeam (bind guard)", () => {
       now: Date.now(),
     });
 
-    const db = fix.db as unknown as PokebotDb;
+    const db = fix.db as unknown as OakDb;
 
     // Owned + format matches "standard" → scarlet-violet → bound.
     const bound = await resolveActiveTeam(accountId, created.id, "standard", db);

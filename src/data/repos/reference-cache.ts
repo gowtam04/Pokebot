@@ -20,7 +20,7 @@ import "server-only";
 
 import { and, eq, ilike, inArray } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
 import { reference_cache, searchable_names } from "@/data/schema";
 import type {
@@ -58,7 +58,7 @@ export type GetReferenceResult =
  */
 export interface ReferenceCacheCtx {
   /** The Drizzle handle (DbCtx.db). Defaults to the @/data/db singleton. */
-  db?: PokebotDb;
+  db?: OakDb;
 }
 
 /** Canonical reference_cache key — must match the keys build-reference writes. */
@@ -67,7 +67,7 @@ function resourceKey(kind: RefKind, slug: string): string {
 }
 
 /** Resolve the Drizzle handle — injected ctx wins; else the lazy singleton. */
-async function resolveDb(ctx?: ReferenceCacheCtx): Promise<PokebotDb> {
+async function resolveDb(ctx?: ReferenceCacheCtx): Promise<OakDb> {
   if (ctx?.db) return ctx.db;
   const mod = await import("@/data/db");
   return mod.db;
@@ -84,7 +84,7 @@ function parsePayload(payload: string): RefRecord | null {
 
 /** Cheap candidate slugs for a miss (full fuzzy ranking is resolve_entity's job). */
 async function suggestSlugs(
-  db: PokebotDb,
+  db: OakDb,
   kind: RefKind,
   slug: string,
   format: Format,
@@ -173,7 +173,7 @@ export interface MoveSummary {
 export async function moveSummaries(
   moveSlugs: string[],
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<Map<string, MoveSummary>> {
   const out = new Map<string, MoveSummary>();
   const distinct = [...new Set(moveSlugs)];

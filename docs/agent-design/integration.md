@@ -11,17 +11,17 @@ The web backend exposes a chat endpoint that drives the agent:
 POST /api/chat
 Request:  { "session_id": string, "message": string }
 Response: streamed — tool-activity progress events, then a final
-          { "answer": PokebotAnswer }   (see output-formats.md)
+          { "answer": OakAnswer }   (see output-formats.md)
 ```
 
 Internally the agent runs behind a single function:
 
 ```ts
-async function runPokebot(
+async function runOak(
   message: string,
   history: ChatMessage[], // in-session prior turns (D9)
   ctx: AgentContext, // tool clients (index, cache), logger, request id
-): Promise<PokebotAnswer>;
+): Promise<OakAnswer>;
 ```
 
 - The loop: build the cached prefix (system + tools + few-shot) → append history
@@ -39,8 +39,8 @@ async function runPokebot(
 
 ## Output Contract
 
-The return value is a validated `PokebotAnswer` (`output-formats.md`). The route
-wraps it as `{ "answer": <PokebotAnswer> }`. If `submit_answer`'s payload fails
+The return value is a validated `OakAnswer` (`output-formats.md`). The route
+wraps it as `{ "answer": <OakAnswer> }`. If `submit_answer`'s payload fails
 schema validation, orchestration returns the validation error to the model and
 requests one re-emit (max 1–2 retries) before surfacing a generic
 `insufficient_data` answer to the user.
@@ -67,7 +67,7 @@ The frontend `AnswerCard` renders the payload field-by-field (mapping table in
 
 | Condition                                       | Caller sees                                                        | Handling                           |
 | ----------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- |
-| Entity unresolved                               | `PokebotAnswer` with `status: "resolution_failed"` + `suggestions` | Normal render (not an HTTP error). |
+| Entity unresolved                               | `OakAnswer` with `status: "resolution_failed"` + `suggestions` | Normal render (not an HTTP error). |
 | Need clarification                              | `status: "clarification_needed"`                                   | Normal render.                     |
 | PokeAPI / cache down on a needed fetch          | `status: "insufficient_data"` + `uncertainty_flags`                | Normal render; user told plainly.  |
 | Index unavailable                               | `status: "insufficient_data"`                                      | Same.                              |
@@ -97,7 +97,7 @@ also what the eval harness and prod-sampling (G-cases) consume.
 Open items for `solution-architect` (do **not** decide here):
 
 - Language/runtime (TS server is the natural fit given a web frontend; confirm).
-- Where `runPokebot` lives (API route vs. service module) and the streaming
+- Where `runOak` lives (API route vs. service module) and the streaming
   mechanism (SSE vs. WebSocket).
 - The **cache/index ingest pipeline** (Dependency 4 in `overview.md`) — storage
   choice (embedded DB vs. in-memory + JSON snapshot), rebuild cadence/trigger.

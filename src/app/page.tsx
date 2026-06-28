@@ -22,18 +22,18 @@ import { getConversation, importConversation } from "@/lib/history-client";
 import type {
   ChatStatus,
   ChatTurn,
-  PokebotAnswer,
+  OakAnswer,
   SavedTeam,
 } from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
-const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
+const CHAMPIONS_STORAGE_KEY = "oak-champions-mode";
 
 /** localStorage key for the persisted model choice (global preference). */
-const MODEL_STORAGE_KEY = "pokebot-model";
+const MODEL_STORAGE_KEY = "oak-model";
 
 /** localStorage key for the persisted history-sidebar collapsed choice. */
-const SIDEBAR_STORAGE_KEY = "pokebot-sidebar-collapsed";
+const SIDEBAR_STORAGE_KEY = "oak-sidebar-collapsed";
 
 /** DOM id of the history sidebar — the toggle's `aria-controls` target. */
 const SIDEBAR_ID = "history-sidebar";
@@ -53,7 +53,7 @@ function makeId(): string {
 }
 
 /**
- * Home — the Pokebot chat page (design.md § Phase 7).
+ * Home — the Oak chat page (design.md § Phase 7).
  *
  * Owns the conversation surface: a stable `session_id`, the committed `turns[]`
  * (user + assistant), and the in-flight turn via `useSseClient` (the manual SSE
@@ -271,7 +271,7 @@ export default function Home() {
 
   // Commit each terminal answer exactly once (guard against effect re-runs /
   // React strict-mode double-invoke by tracking the committed object identity).
-  const committedAnswerRef = useRef<PokebotAnswer | null>(null);
+  const committedAnswerRef = useRef<OakAnswer | null>(null);
   // A team the agent JUST saved (save_team, T13) — set only from a fresh answer
   // so the viewer auto-opens on arrival, never when reloading history.
   const [savedTeamToOpen, setSavedTeamToOpen] = useState<SavedTeam | null>(null);
@@ -419,7 +419,7 @@ export default function Home() {
               controlsId={SIDEBAR_ID}
             />
           )}
-          <h1 className="chat-page__title">Pokebot</h1>
+          <h1 className="chat-page__title">Oak</h1>
         </div>
         <div
           style={{

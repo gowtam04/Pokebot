@@ -1,5 +1,5 @@
 {
-  "name": "pokebot",
+  "name": "oak",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -25,7 +25,7 @@
     "docker:migrate": "docker compose -f docker-compose.dev.yml run --rm web npm run db:migrate",
     "docker:ingest": "docker compose -f docker-compose.dev.yml run --rm web npm run ingest",
     "docker:logs": "docker compose -f docker-compose.dev.yml logs -f web",
-    "docker:psql": "docker compose -f docker-compose.dev.yml exec db psql -U pokebot -d pokebot",
+    "docker:psql": "docker compose -f docker-compose.dev.yml exec db psql -U oak -d oak",
     "docker:sh": "docker compose -f docker-compose.dev.yml exec web bash"
   },
   "dependencies": {

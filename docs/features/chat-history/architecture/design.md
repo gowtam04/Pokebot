@@ -7,7 +7,7 @@ Budget Tier: hobby
 
 This design makes a **signed-in user's conversations durable and cross-device**.
 Today two parallel, ephemeral histories exist: the client (`src/app/page.tsx`)
-holds rich `turns[]` (each assistant turn is a full `PokebotAnswer`), while the
+holds rich `turns[]` (each assistant turn is a full `OakAnswer`), while the
 server's in-memory `session-store` holds text-only `{role, content}` pairs keyed
 by the client `session_id` for re-feeding the model. Both evaporate on
 restart/device-switch. This feature persists conversations to Postgres, scoped
@@ -23,12 +23,12 @@ conversation").
 
 Key approach summary:
 - **Two new tables**, `conversation` and `conversation_message` (one row per
-  turn, the full `PokebotAnswer` stored as a JSON TEXT `answer_json` column —
+  turn, the full `OakAnswer` stored as a JSON TEXT `answer_json` column —
   mirroring the existing `reference_cache.payload` convention). Not
   format-scoped; scoped by `account_id` (BR-H1 / BR-A9).
 - **Server-authoritative persistence.** The chat route already resolves the
   account and already records the turn pair on success; for signed-in users that
-  write becomes a durable DB write (full `PokebotAnswer`), and the model-context
+  write becomes a durable DB write (full `OakAnswer`), and the model-context
   history is read back from the DB. Guests keep the in-memory store, byte-identical.
 - **One client-side exception:** at the guest→sign-in moment the full-fidelity
   turns live only on the client, so a dedicated **idempotent import endpoint**
@@ -47,9 +47,9 @@ Key approach summary:
   `auth_session` tables, `getCurrentAccount()`, and the `@/data/db` singleton +
   repo conventions.
 - **No `agent-design/` pass needed** — this feature does not touch agent
-  internals, the 11-tool contract, prompts, or the `PokebotAnswer` output schema.
+  internals, the 11-tool contract, prompts, or the `OakAnswer` output schema.
   Resuming a thread re-feeds prior turns through the **existing** `history`
-  parameter of `runPokebot`, subject to the existing context-budget trimming, so
+  parameter of `runOak`, subject to the existing context-budget trimming, so
   the prompt-cached prefix and `MAX_ITERATIONS` behavior are unchanged (BR-H5).
 
 ## Tech Stack
@@ -102,7 +102,7 @@ Indexes:
 | `seq`             | integer NOT NULL | monotonic order within the conversation (0,1,2,…)                            |
 | `role`            | text NOT NULL    | `"user"` \| `"assistant"`                                                    |
 | `text_content`    | text NOT NULL    | human-visible text: user message, or assistant `answer_markdown` — powers search (BR-H11) + model re-feed (BR-H5) |
-| `answer_json`     | text             | full `PokebotAnswer` JSON (assistant rows only; NULL for user) — powers full re-render (BR-H3) |
+| `answer_json`     | text             | full `OakAnswer` JSON (assistant rows only; NULL for user) — powers full re-render (BR-H3) |
 | `created_at`      | bigint NOT NULL  | epoch ms                                                                     |
 
 Indexes:
@@ -193,7 +193,7 @@ Guests (`account === null`) get an **empty list** from the list route and **401
 ### `POST /api/conversations/import`
 - Body: `{ session_id: string, champions_mode: boolean, turns: ChatTurn[] }` —
   the guest→sign-in bulk save (HIST-US-12, BR-H10).
-- Validates each assistant turn's `answer` against `pokebotAnswerSchema`
+- Validates each assistant turn's `answer` against `oakAnswerSchema`
   (`src/agent/schemas.ts`); malformed → **400** `invalid_turns`.
 - Empty `turns` → **200** `{ id: null }`, creates nothing (AC-12.2).
 - Else upserts the conversation (id = `session_id`, title from first user
@@ -217,7 +217,7 @@ are **unchanged**. Two changes, both gated on `account !== null`:
    - Signed in: `conversation-repo.appendTurnPair(...)` — upsert the conversation
      (create with derived title + format on the first turn, else bump
      `updated_at`) and insert the user row + the assistant row (full
-     `PokebotAnswer` in `answer_json`) in one transaction, computing the next
+     `OakAnswer` in `answer_json`) in one transaction, computing the next
      `seq` (BR-H2).
    - Guest: `appendTurn` to the in-memory store, exactly as today.
 
@@ -280,7 +280,7 @@ elsewhere).
 ### `src/data/repos/conversation-repo.ts`
 ```ts
 import type { ChatTurn } from "@/components/types";   // { UserTurn | AssistantTurn }
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { AgentMode } from "@/agent/types";
 
 export interface Conversation {
@@ -311,7 +311,7 @@ export function getMessages(accountId: string, conversationId: string): Promise<
 export function appendTurnPair(args: {
   accountId: string; conversationId: string; format: string;
   userTurnId: string; userMessage: string;
-  assistantTurnId: string; answer: PokebotAnswer;
+  assistantTurnId: string; answer: OakAnswer;
   now: number;
 }): Promise<void>;
 
@@ -462,7 +462,7 @@ notes call out independent work.
   (turns round-trip, assistant `answer` rehydrated); rename + pin via PATCH;
   permanent delete; **isolation** — another account's id returns 404 on
   GET/PATCH/DELETE; **guest** — empty list, 401 elsewhere; import validates
-  `pokebotAnswerSchema` (400 on malformed) and is idempotent.
+  `oakAnswerSchema` (400 on malformed) and is idempotent.
 - **Requirement refs:** HIST-US-2, HIST-US-3, HIST-US-7..12, AC-2.2, AC-4.1,
   AC-4.2, AC-8.1, BR-H1, BR-H3, BR-H8, BR-H10, BR-H11.
 
@@ -475,7 +475,7 @@ notes call out independent work.
   memory.
 - **Parallel:** with Phase 3 (both consume Phase 2).
 - **Test focus:** a signed-in turn creates the conversation (title from message,
-  format from mode) and stores the full `PokebotAnswer`; a follow-up feeds the
+  format from mode) and stores the full `OakAnswer`; a follow-up feeds the
   **DB-derived, trimmed** history to the model and continues the same
   conversation (`seq` continues); a resumed conversation's mode follows its
   stored `format` (BR-H6); the **guest path is byte-identical** (in-memory store,
@@ -637,7 +637,7 @@ integration_checkpoints:
   defend isolation by filtering every query on `account_id` (BR-H1), never on id
   alone.
 
-- **HIST-AD-2 — One row per turn; full `PokebotAnswer` as a JSON TEXT column.**
+- **HIST-AD-2 — One row per turn; full `OakAnswer` as a JSON TEXT column.**
   *Alternatives:* a single JSON blob per conversation holding all turns. *Chosen:*
   a normalized `conversation_message` table, one row per turn, with `answer_json`
   TEXT (mirroring `reference_cache.payload`). *Why:* appends never rewrite a
@@ -650,12 +650,12 @@ integration_checkpoints:
 - **HIST-AD-3 — Server-authoritative persistence, with a client import only for
   guest→sign-in.** *Alternatives:* the client POSTs every completed turn to a
   save endpoint. *Chosen:* the chat route persists (it already holds the
-  authoritative `PokebotAnswer` and resolves the account, and already records the
+  authoritative `OakAnswer` and resolves the account, and already records the
   turn pair on success); the **one** case where the full-fidelity turns live only
   on the client — the guest→sign-in moment — is handled by an idempotent import
   endpoint. *Why:* avoids trusting client-sent answers on the hot path and keeps
   the existing route flow. *Tradeoff:* two write paths; the import path validates
-  client turns against `pokebotAnswerSchema` before storing.
+  client turns against `oakAnswerSchema` before storing.
 
 - **HIST-AD-4 — Signed-in history reads from the DB; guests keep the in-memory
   store.** *Alternatives:* keep using the in-memory store for everyone and only
@@ -721,12 +721,12 @@ Resolved here (the requirements' Open Questions, pinned for this build):
   is a future upgrade.
 - **Conversation identity vs. `session_id`:** unified — id = `session_id`
   (HIST-AD-1).
-- **Storage shape of `PokebotAnswer` (BR-H3):** full object as a JSON TEXT
+- **Storage shape of `OakAnswer` (BR-H3):** full object as a JSON TEXT
   column per assistant turn (HIST-AD-2).
 
 Still open (non-blocking for the build):
 - **Schema evolution of stored answers.** Old `answer_json` must stay
-  renderable as `pokebotAnswerSchema` evolves. Not addressed in v1 (the schema is
+  renderable as `oakAnswerSchema` evolves. Not addressed in v1 (the schema is
   additive today); if a breaking change lands, add a version tag and a lenient
   render path. Flagged for the first such change.
 - **Past-turn tool-activity indicator.** Tool-activity is intentionally not

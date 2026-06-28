@@ -8,8 +8,8 @@ import {
 import { SYSTEM_PROMPT } from "@/agent/prompts/system";
 
 describe("system prompt (transcribed verbatim from prompts.md)", () => {
-  it("opens with the Pokebot identity line and closes with the answer-style rule", () => {
-    expect(SYSTEM_PROMPT.startsWith("You are Pokebot, a knowledgeable")).toBe(
+  it("opens with the Oak identity line and closes with the answer-style rule", () => {
+    expect(SYSTEM_PROMPT.startsWith("You are Oak, a knowledgeable")).toBe(
       true,
     );
     expect(

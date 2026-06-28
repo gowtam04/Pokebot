@@ -18,7 +18,7 @@
  *   suggestions[] (+ status)                 → SuggestionChips (click → follow-up POST)
  *
  * Rules (per the shared-tree + risk directives):
- *  - The `PokebotAnswer` type and all its sub-types are owned by
+ *  - The `OakAnswer` type and all its sub-types are owned by
  *    `@/agent/schemas` — they are imported/re-exported here, never redefined.
  *  - The SSE wire types (`ToolActivityEvent`, `ErrorEvent`, `ChatRequestBody`)
  *    are owned by `@/lib/sse-types` — imported/re-exported here, never redefined.
@@ -29,7 +29,7 @@
  */
 
 import type {
-  PokebotAnswer,
+  OakAnswer,
   Subject,
   Candidates,
   Citation,
@@ -49,7 +49,7 @@ import type {
 // Re-export the payload sub-types so leaf authors can import everything they
 // need from `@/components/types` alone (one frontend contract surface).
 export type {
-  PokebotAnswer,
+  OakAnswer,
   Subject,
   Candidates,
   Citation,
@@ -64,8 +64,8 @@ export type {
   ChatRequestBody,
 };
 
-/** The `status` discriminant of a PokebotAnswer (drives clarification UI). */
-export type AnswerStatus = PokebotAnswer["status"];
+/** The `status` discriminant of a OakAnswer (drives clarification UI). */
+export type AnswerStatus = OakAnswer["status"];
 
 /** One row of a candidate result set (`candidates.shown[]`). */
 export type CandidateRow = Candidates["shown"][number];
@@ -84,13 +84,13 @@ export type OnFollowUp = (message: string) => void;
 /**
  * Props for the top-level `AnswerCard` (the barrel/assembly component).
  *
- * AnswerCard receives the whole `PokebotAnswer` and fans its fields out to the
+ * AnswerCard receives the whole `OakAnswer` and fans its fields out to the
  * leaf components below. `onFollowUp` is threaded down to the interactive leaves
  * (SuggestionChips, CandidateTable) so a click POSTs a follow-up turn.
  */
 export interface AnswerCardProps {
   /** The structured answer emitted by `submit_answer` for this assistant turn. */
-  answer: PokebotAnswer;
+  answer: OakAnswer;
   /** Send a follow-up turn when the user clicks a suggestion / candidate. */
   onFollowUp?: OnFollowUp;
 }
@@ -175,12 +175,12 @@ export interface DamageReadoutProps {
 
 /**
  * `proposed_team` — the team the agent built for a "build me a team" turn
- * (TEAM-AD-6). ADDITIVE optional field on `PokebotAnswer`; a `ChatTurn`'s
+ * (TEAM-AD-6). ADDITIVE optional field on `OakAnswer`; a `ChatTurn`'s
  * assistant `answer` carries it through unchanged (it lives inside
- * `PokebotAnswer`). The agent NEVER writes a team (BR-T8) — the user Applies it
+ * `OakAnswer`). The agent NEVER writes a team (BR-T8) — the user Applies it
  * via a normal authenticated Teams API write (save-new / apply-existing).
  */
-export type ProposedTeam = NonNullable<PokebotAnswer["proposed_team"]>;
+export type ProposedTeam = NonNullable<OakAnswer["proposed_team"]>;
 
 /**
  * `proposed_team` card — renders the agent's proposed team and the two Apply
@@ -194,10 +194,10 @@ export interface ProposedTeamCardProps {
 
 /**
  * `saved_team` — a team the agent SAVED this turn via `save_team` (T13, stamped
- * onto `PokebotAnswer` by the route). Lives in the persisted `answer_json`, so a
+ * onto `OakAnswer` by the route). Lives in the persisted `answer_json`, so a
  * `ChatTurn`'s assistant `answer` re-renders the card on reload.
  */
-export type SavedTeam = NonNullable<PokebotAnswer["saved_team"]>;
+export type SavedTeam = NonNullable<OakAnswer["saved_team"]>;
 
 /**
  * "Saved ✓" card — confirms a chat-driven save and offers an "Open in viewer"
@@ -262,11 +262,11 @@ export interface UserTurn {
   content: string;
 }
 
-/** A committed assistant turn — its rendered `PokebotAnswer`. */
+/** A committed assistant turn — its rendered `OakAnswer`. */
 export interface AssistantTurn {
   id: string;
   role: "assistant";
-  answer: PokebotAnswer;
+  answer: OakAnswer;
 }
 
 /** One entry in the visible conversation thread. */
@@ -322,17 +322,17 @@ export interface ComposerProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Return shape of the `usePokebotChat` hook (the SSE client).
+ * Return shape of the `useOakChat` hook (the SSE client).
  *
  * Implementation contract (design.md SSE directive): the hook POSTs to
  * `/api/chat` with `{ session_id, message }` and reads the response body with a
  * MANUAL stream reader (NOT EventSource). It surfaces progress (`tool_activity`
  * events → `activity`) and then the terminal `answer` event, committing it as an
  * `AssistantTurn`. In-domain failures arrive as a normal `answer` (a
- * `PokebotAnswer` with a non-`answered` status) and are committed like any other
+ * `OakAnswer` with a non-`answered` status) and are committed like any other
  * answer — only the transport-level `error` event sets `transportError`.
  */
-export interface UsePokebotChatResult {
+export interface UseOakChatResult {
   /** Stable session id sent as `session_id` on every turn. */
   sessionId: string;
   /** The committed conversation (user + assistant turns), in order. */
@@ -348,7 +348,7 @@ export interface UsePokebotChatResult {
 }
 
 /** The hook signature implemented by `src/lib/sse-client.ts`. */
-export type UsePokebotChat = () => UsePokebotChatResult;
+export type UseOakChat = () => UseOakChatResult;
 
 // ---------------------------------------------------------------------------
 // Artifact viewer (B-4)
@@ -356,7 +356,7 @@ export type UsePokebotChat = () => UsePokebotChatResult;
 
 // Re-export the artifact-viewer client contract (the back-stack view types +
 // the context API) so page/leaf consumers import it from this one frontend
-// surface, alongside the PokebotAnswer + SSE types above.
+// surface, alongside the OakAnswer + SSE types above.
 export type {
   ArtifactView,
   ArtifactViewerApi,

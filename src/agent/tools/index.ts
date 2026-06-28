@@ -8,7 +8,7 @@
  *     fed to the Anthropic SDK (name + description + generated `inputSchema`).
  *   - `dispatch(name, args, ctx)` — name -> `run(args, ctx)` lookup used by the
  *     loop in src/agent/runtime.ts.
- *   - `submitAnswerSchema` — re-export of the PokebotAnswer Zod schema (the
+ *   - `submitAnswerSchema` — re-export of the OakAnswer Zod schema (the
  *     single source of truth in schemas.ts) for the runtime's payload validation
  *     (design.md tool-layer export surface).
  *
@@ -40,7 +40,7 @@
  */
 
 import type { ToolDef, ToolDispatch } from "@/agent/types";
-import { pokebotAnswerSchema } from "@/agent/schemas";
+import { oakAnswerSchema } from "@/agent/schemas";
 
 import { resolveEntityTool } from "./resolve-entity";
 import { queryPokedexTool } from "./query-pokedex";
@@ -100,8 +100,8 @@ export const dispatch: ToolDispatch = (name, args, ctx) => {
 };
 
 /**
- * The PokebotAnswer Zod schema, re-exported under the design.md name for the
+ * The OakAnswer Zod schema, re-exported under the design.md name for the
  * runtime's submit_answer payload validation. NOT a redefinition — single source
  * of truth remains src/agent/schemas.ts.
  */
-export const submitAnswerSchema = pokebotAnswerSchema;
+export const submitAnswerSchema = oakAnswerSchema;

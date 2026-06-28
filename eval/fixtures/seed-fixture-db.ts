@@ -60,7 +60,7 @@ import { TYPE_NAMES } from "@/agent/schemas";
 // Types
 // ---------------------------------------------------------------------------
 
-/** A Drizzle handle typed over the full Pokebot schema (node-postgres). */
+/** A Drizzle handle typed over the full Oak schema (node-postgres). */
 export type FixtureDb = NodePgDatabase<typeof schema>;
 
 // ===========================================================================

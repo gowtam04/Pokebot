@@ -22,11 +22,11 @@ import type {
   TurnRequest,
 } from "@/agent/providers/types";
 import { AnswerMarkdownExtractor } from "@/agent/runtime";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const ANSWER: PokebotAnswer = {
+const ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "Garchomp is **Dragon/Ground**.\nFast & strong.",
   reasoning_markdown: "Looked it up.",

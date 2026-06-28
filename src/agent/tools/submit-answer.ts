@@ -1,10 +1,10 @@
 /**
  * T11 — `submit_answer` (tools.md T11, structured-output / terminal action).
  *
- * The tool's input IS the full `PokebotAnswer` object (schemas.ts /
+ * The tool's input IS the full `OakAnswer` object (schemas.ts /
  * output-formats.md). `run` validates the payload against the single-source Zod
  * schema and echoes it back:
- *   - on success -> the validated PokebotAnswer (the runtime returns this to the
+ *   - on success -> the validated OakAnswer (the runtime returns this to the
  *     caller and the frontend renders it),
  *   - on failure -> { error: "invalid_input", detail } so the runtime can return
  *     the validation error to the model and request a re-emit (integration.md);
@@ -16,9 +16,9 @@
 
 import type { ToolDef } from "@/agent/types";
 import {
-  pokebotAnswerSchema,
+  oakAnswerSchema,
   toJsonSchema,
-  type PokebotAnswer,
+  type OakAnswer,
 } from "@/agent/schemas";
 
 const description =
@@ -31,15 +31,15 @@ const description =
   "suggestions.";
 
 type SubmitAnswerResult =
-  | PokebotAnswer
+  | OakAnswer
   | { error: "invalid_input"; detail: string };
 
 export const submitAnswerTool: ToolDef = {
   name: "submit_answer",
   description,
-  inputSchema: toJsonSchema(pokebotAnswerSchema),
+  inputSchema: toJsonSchema(oakAnswerSchema),
   run(args): Promise<SubmitAnswerResult> {
-    const parsed = pokebotAnswerSchema.safeParse(args);
+    const parsed = oakAnswerSchema.safeParse(args);
     if (!parsed.success) {
       return Promise.resolve({
         error: "invalid_input",

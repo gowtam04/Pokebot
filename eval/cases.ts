@@ -3,7 +3,7 @@
  *
  * Owned by: phase "Eval" / track "cases". Do NOT edit from other phases.
  *
- * Each GoldenCase specifies the input(s), the expected PokebotAnswer
+ * Each GoldenCase specifies the input(s), the expected OakAnswer
  * properties and tool-trace assertions, and the requirement IDs it covers.
  *
  * Determinism policy (design.md § Testing Strategy):
@@ -18,7 +18,7 @@
  *   "item/<slug>", "evolution-chain/<slug>", "learnset/<slug>".
  */
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 // ---------------------------------------------------------------------------
 // GoldenCase — contract (design.md § Interface Definitions, eval harness)
@@ -35,10 +35,10 @@ export interface GoldenCase {
   input: string | string[];
   expect: {
     /**
-     * When present, assert `PokebotAnswer.status === status`.
+     * When present, assert `OakAnswer.status === status`.
      * Omit for cases where the status varies or is LLM-judged.
      */
-    status?: PokebotAnswer["status"];
+    status?: OakAnswer["status"];
     /**
      * Assert `candidates.total_count >= minCandidates` for list answers.
      * Checks the agent found at least this many matches.

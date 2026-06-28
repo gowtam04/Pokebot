@@ -1,5 +1,5 @@
 /**
- * Agent runtime — `runPokebot` (design.md § Agent runtime; agent-design
+ * Agent runtime — `runOak` (design.md § Agent runtime; agent-design
  * integration.md § Invocation Signature). Phase 5.
  *
  * Drives one provider-NEUTRAL tool-loop turn. The transport (which model/SDK
@@ -19,16 +19,16 @@
  *      never forced. OpenAI/xAI map effort to reasoning_effort.)
  *   3. Echo the assistant content back opaquely, dispatch every tool call, and
  *      hand the provider-shaped tool results back in the next message(s).
- *   4. On `submit_answer`, validate the payload against the PokebotAnswer Zod
+ *   4. On `submit_answer`, validate the payload against the OakAnswer Zod
  *      schema. Valid → return it. Invalid → return the validation error and
  *      request a re-emit (≤ 2). After the budget is exhausted — or the iteration
  *      cap, or a turn with no tool call — synthesize an `insufficient_data`
- *      PokebotAnswer.
+ *      OakAnswer.
  *   5. Emit `onProgress` once per tool call, and assemble + log the per-turn
  *      pino trace (integration.md § Observability Hooks).
  *
  * Never throws for in-domain failures (unresolved entity / clarification /
- * PokeAPI down / loop-max / invalid-after-retry surface as a PokebotAnswer with
+ * PokeAPI down / loop-max / invalid-after-retry surface as a OakAnswer with
  * the right `status`). Transport/API faults from the provider stream propagate to
  * the route as exceptions (sse-types.ts: those become an `error` event).
  */
@@ -49,8 +49,8 @@ import type {
   ToolResult,
 } from "@/agent/providers/types";
 import {
-  pokebotAnswerSchema,
-  type PokebotAnswer,
+  oakAnswerSchema,
+  type OakAnswer,
   type PokemonProfile,
 } from "@/agent/schemas";
 import { enrichAnswer } from "@/agent/enrich-answer";
@@ -60,7 +60,7 @@ import type {
   OnAnswerDelta,
   OnAnswerStart,
   OnProgress,
-  RunPokebot,
+  RunOak,
 } from "@/agent/types";
 import { logTurn, type ToolTraceEntry, type TurnTrace } from "@/server/logger";
 
@@ -540,7 +540,7 @@ function formatZodIssues(error: import("zod").ZodError): string {
  * fallbacks (loop-max, invalid-after-retries, no-submit). Never user-blaming;
  * states plainly that the turn couldn't be completed (integration.md).
  */
-function synthesizeInsufficientData(reason: string): PokebotAnswer {
+function synthesizeInsufficientData(reason: string): OakAnswer {
   return {
     status: "insufficient_data",
     answer_markdown:
@@ -563,7 +563,7 @@ function synthesizeInsufficientData(reason: string): PokebotAnswer {
  * so the trace records that it bypassed the structured tool path. No citations or
  * inferences are available (the model never supplied them).
  */
-function synthesizeFromProse(prose: string): PokebotAnswer {
+function synthesizeFromProse(prose: string): OakAnswer {
   return {
     status: "answered",
     answer_markdown: prose,
@@ -614,10 +614,10 @@ function accumulateUsage(state: TraceState, usage: NormalizedUsage): void {
  * observable from the runtime seam.
  */
 function finalize(
-  answer: PokebotAnswer,
+  answer: OakAnswer,
   state: TraceState,
   ctx: AgentContext,
-): PokebotAnswer {
+): OakAnswer {
   const trace: TurnTrace = {
     request_id: ctx.requestId,
     session_id: sessionIdOf(ctx),
@@ -654,7 +654,7 @@ export async function runWithProvider(
   onProgress?: OnProgress,
   onAnswerStart?: OnAnswerStart,
   onAnswerDelta?: OnAnswerDelta,
-): Promise<PokebotAnswer> {
+): Promise<OakAnswer> {
   const state: TraceState = {
     startedAt: Date.now(),
     modelId: provider.apiModelId,
@@ -780,7 +780,7 @@ export async function runWithProvider(
     // provider to shape into the next transcript message(s) (Anthropic: one user
     // message of tool_result blocks; OpenAI: one {role:"tool"} message each).
     const toolResults: ToolResult[] = [];
-    let validAnswer: PokebotAnswer | null = null;
+    let validAnswer: OakAnswer | null = null;
     let submitFailed = false;
 
     for (const call of toolCalls) {
@@ -791,7 +791,7 @@ export async function runWithProvider(
 
       if (call.name === "submit_answer") {
         const started = Date.now();
-        const parsed = pokebotAnswerSchema.safeParse(call.input);
+        const parsed = oakAnswerSchema.safeParse(call.input);
         if (parsed.success) {
           validAnswer = parsed.data;
           state.toolTrace.push({
@@ -904,9 +904,9 @@ export async function runWithProvider(
 /**
  * Run the tool-loop against a raw Anthropic client. Retained as the existing
  * test seam (recorded-transcript injection wraps a fake client in the Anthropic
- * provider); production goes through {@link runPokebot}.
+ * provider); production goes through {@link runOak}.
  */
-export async function runPokebotWith(
+export async function runOakWith(
   client: AnthropicClientLike,
   message: string,
   history: ChatMessage[],
@@ -914,7 +914,7 @@ export async function runPokebotWith(
   onProgress?: OnProgress,
   onAnswerStart?: OnAnswerStart,
   onAnswerDelta?: OnAnswerDelta,
-): Promise<PokebotAnswer> {
+): Promise<OakAnswer> {
   const provider = new AnthropicProvider({}, client);
   return runWithProvider(
     provider,
@@ -929,10 +929,10 @@ export async function runPokebotWith(
 
 /**
  * The agent entry point. Selects the provider for `ctx.model` (default Claude),
- * runs the tool-loop, and returns a schema-valid PokebotAnswer. See the module
+ * runs the tool-loop, and returns a schema-valid OakAnswer. See the module
  * header for the full contract.
  */
-export const runPokebot: RunPokebot = (
+export const runOak: RunOak = (
   message,
   history,
   ctx,
@@ -950,4 +950,4 @@ export const runPokebot: RunPokebot = (
     onAnswerDelta,
   );
 
-export default runPokebot;
+export default runOak;

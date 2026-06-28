@@ -64,7 +64,7 @@ export function getHistory(sessionId: string): ChatMessage[] {
 
 /**
  * Appends one turn to the session history. Creates the session entry on first
- * use. Does NOT auto-trim; call `trim` before passing history to `runPokebot`
+ * use. Does NOT auto-trim; call `trim` before passing history to `runOak`
  * when you want to enforce the context budget.
  */
 export function appendTurn(sessionId: string, message: ChatMessage): void {

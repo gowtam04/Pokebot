@@ -2,16 +2,16 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=pokebot
-      - POSTGRES_PASSWORD=pokebot
-      - POSTGRES_DB=pokebot
+      - POSTGRES_USER=oak
+      - POSTGRES_PASSWORD=oak
+      - POSTGRES_DB=oak
     ports:
       - "5432:5432"        # exposed to the host for psql / drizzle-kit / local dev
     volumes:
       - pgdata:/var/lib/postgresql/data   # named volume → data survives `down`
     healthcheck:
       # web waits for this so the first ingest/migrate doesn't race the boot
-      test: ["CMD-SHELL", "pg_isready -U pokebot -d pokebot"]
+      test: ["CMD-SHELL", "pg_isready -U oak -d oak"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    image: pokebot-dev
+    image: oak-dev
     init: true                 # clean SIGINT/SIGTERM shutdown of next dev
     depends_on:
       db:
@@ -33,7 +33,7 @@ services:
       - NODE_ENV=development
       # The app + ingest connect here; `db` is the compose service hostname.
       # (Set in `environment` so it always wins over any stale value in .env.local.)
-      - DATABASE_URL=postgres://pokebot:pokebot@db:5432/pokebot
+      - DATABASE_URL=postgres://oak:oak@db:5432/oak
     env_file:
       # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does not
       # auto-load .env). ANTHROPIC_API_KEY comes from here — NOT a bare passthrough

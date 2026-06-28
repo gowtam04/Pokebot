@@ -6,7 +6,7 @@
  */
 
 /**
- * Output budget per turn. Comfortably fits the largest PokebotAnswer (candidate
+ * Output budget per turn. Comfortably fits the largest OakAnswer (candidate
  * lists + reasoning). All providers stream, so a non-streaming HTTP timeout does
  * not apply.
  */

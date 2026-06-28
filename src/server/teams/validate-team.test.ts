@@ -19,7 +19,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 
 import { validateTeam, type WarningCode } from "./validate-team";
@@ -73,7 +73,7 @@ function codes(warnings: { code: WarningCode }[]): WarningCode[] {
 }
 
 let fix: PgFixture;
-let db: PokebotDb;
+let db: OakDb;
 
 beforeAll(async () => {
   fix = await createPgSchema({ seed: "tools" });

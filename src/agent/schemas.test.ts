@@ -1,7 +1,7 @@
 /**
  * Unit tests for the team-builder additions to the agent schema contract
  * (src/agent/schemas.ts): the additive `proposed_team` field on the `.strict()`
- * PokebotAnswer (TEAM-AD-6) and the T12 `get_active_team` I/O.
+ * OakAnswer (TEAM-AD-6) and the T12 `get_active_team` I/O.
  *
  * Pure schema tests — no DB / server-only (schemas.ts pulls only the shared
  * team-schema and a type-only EnrichedActiveTeam import).
@@ -15,16 +15,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  pokebotAnswerSchema,
+  oakAnswerSchema,
   getActiveTeamInputSchema,
   TOOL_NAMES,
   toolInputJsonSchemas,
-  type PokebotAnswer,
+  type OakAnswer,
 } from "@/agent/schemas";
 import type { TeamMember } from "@/data/teams/team-schema";
 
-/** A minimal valid PokebotAnswer (the pre-team-builder required surface). */
-const BASE_ANSWER: PokebotAnswer = {
+/** A minimal valid OakAnswer (the pre-team-builder required surface). */
+const BASE_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "Bottom line.",
   reasoning_markdown: "Because.",
@@ -45,9 +45,9 @@ const MEMBER: TeamMember = {
   level: 50,
 };
 
-describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
+describe("oakAnswerSchema — proposed_team (TEAM-AD-6)", () => {
   it("parses a stored answer WITHOUT proposed_team (backward compatible)", () => {
-    const parsed = pokebotAnswerSchema.safeParse(BASE_ANSWER);
+    const parsed = oakAnswerSchema.safeParse(BASE_ANSWER);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.proposed_team).toBeUndefined();
@@ -55,7 +55,7 @@ describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
   });
 
   it("parses an answer carrying a valid proposed_team", () => {
-    const parsed = pokebotAnswerSchema.safeParse({
+    const parsed = oakAnswerSchema.safeParse({
       ...BASE_ANSWER,
       proposed_team: {
         name: "Rain Offense",
@@ -68,13 +68,13 @@ describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
 
   it("accepts both formats in proposed_team.format and rejects an unknown one", () => {
     for (const format of ["scarlet-violet", "champions"] as const) {
-      const parsed = pokebotAnswerSchema.safeParse({
+      const parsed = oakAnswerSchema.safeParse({
         ...BASE_ANSWER,
         proposed_team: { name: "T", format, members: [] },
       });
       expect(parsed.success).toBe(true);
     }
-    const bad = pokebotAnswerSchema.safeParse({
+    const bad = oakAnswerSchema.safeParse({
       ...BASE_ANSWER,
       proposed_team: { name: "T", format: "gen-1", members: [] },
     });
@@ -82,7 +82,7 @@ describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
   });
 
   it("rejects an unknown key inside proposed_team (.strict())", () => {
-    const parsed = pokebotAnswerSchema.safeParse({
+    const parsed = oakAnswerSchema.safeParse({
       ...BASE_ANSWER,
       proposed_team: {
         name: "T",
@@ -95,7 +95,7 @@ describe("pokebotAnswerSchema — proposed_team (TEAM-AD-6)", () => {
   });
 
   it("still rejects unknown TOP-LEVEL keys (the answer stays strict)", () => {
-    const parsed = pokebotAnswerSchema.safeParse({
+    const parsed = oakAnswerSchema.safeParse({
       ...BASE_ANSWER,
       not_a_field: true,
     });

@@ -12,7 +12,7 @@
  * species' legal ability slots), `learnset-repo.movesForPokemon` (move legality
  * for the active format), and the `searchable_names` master list (held-item
  * legality) — plus pure EV/IV/clause math. `@/data/schema` is import-safe (only
- * `@/data/db` is `server-only`); `PokebotDb` is imported type-only.
+ * `@/data/db` is `server-only`); `OakDb` is imported type-only.
  *
  * Checks (BR-T5), in stable per-slot then team-level order:
  *   - incomplete            — species unset OR < 4 moves (informational, BR-T4).
@@ -29,7 +29,7 @@
 
 import { and, eq } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 import { searchable_names } from "@/data/schema";
@@ -79,7 +79,7 @@ function statSum(spread: StatSpread): number {
 export async function validateTeam(
   members: TeamMember[],
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<TeamWarning[]> {
   const warnings: TeamWarning[] = [];
 

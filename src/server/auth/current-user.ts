@@ -22,7 +22,7 @@ import { readSessionCookie, resolveSessionToken } from "@/server/auth/sessions";
  * The signed-in `Account` for the current request, or `null` for a guest.
  *
  * Thin by design: `readSessionCookie()` pulls the opaque token from the
- * `pokebot_session` cookie and `resolveSessionToken()` maps it to its account
+ * `oak_session` cookie and `resolveSessionToken()` maps it to its account
  * (treating absent/expired/unknown tokens as `null`).
  */
 export async function getCurrentAccount(): Promise<Account | null> {

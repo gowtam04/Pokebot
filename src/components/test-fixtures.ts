@@ -1,5 +1,5 @@
 /**
- * Canonical PokebotAnswer fixtures for component tests (jsdom project).
+ * Canonical OakAnswer fixtures for component tests (jsdom project).
  *
  * These are plain-object constants — no server/native imports.  Every field from
  * output-formats.md is represented so leaf-component tests can pick the slices
@@ -7,7 +7,7 @@
  */
 
 import type {
-  PokebotAnswer,
+  OakAnswer,
   Subject,
   Candidates,
   Citation,
@@ -166,7 +166,7 @@ export const DAMAGE_CALC_GARCHOMP: DamageCalc = {
 // Canonical full-answer fixture (covers every optional field)
 // ---------------------------------------------------------------------------
 
-export const CANONICAL_ANSWER: PokebotAnswer = {
+export const CANONICAL_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown:
     "Garchomp learns Earthquake via TM in Gen 9 and has a base Speed stat of 102.",
@@ -186,7 +186,7 @@ export const CANONICAL_ANSWER: PokebotAnswer = {
 // Minimal answered answer (no optional fields)
 // ---------------------------------------------------------------------------
 
-export const MINIMAL_ANSWER: PokebotAnswer = {
+export const MINIMAL_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "Yes, Garchomp can learn Earthquake.",
   reasoning_markdown: "Checked Gen-9 learnset.",
@@ -199,7 +199,7 @@ export const MINIMAL_ANSWER: PokebotAnswer = {
 // Resolution-failed fixture (triggers SuggestionChips + CaveatStrip)
 // ---------------------------------------------------------------------------
 
-export const RESOLUTION_FAILED_ANSWER: PokebotAnswer = {
+export const RESOLUTION_FAILED_ANSWER: OakAnswer = {
   status: "resolution_failed",
   answer_markdown:
     "I couldn't find a Pokémon named 'Garcomp'. Did you mean Garchomp?",
@@ -214,7 +214,7 @@ export const RESOLUTION_FAILED_ANSWER: PokebotAnswer = {
 // Fallback-generation fixture
 // ---------------------------------------------------------------------------
 
-export const FALLBACK_ANSWER: PokebotAnswer = {
+export const FALLBACK_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "Mewtwo has a base Speed of 130 (Gen 1 data; not in Gen 9).",
   reasoning_markdown: "Mewtwo is not in Gen 9; falling back to Gen 1 data.",
@@ -235,7 +235,7 @@ export const FALLBACK_ANSWER: PokebotAnswer = {
 // Clarification-needed fixture
 // ---------------------------------------------------------------------------
 
-export const CLARIFICATION_ANSWER: PokebotAnswer = {
+export const CLARIFICATION_ANSWER: OakAnswer = {
   status: "clarification_needed",
   answer_markdown:
     "There are multiple Tauros forms in Gen 9. Which one do you mean?",
@@ -257,7 +257,7 @@ export const CLARIFICATION_ANSWER: PokebotAnswer = {
 // description, one does not, to exercise both render paths.
 // ---------------------------------------------------------------------------
 
-export const QUESTION_ANSWER: PokebotAnswer = {
+export const QUESTION_ANSWER: OakAnswer = {
   status: "clarification_needed",
   answer_markdown:
     "Trick Room teams differ a lot by format — are you building for Singles or Doubles?",

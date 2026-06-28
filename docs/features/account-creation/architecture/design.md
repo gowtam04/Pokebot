@@ -5,7 +5,7 @@
 Mode: PM
 Budget Tier: hobby
 
-This design adds **passwordless email-OTP accounts** to Pokebot while keeping an
+This design adds **passwordless email-OTP accounts** to Oak while keeping an
 **anonymous guest mode**. A single unified flow (enter email → 6-digit code →
 verify) both creates accounts and logs users in. Auth is layered as a **separate,
 cookie-based concern** that is orthogonal to the existing conversation
@@ -13,7 +13,7 @@ cookie-based concern** that is orthogonal to the existing conversation
 untouched, and the guest→user conversation carries over for free (the client
 keeps its `session_id` and `turns[]` across sign-in).
 
-The auth layer is **hand-rolled** (no auth library), consistent with Pokebot's
+The auth layer is **hand-rolled** (no auth library), consistent with Oak's
 existing hand-rolled rate-limiter, session store, and SSE client. Three new
 Postgres tables (`account`, `auth_session`, `otp_code`) hold identity; an opaque
 session token lives in an httpOnly cookie (its SHA-256 hash stored server-side);
@@ -158,7 +158,7 @@ the `tsx` ingest/eval/migrate scripts).
 
 All auth routes are `runtime = "nodejs"`, return plain JSON (mirroring the chat
 route's `jsonError` helper), and never reveal account existence on the request
-path (BR-A1). The session cookie is `pokebot_session`: httpOnly, `SameSite=Lax`,
+path (BR-A1). The session cookie is `oak_session`: httpOnly, `SameSite=Lax`,
 `Secure` in production, `Path=/`, `Max-Age` 30 days.
 
 ### `POST /api/auth/request-code`
@@ -308,7 +308,7 @@ export function timingSafeEqualHex(a: string, b: string): boolean; // length-che
 
 ### `src/server/auth/sessions.ts`
 ```ts
-export const SESSION_COOKIE = "pokebot_session";
+export const SESSION_COOKIE = "oak_session";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
 
 // Creates an auth_session row; returns the RAW token (only place it exists in plaintext).
@@ -609,7 +609,7 @@ integration_checkpoints:
   request caps are abuse-bounding and tolerate a restart reset on a single-instance
   hobby deploy. *Tradeoff:* throttle counters reset on restart and aren't shared
   across instances — acceptable per the existing rate-limiter's documented stance;
-  revisit if Pokebot ever runs multi-instance.
+  revisit if Oak ever runs multi-instance.
 
 - **AD-6 — Resend in prod, console transport in dev/test, behind one interface.**
   *Why:* no key needed for local dev or CI (the node test project must not send
@@ -644,7 +644,7 @@ Build & test commands (source of truth; mirrored in the Build Manifest):
   raw codes or tokens. *Fits:* free.
 - **Secrets:** env vars. `AUTH_SECRET` (required in prod; dev default provided),
   `RESEND_API_KEY` (optional — absent ⇒ console transport), `EMAIL_FROM` (default
-  `Pokebot <onboarding@resend.dev>`). Add to `.env.local` / the compose `env_file`
+  `Oak <onboarding@resend.dev>`). Add to `.env.local` / the compose `env_file`
   alongside `ANTHROPIC_API_KEY`. *Fits:* no secrets manager at this tier.
 - **Environments:** just-prod + local dev, as today.
 
@@ -670,5 +670,5 @@ Still needs the user's input (non-blocking for the build):
   launch (requirements Open Questions).
 - **Preserved-thread fate once chat history (B-3) lands** — whether to auto-save the
   preserved guest conversation to the new account. Deferred to B-3.
-- **Multi-instance** — if Pokebot ever scales past one process, the in-memory
+- **Multi-instance** — if Oak ever scales past one process, the in-memory
   throttle (AD-5) and conversation store need a shared backend.

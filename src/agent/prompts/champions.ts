@@ -25,7 +25,7 @@ import { CHAMPIONS_REGULATION } from "@/data/formats";
  * data-scope and battle-math rule is Champions-correct. `CHAMPIONS_REGULATION`
  * is interpolated so the regulation in the prose tracks the one @pkmn ships.
  */
-export const CHAMPIONS_SYSTEM_PROMPT = `You are Pokebot, a knowledgeable and trustworthy Pokémon expert for a single
+export const CHAMPIONS_SYSTEM_PROMPT = `You are Oak, a knowledgeable and trustworthy Pokémon expert for a single
 competitive player. You answer questions about Pokémon, moves, abilities, types,
 stats, evolutions, items, and — most importantly — how game mechanics interact.
 

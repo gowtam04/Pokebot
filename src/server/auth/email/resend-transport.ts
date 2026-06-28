@@ -23,13 +23,13 @@ function buildOtpEmail(code: string): {
   text: string;
   html: string;
 } {
-  const subject = "Your Pokebot sign-in code";
+  const subject = "Your Oak sign-in code";
   const text =
-    `Your Pokebot sign-in code is ${code}.\n\n` +
+    `Your Oak sign-in code is ${code}.\n\n` +
     `It expires in ${OTP_TTL_MINUTES} minutes and can be used once. ` +
     `If you did not request this, you can ignore this email.`;
   const html =
-    `<p>Your Pokebot sign-in code is:</p>` +
+    `<p>Your Oak sign-in code is:</p>` +
     `<p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>` +
     `<p>It expires in ${OTP_TTL_MINUTES} minutes and can be used once. ` +
     `If you did not request this, you can ignore this email.</p>`;

@@ -31,7 +31,7 @@ import { db } from "@/data/db";
 import { conversation, conversation_message } from "@/data/schema";
 import { deriveTitle } from "@/server/history/derive-title";
 import type { ChatTurn } from "@/components/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
 // ---------------------------------------------------------------------------
 // Row shapes (camelCase — § Interface Definitions)
@@ -63,7 +63,7 @@ export interface ConversationSummary {
   updatedAt: number;
 }
 
-/** One stored turn. `answerJson` is the full PokebotAnswer JSON on assistant rows. */
+/** One stored turn. `answerJson` is the full OakAnswer JSON on assistant rows. */
 export interface StoredTurn {
   id: string;
   role: "user" | "assistant";
@@ -197,7 +197,7 @@ export async function getMessages(
  * In ONE transaction: lock/create the conversation (create with the derived
  * title + format on the first turn, else bump `updated_at`), compute the next
  * `seq` as `COALESCE(MAX(seq), -1) + 1`, then insert the user row and the
- * assistant row (full `PokebotAnswer` in `answer_json`).
+ * assistant row (full `OakAnswer` in `answer_json`).
  *
  * NOT idempotent (unlike {@link importConversation}): the chat request carries
  * no client turn ids, so the route mints fresh `userTurnId`/`assistantTurnId`
@@ -212,7 +212,7 @@ export async function appendTurnPair(args: {
   userTurnId: string;
   userMessage: string;
   assistantTurnId: string;
-  answer: PokebotAnswer;
+  answer: OakAnswer;
   now: number;
   /**
    * The active team selected for this turn (BR-T9). `null` = none. When omitted

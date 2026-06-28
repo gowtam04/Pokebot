@@ -51,7 +51,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
 import {
@@ -183,7 +183,7 @@ type IndexMeta = { available: true } | { available: false };
  * a missing row or an unreadable table → `index_unavailable`.
  */
 async function readIndexMeta(
-  db: PokebotDb,
+  db: OakDb,
   format: Format,
 ): Promise<IndexMeta> {
   try {
@@ -206,7 +206,7 @@ async function readIndexMeta(
 const CANONICAL_TYPES = new Set<string>(TYPE_NAMES);
 
 async function abilityInIndex(
-  db: PokebotDb,
+  db: OakDb,
   abilitySlug: string,
   format: Format,
 ): Promise<boolean> {
@@ -228,7 +228,7 @@ async function abilityInIndex(
 }
 
 async function moveInIndex(
-  db: PokebotDb,
+  db: OakDb,
   moveSlug: string,
   format: Format,
 ): Promise<boolean> {
@@ -247,7 +247,7 @@ async function moveInIndex(
  * actual format-scoped index rows.
  */
 async function collectUnresolved(
-  db: PokebotDb,
+  db: OakDb,
   f: PokedexFilters,
   format: Format,
 ): Promise<string[]> {
@@ -275,7 +275,7 @@ async function collectUnresolved(
  * (Equivalent to learnset-repo.pokemonLearningAll.)
  */
 async function pokemonLearningAll(
-  db: PokebotDb,
+  db: OakDb,
   moveIds: string[],
   format: Format,
 ): Promise<string[]> {
@@ -298,7 +298,7 @@ async function pokemonLearningAll(
 export async function queryPokedex(
   f: PokedexFilters,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<QueryPokedexOutput> {
   const meta = await readIndexMeta(db, format);
   if (!meta.available) {
@@ -403,7 +403,7 @@ function normalizeName(name: string): string {
  * name — a lightweight nudge; resolve_entity (T1) is the real fuzzy matcher.
  */
 async function suggestionsFor(
-  db: PokebotDb,
+  db: OakDb,
   query: string,
   format: Format,
 ): Promise<string[]> {
@@ -428,7 +428,7 @@ async function suggestionsFor(
 export async function getPokemon(
   slug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<GetPokemonOutput> {
   const id = normalizeName(slug);
 
@@ -537,7 +537,7 @@ function slugifyName(name: string): string {
 export async function spriteRefsByNames(
   names: string[],
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<Map<string, SpriteRef>> {
   const out = new Map<string, SpriteRef>();
   const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
@@ -642,7 +642,7 @@ export interface AbilityHolderRow {
 export async function pokemonWithAbility(
   abilitySlug: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<AbilityHolderRow[]> {
   try {
     const rows = await db

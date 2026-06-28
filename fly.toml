@@ -1,5 +1,5 @@
-# Pokebot — single always-on machine, unmanaged Fly Postgres, region iad.
-app = "pokebot-gowtam"
+# Oak — single always-on machine, unmanaged Fly Postgres, region iad.
+app = "oak-gowtam"
 primary_region = "iad"
 
 # Cheap OOM insurance: Linux swap so a brief spike (Next SSR + Anthropic stream +

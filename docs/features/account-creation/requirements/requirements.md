@@ -1,7 +1,7 @@
 # Account Creation (Email + OTP Auth) — Business Requirements
 
 > Refines backlog item **B-1 — Account creation** (`docs/backlog.md`) into a
-> buildable spec. This feature changes Pokebot from a single-user, no-auth tool
+> buildable spec. This feature changes Oak from a single-user, no-auth tool
 > into a **multi-tenant** app with **passwordless email-OTP** accounts, while
 > keeping an **anonymous guest mode**. It supersedes the "Single user — no
 > authentication, accounts, or multi-user access control" stance in
@@ -12,7 +12,7 @@
 
 ## Overview
 
-Today Pokebot is single-user and stateless: there are no accounts, identity is a
+Today Oak is single-user and stateless: there are no accounts, identity is a
 server-controlled single session, and conversation history lives only in memory.
 This feature introduces **accounts** so the product can become genuinely
 multi-user and, later, persist per-person data (teams — B-2, chat history — B-3).
@@ -32,7 +32,7 @@ to — not a wall in front of the product.
 
 - Let anyone create an account and sign in using only their email address plus a
   one-time code — no password to choose, store, or reset.
-- Keep Pokebot instantly usable for anonymous guests; make signing in a low-
+- Keep Oak instantly usable for anonymous guests; make signing in a low-
   friction upgrade rather than a gate.
 - Establish a per-account identity that later features (saved teams, persisted
   chat history) can be scoped to, with strict isolation between accounts.
@@ -44,7 +44,7 @@ to — not a wall in front of the product.
   in one flow, with no password step, and the account exists afterward.
 - A returning user entering the same email is logged into the **same** account
   (no duplicate account is created).
-- An anonymous visitor can ask Pokebot questions and get answers without ever
+- An anonymous visitor can ask Oak questions and get answers without ever
   signing in.
 - A guest who signs in mid-conversation keeps the conversation that is on screen.
 - Signed-in users get a higher request allowance than guests, and one account
@@ -71,7 +71,7 @@ is no allowlist to manage and no cross-account visibility for anyone.
 
 ### Guest access
 
-- **AUTH-US-1** — As a visitor, I want to use Pokebot without creating an
+- **AUTH-US-1** — As a visitor, I want to use Oak without creating an
   account, so that I can get answers immediately.
   - **AC-1.1** — Given I have never signed in, when I open the app and submit a
     question, then I receive a normal answer without being required to
@@ -288,7 +288,7 @@ is no allowlist to manage and no cross-account visibility for anyone.
 - **Signed-in state.** The UI reflects that the user is signed in and offers
   **Sign out**. The conversation already on screen remains visible across
   sign-in (AUTH-US-6).
-- **Consistency.** Auth screens should match Pokebot's existing visual language
+- **Consistency.** Auth screens should match Oak's existing visual language
   (see `docs/design-system/design-system.md`); this feature does not introduce a
   new look-and-feel.
 
@@ -296,7 +296,7 @@ is no allowlist to manage and no cross-account visibility for anyone.
 
 > Inputs for the solution architect — not decisions made here.
 
-- **Existing stack (hard constraint).** Pokebot is a TypeScript / Next.js
+- **Existing stack (hard constraint).** Oak is a TypeScript / Next.js
   (App Router) monolith with a Drizzle + Postgres (node-postgres) data layer
   (see `CLAUDE.md`, `docs/architecture/design.md`). Identity, sessions, and
   one-time codes should live within this existing data layer rather than a

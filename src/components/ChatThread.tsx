@@ -87,7 +87,7 @@ export default function ChatThread({
     <div className="chat-thread" data-testid="chat-thread">
       {showEmptyState && (
         <div className="chat-empty" data-testid="chat-empty">
-          <span className="chat-empty__wordmark">Pokebot</span>
+          <span className="chat-empty__wordmark">Oak</span>
           <p className="chat-empty__invite">
             Ask anything about Pokémon — team-building filters, stat math, damage
             calcs, or a quick Pokédex lookup.

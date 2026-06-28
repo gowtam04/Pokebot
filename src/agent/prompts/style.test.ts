@@ -59,7 +59,7 @@ describe("GPT-5.5 style — tuned scaffolding", () => {
   });
 
   it("still carries the shared domain body", () => {
-    expect(text).toContain("You are Pokebot");
+    expect(text).toContain("You are Oak");
     expect(text).toContain("# How to use your tools");
   });
 });
@@ -78,6 +78,6 @@ describe("Grok 4.3 style — XML-tagged scaffolding", () => {
 
   it("includes the explicit stop condition and the shared domain body", () => {
     expect(text).toContain("<stop_condition>");
-    expect(text).toContain("You are Pokebot");
+    expect(text).toContain("You are Oak");
   });
 });

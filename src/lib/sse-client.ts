@@ -27,7 +27,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type {
   AnswerDeltaEvent,
   AnswerEvent,
@@ -168,13 +168,13 @@ export interface SseClientState {
    */
   activities: ToolActivityEvent[];
   /**
-   * The terminal `PokebotAnswer` for the current turn, or `null` while the
+   * The terminal `OakAnswer` for the current turn, or `null` while the
    * request is in-flight or when there is a transport error.
    *
    * Check `answer.status` for in-domain failure kinds
    * (`resolution_failed`, `clarification_needed`, `insufficient_data`).
    */
-  answer: PokebotAnswer | null;
+  answer: OakAnswer | null;
   /**
    * Answer prose accumulated from `answer_delta` events for the in-flight turn.
    * Reset to "" on each `send` and on `answer_start` (a re-emitted answer), and

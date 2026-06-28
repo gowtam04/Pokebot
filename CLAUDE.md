@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Pokebot is a single-user web chat agent that answers natural-language Pokémon questions (filters, lookups, mechanics reasoning, battle math). Its defining trait is that it **reasons on top of data**: tools supply raw facts (move priority, ability effect text, type charts, base stats) and the agent deduces how they interact. Every answer carries reasoning, cited sources, explicit inference/uncertainty flags, and the generation/format it's based on.
+Oak is a single-user web chat agent that answers natural-language Pokémon questions (filters, lookups, mechanics reasoning, battle math). Its defining trait is that it **reasons on top of data**: tools supply raw facts (move priority, ability effect text, type charts, base stats) and the agent deduces how they interact. Every answer carries reasoning, cited sources, explicit inference/uncertainty flags, and the generation/format it's based on.
 
-The agent's internals (topology, the 11 tools, prompts, the `PokebotAnswer` output schema, eval spec) are **fixed by design** in `docs/agent-design/`. The surrounding system (data store, ingest, tool wiring, web API, frontend, eval harness) is specified in `docs/architecture/design.md`. When agent internals and the architecture doc disagree, agent-design wins on internals; the architecture doc wins on stack/storage/layout.
+The agent's internals (topology, the 11 tools, prompts, the `OakAnswer` output schema, eval spec) are **fixed by design** in `docs/agent-design/`. The surrounding system (data store, ingest, tool wiring, web API, frontend, eval harness) is specified in `docs/architecture/design.md`. When agent internals and the architecture doc disagree, agent-design wins on internals; the architecture doc wins on stack/storage/layout.
 
 > Note: `README.md` is stale — it claims "design phase, no code yet." The app is fully implemented. Trust the code and `docs/`, not the README's status line.
 
@@ -61,12 +61,12 @@ A single **TypeScript / Next.js (App Router) monolith**. One language across fro
 ### Request flow
 
 ```
-POST /api/chat (SSE)  →  runPokebot (tool-loop)  →  11 tools  →  repos  →  Postgres
+POST /api/chat (SSE)  →  runOak (tool-loop)  →  11 tools  →  repos  →  Postgres
    src/app/api/chat/route.ts      src/agent/runtime.ts   src/agent/tools/   src/data/repos/   node-postgres @ $DATABASE_URL
 ```
 
 - **`route.ts`** validates the body `{ session_id, message, champions_mode }`, applies the input-length cap + per-session rate limit *before* opening the stream, resolves prior history from the in-memory session store, then streams SSE events: `tool_activity`\* (one per tool call) → `answer_start`/`answer_delta`\* (token-by-token `answer_markdown`) → exactly one terminal `answer`. Only a transport/API fault emits an `error` event — every in-domain failure rides a normal `answer` event with the appropriate `status`. `runtime = "nodejs"`, `dynamic = "force-dynamic"`; the runtime is **dynamically imported** inside the request so `next build` doesn't evaluate `env` (which throws on a missing API key) at build time.
-- **`runtime.ts`** drives one Claude tool-loop turn (model is `ANTHROPIC_MODEL`, default Sonnet 4.6). It assembles a byte-identical, prompt-cached prefix (system + few-shot + 11 tool defs), appends history + message, loops ≤ `MAX_ITERATIONS` (10), and validates the `submit_answer` payload against the `PokebotAnswer` Zod schema (≤2 re-emits on failure, else synthesizes an `insufficient_data` answer). It **never throws for in-domain failures** — those return a valid `PokebotAnswer`; only transport faults propagate.
+- **`runtime.ts`** drives one Claude tool-loop turn (model is `ANTHROPIC_MODEL`, default Sonnet 4.6). It assembles a byte-identical, prompt-cached prefix (system + few-shot + 11 tool defs), appends history + message, loops ≤ `MAX_ITERATIONS` (10), and validates the `submit_answer` payload against the `OakAnswer` Zod schema (≤2 re-emits on failure, else synthesizes an `insufficient_data` answer). It **never throws for in-domain failures** — those return a valid `OakAnswer`; only transport faults propagate.
 - **Tools** (`src/agent/tools/`, T1–T11, names fixed by `docs/agent-design/tools.md`) wrap repos + formulas and return the exact structured shapes the model reasons about. They **never throw in-domain** — they return documented shapes like `{ found:false, suggestions }`, `{ unresolved:[…] }`, `{ error:"index_unavailable" }`. `index.ts` is the barrel exporting `tools` and `dispatch`.
 
 ### Data layer — built from `@pkmn`, not PokeAPI
@@ -87,7 +87,7 @@ The index stores one row-set **per format**, discriminated by a `format` column 
 - **Zod is the single source of truth** (`src/agent/schemas.ts`): runtime validation, inferred TS types, and the Anthropic tool / `submit_answer` JSON Schemas (via `zod-to-json-schema`) all derive from one definition. Don't hand-maintain a duplicate JSON Schema.
 - **Tool names and tool output field names are a contract** the model depends on (`tools.md` / `output-formats.md`). Never rename them.
 - **Error styles split at the runtime/route seam:** Result unions / structured shapes in the tool+data layer (never throw in-domain); try/catch → error mapping at the HTTP edge.
-- **Frontend** (`src/components/`) renders a `PokebotAnswer` field-by-field (`AnswerCard` tree). Component tests render fixture payloads only and must **never** import db/repos/runtime — they pull `server-only`/open a Postgres pool, and the jsdom project has no Testcontainers Postgres.
+- **Frontend** (`src/components/`) renders a `OakAnswer` field-by-field (`AnswerCard` tree). Component tests render fixture payloads only and must **never** import db/repos/runtime — they pull `server-only`/open a Postgres pool, and the jsdom project has no Testcontainers Postgres.
 
 ## Testing
 
@@ -102,6 +102,6 @@ What's real vs. faked: Postgres (a real migrated+seeded schema), the tool layer,
 - **Dev runs in Docker; host `npm install` doesn't reach the container.** After adding a dependency, refresh the anonymous `node_modules` volume (it masks the host's macOS modules with the container's Linux build) — a plain restart won't pick up new packages.
 - **`npm test` needs a Docker daemon** (Testcontainers Postgres for the node project). `typecheck`, `lint`, and `npm run test:components` (jsdom) run without Docker.
 - **Migrate + re-ingest after any schema change.** Migrations are no longer applied on connect. Run `npm run db:migrate` then `npm run ingest` (or just `npm run docker:ingest`, which migrates first); the ingest write path DELETEs + recreates table contents, so a stale/empty DB otherwise reads as `index_unavailable`.
-- **`resolve_entity` (resolve-index) reads the `@/data/db` singleton, not `ctx.db`.** Tests that exercise resolution must `installAsSingleton(fix)` (which sets `globalThis.__pokebotDb` + resets the resolve cache), not only bind `ctx.db`.
+- **`resolve_entity` (resolve-index) reads the `@/data/db` singleton, not `ctx.db`.** Tests that exercise resolution must `installAsSingleton(fix)` (which sets `globalThis.__oakDb` + resets the resolve cache), not only bind `ctx.db`.
 - **Don't force `tool_choice` while thinking is on.** Thinking + a forced `tool_choice` is a hard 400 on Sonnet 4.6. The loop uses `tool_choice: "auto"` + adaptive thinking and drives `submit_answer` via the system prompt and the max-iteration guard. If you change this, keep the iteration cap.
 - **`env` is validated at module load and throws on a missing `ANTHROPIC_API_KEY`.** That's why the route dynamically imports the runtime and `drizzle.config.ts` reads `DATABASE_URL` directly instead of importing `src/env.ts`. (`DATABASE_URL` itself has a dev default, so it's not required to boot.)

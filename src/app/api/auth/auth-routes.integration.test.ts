@@ -324,7 +324,7 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
 
     expect(verifyCap.setCookies).toHaveLength(1);
     const setCookie = verifyCap.setCookies[0]!;
-    expect(setCookie).toMatch(/^pokebot_session=/);
+    expect(setCookie).toMatch(/^oak_session=/);
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Lax");
     expect(setCookie).toContain("Path=/");
@@ -333,13 +333,13 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
     expect(setCookie).not.toMatch(/secure/i);
 
     const sessionToken = setCookie
-      .slice("pokebot_session=".length)
+      .slice("oak_session=".length)
       .split(";")[0]!;
     expect(sessionToken).toMatch(/^[0-9a-f]{64}$/);
     // The session row is real and exactly one.
     expect(await sessionCount()).toBe(1);
     // Cookie was threaded into the browser jar.
-    expect(browser.get("pokebot_session")).toBe(sessionToken);
+    expect(browser.get("oak_session")).toBe(sessionToken);
 
     // --- 3. me → signed in --------------------------------------------------
     const meIn = await callRoute(() => meRoute.GET());
@@ -352,10 +352,10 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
     expect(bodyJson(signoutCap)).toEqual({ ok: true });
     expect(signoutCap.setCookies).toHaveLength(1);
     const clearCookie = signoutCap.setCookies[0]!;
-    expect(clearCookie).toMatch(/^pokebot_session=;/); // empty value
+    expect(clearCookie).toMatch(/^oak_session=;/); // empty value
     expect(clearCookie).toContain("Max-Age=0");
     // Threaded out of the browser jar.
-    expect(browser.has("pokebot_session")).toBe(false);
+    expect(browser.has("oak_session")).toBe(false);
 
     // --- 5. me → signed out; the ROW is gone, not merely the cookie ---------
     const meOut = await callRoute(() => meRoute.GET());
@@ -366,10 +366,10 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
 
     // Replay the OLD token (as a client that kept the cookie would): still
     // signed out, because the session was revoked server-side — not just locally.
-    browser.set("pokebot_session", sessionToken);
+    browser.set("oak_session", sessionToken);
     const meReplay = await callRoute(() => meRoute.GET());
     expect(bodyJson(meReplay)).toEqual({ signedIn: false });
-    browser.delete("pokebot_session");
+    browser.delete("oak_session");
 
     // --- no raw code / token / secret in any response body or header --------
     const secrets = [code, sessionToken, env.AUTH_SECRET];

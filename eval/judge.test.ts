@@ -17,12 +17,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { AgentContext } from "@/agent/types";
 
 // ── Mock @/agent/runtime to prevent SQLite / Anthropic imports ─────────────
 vi.mock("@/agent/runtime", () => ({
-  runPokebot: vi.fn(),
+  runOak: vi.fn(),
   default: vi.fn(),
 }));
 
@@ -31,12 +31,12 @@ import {
   runJudgedWith,
   type GoldenCase,
   type JudgeClientLike,
-  type RunPokebotFn,
+  type RunOakFn,
 } from "./judge";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const BASE_ANSWER: PokebotAnswer = {
+const BASE_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "Garchomp is Dragon/Ground with 102 base Speed.",
   reasoning_markdown: "Looked up Garchomp's profile.",
@@ -45,7 +45,7 @@ const BASE_ANSWER: PokebotAnswer = {
   generation_basis: { generation: "gen-9", fallback: false },
 };
 
-const CANDIDATE_ANSWER: PokebotAnswer = {
+const CANDIDATE_ANSWER: OakAnswer = {
   ...BASE_ANSWER,
   candidates: {
     total_count: 6,
@@ -65,7 +65,7 @@ const CANDIDATE_ANSWER: PokebotAnswer = {
   },
 };
 
-const FALLBACK_ANSWER: PokebotAnswer = {
+const FALLBACK_ANSWER: OakAnswer = {
   ...BASE_ANSWER,
   subjects: [
     {
@@ -141,10 +141,10 @@ function mockJudgeClient(judgment: MockJudgment): JudgeClientLike {
   };
 }
 
-function mockRunPokebot(
-  answer: PokebotAnswer,
+function mockRunOak(
+  answer: OakAnswer,
   toolsToEmit: string[] = [],
-): RunPokebotFn {
+): RunOakFn {
   const fn = vi
     .fn()
     .mockImplementation(
@@ -160,7 +160,7 @@ function mockRunPokebot(
         return answer;
       },
     );
-  return fn as unknown as RunPokebotFn;
+  return fn as unknown as RunOakFn;
 }
 
 const PASSING_JUDGMENT: MockJudgment = {
@@ -347,7 +347,7 @@ describe("runStructural", () => {
 
   describe("citation_presence assertion (BR-4)", () => {
     it("fails for answered factual answer with empty citations and subjects", () => {
-      const factualWithoutCitations: PokebotAnswer = {
+      const factualWithoutCitations: OakAnswer = {
         ...BASE_ANSWER,
         citations: [],
         subjects: [
@@ -367,7 +367,7 @@ describe("runStructural", () => {
     });
 
     it("does NOT fail for answered scope-decline with no subjects/candidates/damage_calc", () => {
-      const scopeDecline: PokebotAnswer = {
+      const scopeDecline: OakAnswer = {
         status: "answered",
         answer_markdown: "Egg moves are outside what I cover.",
         reasoning_markdown: "Out of scope.",
@@ -383,7 +383,7 @@ describe("runStructural", () => {
     });
 
     it("does NOT fail for clarification_needed with empty citations", () => {
-      const clarification: PokebotAnswer = {
+      const clarification: OakAnswer = {
         status: "clarification_needed",
         answer_markdown: 'Did you mean "Will-O-Wisp"?',
         reasoning_markdown: "Name not found.",
@@ -402,7 +402,7 @@ describe("runStructural", () => {
 
   describe("generation_correctness assertion (BR-1)", () => {
     it("fails when subjects has is_fallback=true but generation_basis.fallback=false", () => {
-      const bad: PokebotAnswer = {
+      const bad: OakAnswer = {
         ...FALLBACK_ANSWER,
         generation_basis: { generation: "gen-9", fallback: false }, // inconsistent
       };
@@ -437,18 +437,18 @@ describe("runStructural", () => {
 
 describe("runJudgedWith", () => {
   let judgeClient: JudgeClientLike;
-  let runPokebot: RunPokebotFn;
+  let runOak: RunOakFn;
 
   beforeEach(() => {
     judgeClient = mockJudgeClient(PASSING_JUDGMENT);
-    runPokebot = mockRunPokebot(BASE_ANSWER, ["query_pokedex"]);
+    runOak = mockRunOak(BASE_ANSWER, ["query_pokedex"]);
   });
 
-  it("calls runPokebot once for a single-turn case", async () => {
+  it("calls runOak once for a single-turn case", async () => {
     const gc = makeGoldenCase({ input: "is Garchomp fast?" });
-    await runJudgedWith([gc], SILENT_CTX, judgeClient, runPokebot);
-    expect(runPokebot).toHaveBeenCalledOnce();
-    expect(runPokebot).toHaveBeenCalledWith(
+    await runJudgedWith([gc], SILENT_CTX, judgeClient, runOak);
+    expect(runOak).toHaveBeenCalledOnce();
+    expect(runOak).toHaveBeenCalledWith(
       "is Garchomp fast?",
       [],
       SILENT_CTX,
@@ -456,7 +456,7 @@ describe("runJudgedWith", () => {
     );
   });
 
-  it("calls runPokebot once per turn for a multi-turn case", async () => {
+  it("calls runOak once per turn for a multi-turn case", async () => {
     const gc = makeGoldenCase({
       id: "G19",
       input: [
@@ -465,8 +465,8 @@ describe("runJudgedWith", () => {
       ],
       covers: ["US-10"],
     });
-    await runJudgedWith([gc], SILENT_CTX, judgeClient, runPokebot);
-    expect(runPokebot).toHaveBeenCalledTimes(2);
+    await runJudgedWith([gc], SILENT_CTX, judgeClient, runOak);
+    expect(runOak).toHaveBeenCalledTimes(2);
   });
 
   it("passes accumulated history to subsequent turns", async () => {
@@ -475,16 +475,16 @@ describe("runJudgedWith", () => {
       input: ["first question", "follow-up question"],
       covers: [],
     });
-    await runJudgedWith([gc], SILENT_CTX, judgeClient, runPokebot);
+    await runJudgedWith([gc], SILENT_CTX, judgeClient, runOak);
 
-    const secondCallArgs = vi.mocked(runPokebot).mock.calls[1];
+    const secondCallArgs = vi.mocked(runOak).mock.calls[1];
     // Second call should have non-empty history (the first turn's exchange).
     const history = secondCallArgs[1] as unknown[];
     expect(history).toHaveLength(2); // one user turn + one assistant turn
   });
 
   it("captures tool calls from onProgress into JudgeResult.toolCalls", async () => {
-    runPokebot = mockRunPokebot(BASE_ANSWER, [
+    runOak = mockRunOak(BASE_ANSWER, [
       "query_pokedex",
       "get_pokemon",
       "submit_answer",
@@ -494,7 +494,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.toolCalls).toEqual([
       "query_pokedex",
@@ -505,7 +505,7 @@ describe("runJudgedWith", () => {
 
   it("calls the judge client once per case", async () => {
     const cases = [makeGoldenCase({ id: "G1" }), makeGoldenCase({ id: "G2" })];
-    await runJudgedWith(cases, SILENT_CTX, judgeClient, runPokebot);
+    await runJudgedWith(cases, SILENT_CTX, judgeClient, runOak);
     expect(judgeClient.messages.create).toHaveBeenCalledTimes(2);
   });
 
@@ -518,19 +518,19 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.caseId).toBe("G5");
     expect(result.input).toBe("Fire types with Flash Fire");
   });
 
-  it("returns the PokebotAnswer produced by runPokebot", async () => {
+  it("returns the OakAnswer produced by runOak", async () => {
     const gc = makeGoldenCase();
     const [result] = await runJudgedWith(
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.answer).toEqual(BASE_ANSWER);
   });
@@ -541,7 +541,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.covers).toEqual(["US-1", "BR-7"]);
   });
@@ -552,7 +552,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     const dimNames = result.scores.map((s) => s.dimension);
     expect(dimNames).toEqual(
@@ -573,7 +573,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.overallPass).toBe(true);
     expect(result.structuralFailures).toHaveLength(0);
@@ -586,7 +586,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.overallPass).toBe(false);
     expect(result.structuralFailures).not.toHaveLength(0);
@@ -602,7 +602,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.overallPass).toBe(false);
     const failing = result.scores.find(
@@ -622,7 +622,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.overallPass).toBe(true);
     const partial = result.scores.find((s) => s.dimension === "transparency");
@@ -636,7 +636,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(result.agentLatencyMs).toBeGreaterThanOrEqual(0);
     expect(result.judgeLatencyMs).toBeGreaterThanOrEqual(0);
@@ -647,10 +647,10 @@ describe("runJudgedWith", () => {
       [],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     expect(results).toEqual([]);
-    expect(runPokebot).not.toHaveBeenCalled();
+    expect(runOak).not.toHaveBeenCalled();
     expect(judgeClient.messages.create).not.toHaveBeenCalled();
   });
 
@@ -667,7 +667,7 @@ describe("runJudgedWith", () => {
       [gc],
       SILENT_CTX,
       judgeClient,
-      runPokebot,
+      runOak,
     );
     const mech = result.scores.find(
       (s) => s.dimension === "mechanics_precision",
@@ -690,7 +690,7 @@ describe("score clamping", () => {
       [gc],
       SILENT_CTX,
       client,
-      mockRunPokebot(BASE_ANSWER),
+      mockRunOak(BASE_ANSWER),
     );
     const scopeScore = result.scores.find(
       (s) => s.dimension === "scope_adherence",
@@ -709,7 +709,7 @@ describe("score clamping", () => {
       [gc],
       SILENT_CTX,
       client,
-      mockRunPokebot(BASE_ANSWER),
+      mockRunOak(BASE_ANSWER),
     );
     const correctness = result.scores.find(
       (s) => s.dimension === "answer_correctness",
@@ -742,7 +742,7 @@ describe("judge fallback", () => {
       [gc],
       SILENT_CTX,
       noToolClient,
-      mockRunPokebot(BASE_ANSWER),
+      mockRunOak(BASE_ANSWER),
     );
     // All scores should default to 1 (partial pass)
     expect(result.scores.every((s) => s.score === 1 && s.pass === true)).toBe(

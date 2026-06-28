@@ -18,7 +18,7 @@ import {
 import { getReference } from "@/data/repos/reference-cache";
 import { gen9LearnerCount } from "@/data/repos/learnset-repo";
 import { formatForMode } from "@/data/formats";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 
 const description =
   "Get a move's mechanical details — type, power, accuracy, PP, priority, " +
@@ -59,7 +59,7 @@ export const getMoveTool: ToolDef = {
         gen9_learner_count: await gen9LearnerCount(
           name,
           format,
-          ctx.db as unknown as PokebotDb,
+          ctx.db as unknown as OakDb,
         ),
       };
     }

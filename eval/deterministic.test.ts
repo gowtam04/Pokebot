@@ -6,7 +6,7 @@
  *
  * Runs in the Vitest node project (the eval test glob) so the real tool layer
  * + Postgres fixture schema are available. The Anthropic client is mocked
- * inside runDeterministic (a scripted transcript via runPokebotWith), so this
+ * inside runDeterministic (a scripted transcript via runOakWith), so this
  * test NEVER reaches the network — the dummy ANTHROPIC_API_KEY from
  * vitest.config.ts is enough and no real model call can occur.
  *

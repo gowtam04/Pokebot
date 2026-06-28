@@ -623,7 +623,7 @@ answer is based on, and the Pokémon/candidates/calc results to display. If you
 couldn't resolve an entity or need clarification, set `status` accordingly and
 provide `suggestions`.
 
-**Input schema:** the full `PokebotAnswer` object — see `output-formats.md` for
+**Input schema:** the full `OakAnswer` object — see `output-formats.md` for
 the complete JSON Schema and field semantics.
 
 **Side effects:** Terminates the agent loop; the payload is returned to the

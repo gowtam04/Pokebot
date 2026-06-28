@@ -17,7 +17,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 import { exportPaste, importPaste } from "./import-export";
@@ -26,11 +26,11 @@ import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 const SV = "scarlet-violet" as const;
 
 let fixture: PgFixture;
-let db: PokebotDb;
+let db: OakDb;
 
 beforeAll(async () => {
   fixture = await createPgSchema({ seed: "tools" });
-  db = fixture.db as unknown as PokebotDb;
+  db = fixture.db as unknown as OakDb;
 });
 
 afterAll(async () => {

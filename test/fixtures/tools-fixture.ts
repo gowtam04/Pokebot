@@ -39,7 +39,7 @@ import {
 } from "@/data/schema";
 import type { AgentContext } from "@/agent/types";
 
-/** A Drizzle handle typed over the full Pokebot schema (node-postgres). */
+/** A Drizzle handle typed over the full Oak schema (node-postgres). */
 export type ToolsFixtureDb = NodePgDatabase<typeof schema>;
 
 // ---------------------------------------------------------------------------

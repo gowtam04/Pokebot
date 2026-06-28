@@ -25,9 +25,9 @@ type SetupContext = { provide: (key: "PG_CONN_URI", value: string) => void };
 
 export async function setup({ provide }: SetupContext): Promise<void> {
   container = await new PostgreSqlContainer("postgres:16-alpine")
-    .withDatabase("pokebot_test")
-    .withUsername("pokebot")
-    .withPassword("pokebot")
+    .withDatabase("oak_test")
+    .withUsername("oak")
+    .withPassword("oak")
     // Headroom for the many small per-file pools running concurrently.
     .withCommand(["postgres", "-c", "max_connections=200"])
     .start();

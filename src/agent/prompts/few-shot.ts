@@ -1,5 +1,5 @@
 /**
- * Pokebot few-shot examples — transcribed VERBATIM from
+ * Oak few-shot examples — transcribed VERBATIM from
  * `docs/agent-design/prompts.md` ("Few-Shot Examples", Examples A–E).
  *
  * These examples live in the cacheable stable prefix (system + tool defs +
@@ -7,7 +7,7 @@
  * Anthropic prompt cache to hit. Do NOT author or fill in the abbreviated tool
  * transcripts — `prompts.md` is the source of truth. Tool calls are shown as
  * `→ tool(args)` / `← result` exactly as in the doc; each example ends in a
- * `submit_answer` call carrying the PokebotAnswer (see output-formats.md).
+ * `submit_answer` call carrying the OakAnswer (see output-formats.md).
  */
 
 /** A single transcribed few-shot example (A–E). */

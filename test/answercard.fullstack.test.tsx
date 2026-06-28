@@ -1,6 +1,6 @@
 /**
  * FULL-STACK-E2E CHECKPOINT (frontend half) — renders EACH canonical
- * `PokebotAnswer` payload from output-formats.md through the top-level
+ * `OakAnswer` payload from output-formats.md through the top-level
  * <AnswerCard/> and asserts the mapped leaf components appear (the consumer
  * contract in output-formats.md / ux-design.md).
  *

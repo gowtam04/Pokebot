@@ -29,7 +29,7 @@ vi.mock("@/server/auth/current-user", () => ({ getCurrentAccount: meMock }));
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { Account } from "@/data/repos/accounts-repo";
 
 // Route handlers (their repo + current-user are loaded dynamically at call time,
@@ -74,7 +74,7 @@ function signedInAs(account: Account | null): void {
   meMock.mockResolvedValue(account);
 }
 
-function makeAnswer(markdown: string): PokebotAnswer {
+function makeAnswer(markdown: string): OakAnswer {
   return {
     status: "answered",
     answer_markdown: markdown,

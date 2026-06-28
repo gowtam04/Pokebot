@@ -1,7 +1,7 @@
 /**
  * Focused unit tests for submit_answer (T11) — not covered by the oracle suite.
  *
- * Asserts the validation contract: a schema-valid PokebotAnswer echoes back; an
+ * Asserts the validation contract: a schema-valid OakAnswer echoes back; an
  * invalid payload resolves to { error: "invalid_input", detail } (so the runtime
  * can request a re-emit) and NEVER throws.
  */
@@ -9,9 +9,9 @@
 import { describe, expect, it } from "vitest";
 
 import { submitAnswerTool } from "./submit-answer";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 
-const valid: PokebotAnswer = {
+const valid: OakAnswer = {
   status: "answered",
   answer_markdown: "Garchomp is Dragon/Ground.",
   reasoning_markdown: "Looked up the profile.",
@@ -26,7 +26,7 @@ describe("submit_answer (T11)", () => {
     expect(submitAnswerTool.inputSchema).toMatchObject({ type: "object" });
   });
 
-  it("echoes a valid PokebotAnswer back unchanged", async () => {
+  it("echoes a valid OakAnswer back unchanged", async () => {
     const out = await submitAnswerTool.run(valid, {} as never);
     expect(out).toEqual(valid);
   });

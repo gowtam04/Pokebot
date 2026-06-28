@@ -21,14 +21,14 @@
  *     re-export), never `@pkmn/sets` directly — keeping that dependency isolated
  *     to `src/data/pkmn`.
  *   - It reads `searchable_names` through the supplied Drizzle handle (type-only
- *     `PokebotDb` import, like the repos) so it stays exercisable against a
+ *     `OakDb` import, like the repos) so it stays exercisable against a
  *     fixture DB without opening its own connection. Natures are not in the
  *     index, so they validate against the fixed 25-nature set below.
  */
 
 import { eq } from "drizzle-orm";
 
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
 import { searchable_names } from "@/data/schema";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
@@ -105,7 +105,7 @@ interface Resolver {
   display: Record<IndexKind, Map<string, string>>;
 }
 
-async function buildResolver(format: Format, db: PokebotDb): Promise<Resolver> {
+async function buildResolver(format: Format, db: OakDb): Promise<Resolver> {
   const rows = (await db
     .select({
       kind: searchable_names.kind,
@@ -299,7 +299,7 @@ function mapSet(
 export async function importPaste(
   paste: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<{ members: TeamMember[]; notes: ImportNote[] }> {
   const sets = parseShowdown(paste);
   if (sets.length === 0) return { members: [], notes: [] };
@@ -344,7 +344,7 @@ function memberToSet(member: TeamMember, resolver: Resolver): ShowdownSet {
 export async function exportPaste(
   members: TeamMember[],
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<string> {
   if (!members || members.length === 0) return "";
   const resolver = await buildResolver(format, db);

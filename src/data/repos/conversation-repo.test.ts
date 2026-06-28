@@ -32,7 +32,7 @@ import {
   type PgFixture,
 } from "../../../test/support/pg";
 
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { ChatTurn } from "@/components/types";
 
 type Repo = typeof import("./conversation-repo");
@@ -65,7 +65,7 @@ const ACCT_B = "account-b";
 const SV = "scarlet-violet";
 const CH = "champions";
 
-function makeAnswer(markdown: string): PokebotAnswer {
+function makeAnswer(markdown: string): OakAnswer {
   return {
     status: "answered",
     answer_markdown: markdown,
@@ -134,7 +134,7 @@ describe("appendTurnPair", () => {
       [1, "assistant", "hello there"],
     ]);
     expect(turns[0].answerJson).toBeNull();
-    const parsed = JSON.parse(turns[1].answerJson!) as PokebotAnswer;
+    const parsed = JSON.parse(turns[1].answerJson!) as OakAnswer;
     expect(parsed.answer_markdown).toBe("hello there");
     expect(parsed.status).toBe("answered");
   });

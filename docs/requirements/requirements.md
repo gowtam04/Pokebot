@@ -1,8 +1,8 @@
-# Pokebot — Business Requirements
+# Oak — Business Requirements
 
 ## Overview
 
-Pokebot is a **personal, web-based chat agent** that answers natural-language
+Oak is a **personal, web-based chat agent** that answers natural-language
 questions about Pokemon — their moves, abilities, types, stats, evolutions,
 items, and game-mechanic interactions. The user types questions in plain
 English (e.g. _"find me a Pokemon that can learn both Trick Room and
@@ -21,7 +21,7 @@ The product serves two blended use cases equally:
 2. **General Pokedex curiosity** — looking up individual Pokemon, evolutions,
    type matchups, items, and trivia.
 
-A defining characteristic of Pokebot is that it is **not just a data filter** —
+A defining characteristic of Oak is that it is **not just a data filter** —
 it reasons about game mechanics. PokeAPI supplies the raw building blocks (move
 priority values, ability effect text, type charts), but deducing how those
 pieces interact ("Fake Out is a priority move; Armor Tail negates priority
@@ -269,7 +269,7 @@ See the [Out of Scope](#out-of-scope) section.
 - **Single user.** Personal tool; no authentication, accounts, or multi-user
   access control required.
   - **SUPERSEDED (auth dimension) by B-1 — Account Creation.** As of the
-    Account Creation feature, Pokebot is multi-tenant with passwordless
+    Account Creation feature, Oak is multi-tenant with passwordless
     email-OTP accounts plus a retained anonymous guest mode, so the "no
     authentication / accounts / multi-user access control" stance no longer
     holds for the auth dimension. History preserved above for context. See

@@ -15,18 +15,18 @@
  * Wiring mirrors the runtime-g4 oracle: neutralize `server-only`, install a
  * seeded schema as the `@/data/db` singleton BEFORE the first dynamic import of
  * the repos/runtime (resolve_entity + team-repo read the SINGLETON, not
- * `ctx.db`), and replay a scripted transcript through `runPokebotWith`.
+ * `ctx.db`), and replay a scripted transcript through `runOakWith`.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { pokebotAnswerSchema } from "@/agent/schemas";
+import { oakAnswerSchema } from "@/agent/schemas";
 import type {
   AgentContext,
   AgentMode,
   ChatMessage,
 } from "@/agent/types";
-import type { PokebotAnswer } from "@/agent/schemas";
+import type { OakAnswer } from "@/agent/schemas";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "../../test/support/pg";
@@ -168,7 +168,7 @@ function lastToolResultText(params: any): string {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const TEAM_ANSWER: PokebotAnswer = {
+const TEAM_ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown:
     "Your Garchomp slot is solid, but the team is incomplete — you only have one Pokémon.",
@@ -187,7 +187,7 @@ async function buildCtx(
     requestId: "active-team-it",
     mode,
     activeTeam,
-    db: fix.db as unknown as import("@/data/db").PokebotDb,
+    db: fix.db as unknown as import("@/data/db").OakDb,
   });
 }
 
@@ -212,7 +212,7 @@ describe("active-team-agent-e2e — format-matched binding (resolveActiveTeam)",
       members: [garchompMember()],
       now,
     });
-    const db = fix.db as unknown as import("@/data/db").PokebotDb;
+    const db = fix.db as unknown as import("@/data/db").OakDb;
 
     // Format-matched + owned → bound (raw slugs, server-controlled view).
     const bound = await activeTeamSvc.resolveActiveTeam(ACCT_A, svTeam.id, "standard", db);
@@ -258,7 +258,7 @@ describe("active-team-agent-e2e — get_active_team via the real runtime", () =>
       members: [garchompMember()],
       now,
     });
-    const db = fix.db as unknown as import("@/data/db").PokebotDb;
+    const db = fix.db as unknown as import("@/data/db").OakDb;
     const activeTeam = await activeTeamSvc.resolveActiveTeam(
       ACCT_A,
       team.id,
@@ -274,7 +274,7 @@ describe("active-team-agent-e2e — get_active_team via the real runtime", () =>
     ]);
 
     const progress: string[] = [];
-    const result = await runtime.runPokebotWith(
+    const result = await runtime.runOakWith(
       client,
       "how's my team look?",
       [] as ChatMessage[],
@@ -292,7 +292,7 @@ describe("active-team-agent-e2e — get_active_team via the real runtime", () =>
     expect(toolResult).toContain("Garchomp"); // species_display from searchable_names
     expect(toolResult).toContain("incomplete"); // validateTeam warning
 
-    expect(pokebotAnswerSchema.safeParse(result).success).toBe(true);
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
     expect(result.status).toBe("answered");
   });
 
@@ -303,7 +303,7 @@ describe("active-team-agent-e2e — get_active_team via the real runtime", () =>
       message([toolUse("submit_answer", TEAM_ANSWER, "t2")]),
     ]);
 
-    await runtime.runPokebotWith(client, "how's my team?", [] as ChatMessage[], ctx);
+    await runtime.runOakWith(client, "how's my team?", [] as ChatMessage[], ctx);
 
     expect(lastToolResultText(snapshots[1])).toMatch(/"active":\s*false/);
   });
@@ -345,7 +345,7 @@ describe("active-team-agent-e2e — persist + restore on resume", () => {
     expect(resumed?.activeTeamId).toBe(team.id);
 
     // Re-resolving on resume still binds it (format still matches).
-    const db = fix.db as unknown as import("@/data/db").PokebotDb;
+    const db = fix.db as unknown as import("@/data/db").OakDb;
     const rebound = await activeTeamSvc.resolveActiveTeam(
       ACCT_A,
       resumed!.activeTeamId,
@@ -371,7 +371,7 @@ describe("active-team-agent-e2e — persist + restore on resume", () => {
       members: [garchompMember()],
       now,
     });
-    const db = fix.db as unknown as import("@/data/db").PokebotDb;
+    const db = fix.db as unknown as import("@/data/db").OakDb;
     expect(
       await activeTeamSvc.resolveActiveTeam(ACCT_A, chTeam.id, "standard", db),
     ).toBeNull();

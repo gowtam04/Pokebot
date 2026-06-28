@@ -15,7 +15,7 @@ import {
   renameConversation,
   setPinned,
 } from "@/lib/history-client";
-import type { PokebotAnswer } from "@/components/types";
+import type { OakAnswer } from "@/components/types";
 
 function res(status: number, body: unknown): Response {
   return {
@@ -29,7 +29,7 @@ function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>)
   vi.stubGlobal("fetch", vi.fn(impl));
 }
 
-const ANSWER: PokebotAnswer = {
+const ANSWER: OakAnswer = {
   status: "answered",
   answer_markdown: "hi",
   reasoning_markdown: "r",

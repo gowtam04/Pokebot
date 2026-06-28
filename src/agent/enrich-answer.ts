@@ -24,12 +24,12 @@ import {
   type SpriteRef,
 } from "@/data/repos/pokedex-repo";
 import { resolveEntity } from "@/data/repos/resolve-index";
-import type { PokebotDb } from "@/data/db";
+import type { OakDb } from "@/data/db";
 import {
-  pokebotAnswerSchema,
+  oakAnswerSchema,
   TYPE_NAMES,
   type Candidates,
-  type PokebotAnswer,
+  type OakAnswer,
   type PokemonProfile,
   type Subject,
   type TypeName,
@@ -48,13 +48,13 @@ function asTypeNames(types: string[]): TypeName[] {
  * answer) synthesize a subject from the turn's looked-up profiles.
  */
 export async function enrichAnswer(
-  answer: PokebotAnswer,
+  answer: OakAnswer,
   ctx: AgentContext,
   lookedUpProfiles: PokemonProfile[],
-): Promise<PokebotAnswer> {
+): Promise<OakAnswer> {
   try {
     const format = formatForMode(ctx.mode);
-    const db = ctx.db as unknown as PokebotDb;
+    const db = ctx.db as unknown as OakDb;
 
     const candidateNames = answer.candidates?.shown.map((r) => r.name) ?? [];
     const subjectNames = answer.subjects?.map((s) => s.name) ?? [];
@@ -91,12 +91,12 @@ export async function enrichAnswer(
       subjects = [subjectFromProfile(lookedUpProfiles[0]!)];
     }
 
-    const enriched: PokebotAnswer = { ...answer };
+    const enriched: OakAnswer = { ...answer };
     if (candidates) enriched.candidates = candidates;
     if (subjects && subjects.length > 0) enriched.subjects = subjects;
 
     // Safety net: only adopt the enriched answer if it still validates.
-    return pokebotAnswerSchema.parse(enriched);
+    return oakAnswerSchema.parse(enriched);
   } catch (err) {
     ctx.logger.warn(
       { err: err instanceof Error ? err.message : String(err) },
@@ -110,7 +110,7 @@ export async function enrichAnswer(
 async function refByFuzzy(
   name: string,
   format: Format,
-  db: PokebotDb,
+  db: OakDb,
 ): Promise<SpriteRef | null> {
   try {
     const res = await resolveEntity(name, "pokemon", 1, format);
