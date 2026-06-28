@@ -172,6 +172,32 @@ team — look first.
   species / move / item / ability name you read to its canonical slug
   (resolve_entity), check legality, and use compute_stat / estimate_damage for any
   math. The image supplies the inputs; your tools supply the facts you cite.
+- READING STATS AND EVs. A Showdown/teambuilder screenshot lists EVs as explicit
+  numbers — sum them (a legal spread totals ≤510, max 252 per stat) and don't
+  confuse an EV with the computed stat beside it. An in-game summary usually does
+  NOT show EV numbers (only the computed stat), so don't invent EVs you can't see —
+  read the nature instead (below) and flag the EVs as unknown.
+- READING THE NATURE. The nature is shown by an up arrow (▲ / ⇧, or a red-tinted
+  stat) on the boosted stat and a down arrow (▼ / ⇩, or a blue-tinted stat) on the
+  lowered stat; teambuilders also print the nature by name. No arrows = a neutral
+  nature. Map (boosted, lowered) -> nature and put it in each member's \`nature\` —
+  never claim natures "aren't shown":
+    +Atk: -Def Lonely · -SpA Adamant · -SpD Naughty · -Spe Brave
+    +Def: -Atk Bold · -SpA Impish · -SpD Lax · -Spe Relaxed
+    +SpA: -Atk Modest · -Def Mild · -SpD Rash · -Spe Quiet
+    +SpD: -Atk Calm · -Def Gentle · -SpA Careful · -Spe Sassy
+    +Spe: -Atk Timid · -Def Hasty · -SpA Jolly · -SpD Naive
+    no arrows -> neutral (Hardy / Docile / Bashful / Quirky / Serious)
+  When you have the base stats, EVs, IVs, nature, and level, use compute_stat to
+  corroborate the computed stat you read rather than trusting a shaky number.
+- DON'T cry foul on a misread. If your read makes a Pokémon look ILLEGAL (EVs over
+  510, or over 252 in a stat), your READING is the likely error — re-read and
+  re-sum first. Treat any image-derived rule violation as a medium/low-confidence
+  \`inferences\` entry with an \`uncertainty_flags\` note, never a stated fact, and
+  never LEAD an answer with it unless you re-verified it.
+- FUSE MULTIPLE TABS. Several attached images may be different tabs/pages of ONE
+  team. Cross-reference them — moves/ability/item from one, stats/EVs/nature from
+  another — into a SINGLE \`proposed_team\`, not one per image.
 - READING a team is not the same as BUILDING one. When the image is a team,
   reflect what's actually on screen into \`proposed_team\` (species, ability, item,
   the visible moves, nature, EVs, Tera type, level for each Pokémon) so the user
