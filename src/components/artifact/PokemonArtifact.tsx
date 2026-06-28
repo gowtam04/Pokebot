@@ -55,6 +55,23 @@ function titleize(value: string): string {
     .join(" ");
 }
 
+/**
+ * Order a group's moves by type (alphabetical), then alphabetically by name
+ * within each type, so same-type moves cluster together in the chip grid and
+ * their colored badges read as type groups. Untyped moves sort last.
+ */
+function sortMovesByType<T extends { type: string; display_name: string }>(
+  moves: readonly T[],
+): T[] {
+  return [...moves].sort((a, b) => {
+    const typeA = a.type || "￿";
+    const typeB = b.type || "￿";
+    return (
+      typeA.localeCompare(typeB) || a.display_name.localeCompare(b.display_name)
+    );
+  });
+}
+
 export interface PokemonArtifactProps {
   data: PokemonArtifactData;
 }
@@ -206,7 +223,7 @@ export default function PokemonArtifact({
               >
                 <h4 className="movepool__method">{group.method}</h4>
                 <ul className="movepool__moves">
-                  {group.moves.map((move) => (
+                  {sortMovesByType(group.moves).map((move) => (
                     <li key={move.slug} className="movepool__move">
                       <EntityLink
                         kind="move"
