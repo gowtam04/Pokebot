@@ -398,3 +398,83 @@ Phase 2 (if pursued) — schema/runtime/repo/test identifiers across ~85 files; 
 `npm run typecheck` **and** the golden eval suite if any model-visible field name changes.
 
 **Depends on:** Nothing.
+
+---
+
+## B-8 — Image upload
+
+**Why:** Chat input is **text-only** today — the request body is
+`{ session_id, message, champions_mode }` and the runtime assembles a single text
+message. A lot of real Pokémon questions arrive as pictures: a team-preview or
+battle screenshot, a Showdown/box screenshot, a damage-roll the user wants
+checked, or "what is this Pokémon?" Letting the user attach an image and having
+the agent reason over it (the model already supports vision) turns those into
+first-class questions instead of "describe it to me in text."
+
+**Scope:**
+- Accept one or more image attachments on the chat input and carry them through
+  the API into the model turn as image content blocks alongside the text message.
+- Decide how vision interacts with the **data-grounded** contract: an image gives
+  the agent *what to look up*, but answers must still resolve to the index and
+  carry the usual sources/inference flags — the model should not assert dex facts
+  read off a picture without grounding them through the tools.
+- Frontend affordance: attach / preview / remove an image; show it in the
+  rendered turn so the conversation stays legible on resume (B-3).
+
+**Open questions:**
+- Validation + limits (file type, size, count) and where they're enforced
+  relative to the existing input-length cap and per-session rate limit in
+  `route.ts`.
+- Are uploaded images persisted (for signed-in history / resume) or kept
+  ephemeral? Persisting overlaps B-1 (per-account) and B-3 (what's stored).
+- Does the vision step stay inside the existing tool-loop turn, or does it need a
+  pre-pass that extracts entities from the image before the normal resolve/lookup
+  flow runs?
+
+**Touches:** `src/app/api/chat/route.ts` (body schema, validation), the request
+type/Zod schema, `src/agent/runtime.ts` (message assembly with image blocks),
+frontend chat input + turn rendering (`src/components/*`).
+
+**Depends on:** Nothing for an ephemeral single-turn upload; persisting uploads
+across resume depends on B-1 / B-3.
+
+---
+
+## B-9 — Make Grok native
+
+**Why:** Oak already has a model-provider seam (the `LLMProvider` abstraction in
+`src/agent/providers/` with a client-safe `src/agent/models.ts` registry and a
+server-only `factory.ts`; the Anthropic path is `anthropic-provider.ts` and a
+generic `openai-compatible-provider.ts` already exists). Grok (xAI) can technically
+run *today* through the OpenAI-compatible shim — this item is about making it a
+**native, first-class** provider instead: a dedicated adapter with proper support
+for Grok's tool-use and streaming semantics rather than the lowest-common-denominator
+OpenAI compatibility layer, so it's a real option in the switcher with quality on par
+with the Anthropic path.
+
+**Scope:**
+- A native xAI/Grok implementation of the `LLMProvider` interface (auth/env,
+  request shaping, streaming, tool-call wiring), registered in `models.ts` and
+  constructed via `factory.ts`.
+- Map the existing tool-loop contract onto Grok's tool-use format: the 12-tool
+  set, forced/`auto` tool choice, the `submit_answer` JSON Schema, and the
+  iteration cap — keeping the same `OakAnswer` validation seam regardless of
+  provider.
+- Surface Grok in the model switcher UI and document the new env/config knobs.
+
+**Open questions:**
+- Does Grok support the thinking/`tool_choice` interplay the loop relies on, or
+  does the adaptive-thinking + `auto` tool-choice strategy
+  (`[[tool-choice-thinking-conflict]]`) need a provider-specific variant?
+- Prompt-cache parity — the byte-identical cached prefix is an Anthropic
+  optimization; what's the equivalent (if any) on Grok, and does its absence
+  change cost/latency assumptions?
+- Re-run the golden eval suite per provider — answer quality and schema-adherence
+  must hold on Grok, not just typecheck.
+
+**Touches:** `src/agent/providers/*` (the `LLMProvider` seam — `factory.ts`,
+`types.ts`, a new `grok-provider.ts`), `src/agent/models.ts` (registry),
+`src/agent/runtime.ts` (provider-agnostic loop), model-switcher UI, env/config +
+`.env.example`.
+
+**Depends on:** Nothing (builds on the existing provider abstraction).
