@@ -283,8 +283,8 @@ img {
   overflow: hidden;
   background: radial-gradient(
       120% 60% at 50% -10%,
-      color-mix(in srgb, var(--poke-red) 7%, var(--bg)),
-      var(--bg) 60%
+      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
+      var(--bg) 55%
     )
     no-repeat;
 }
@@ -302,10 +302,11 @@ img {
   background: linear-gradient(
     180deg,
     var(--poke-red) 0%,
-    var(--poke-red-active) 140%
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
   );
-  border-bottom: 3px solid color-mix(in srgb, #000 18%, var(--poke-red-active));
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 35%, transparent);
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
 }
 
 .chat-page__title {
@@ -328,6 +329,38 @@ img {
   -webkit-mask: var(--icon-pokeball) center / contain no-repeat;
   mask: var(--icon-pokeball) center / contain no-repeat;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+
+/* Right-side header controls: logical groups wrapped in a cluster, split by a
+   subtle vertical divider (markup produced by another track — styled here). */
+.chat-page__header-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.chat-page__header-divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Teams link sits on the red band, so it overrides the base azure `a` color. */
+.chat-page__teams-link {
+  color: var(--neutral-0);
+  font-weight: 600;
+  text-decoration: none;
+}
+.chat-page__teams-link:hover,
+.chat-page__teams-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* "Active team" label + its <select>, kept apart so they don't glue together. */
+.active-team-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /* Theme toggle (rendered by ThemeToggle.tsx, lives in the header band) */
@@ -381,7 +414,9 @@ img {
   width: 100%;
   max-width: 820px;
   margin-inline: auto;
-  padding: var(--space-8) var(--space-10) var(--space-12);
+  /* Extra bottom room so trailing answer content clears the sticky composer. */
+  padding: var(--space-8) var(--space-10) calc(var(--space-16) + var(--space-8));
+  scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -411,12 +446,15 @@ img {
 .chat-turn--user .chat-turn__content {
   max-width: 70%;
   padding: var(--space-3) var(--space-4);
-  background: var(--poke-red-soft);
+  /* Clearer surface (only a hint of red) + border + shadow so the bubble
+     separates from the red-tinted page instead of blending into it. */
+  background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
   color: var(--text-strong);
   font-size: 15px;
-  border: 1px solid color-mix(in srgb, var(--poke-red) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--poke-red) 30%, var(--border));
   border-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
 }
 
 .chat-turn--assistant {
@@ -1598,4 +1636,26 @@ img {
   .chat-page__sidebar {
     transition: none;
   }
+}
+
+/* --------------------------------------------------------------------------
+   19. Detail panel scroll container — slim, token-colored scrollbar
+   -------------------------------------------------------------------------- */
+.artifact-viewer__body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.artifact-viewer__body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.artifact-viewer__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.artifact-viewer__body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+.artifact-viewer__body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
 }

@@ -53,7 +53,6 @@ export default function ModelSelector({
         cursor: "pointer",
       }}
     >
-      <span aria-hidden="true">Model</span>
       <select
         data-testid="model-selector"
         aria-label="Answering model"

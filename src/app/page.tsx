@@ -421,26 +421,21 @@ export default function Home() {
           )}
           <h1 className="chat-page__title">Oak</h1>
         </div>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--space-3)",
-          }}
-        >
+        <div className="chat-page__header-cluster">
           {auth.signedIn && (
-            <ActiveTeamSelector
-              format={artifactFormat}
-              conversationId={sessionId}
-              value={activeTeamId}
-              onChange={setActiveTeamId}
-              enabled={auth.signedIn}
-            />
-          )}
-          {auth.signedIn && (
-            <a className="chat-page__teams-link" href="/teams">
-              Teams
-            </a>
+            <>
+              <ActiveTeamSelector
+                format={artifactFormat}
+                conversationId={sessionId}
+                value={activeTeamId}
+                onChange={setActiveTeamId}
+                enabled={auth.signedIn}
+              />
+              <a className="chat-page__teams-link" href="/teams">
+                Teams
+              </a>
+              <span className="chat-page__header-divider" aria-hidden></span>
+            </>
           )}
           <ModelSelector
             value={selectedModel}
@@ -451,6 +446,7 @@ export default function Home() {
             checked={championsMode}
             onChange={handleChampionsToggle}
           />
+          <span className="chat-page__header-divider" aria-hidden></span>
           <ThemeToggle />
           <AuthMenu
             signedIn={auth.signedIn}

@@ -9,9 +9,10 @@
 .artifact-viewer {
   display: flex;
   flex-direction: column;
-  flex: 0 0 420px;
-  width: 420px;
-  max-width: 420px;
+  flex: 0 0 45%;
+  width: 45%;
+  max-width: 45%;
+  min-width: 420px;
   align-self: stretch;
   max-height: 100%;
   overflow: hidden;
@@ -158,6 +159,7 @@
     flex-basis: auto;
     width: 100%;
     max-width: 100%;
+    min-width: 0; /* cancel the desktop 420px floor so the overlay fills phones < 420px */
     max-height: 100%;
     border-radius: 0;
   }
@@ -293,6 +295,16 @@
   background: var(--azure);
   border-radius: var(--radius-pill);
 }
+/* Color the fill by value tier so strong/weak stats read at a glance (#9). */
+.stat-list__bar-fill--low {
+  background: color-mix(in srgb, var(--danger) 72%, var(--azure));
+}
+.stat-list__bar-fill--mid {
+  background: var(--azure);
+}
+.stat-list__bar-fill--high {
+  background: var(--success);
+}
 .stat-list__row--total .stat-list__value {
   font-weight: 700;
 }
@@ -303,6 +315,21 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* "Hidden ability" marker — a standalone badge inside the chip (#4), never
+ * inline text. */
+.ability-chip__hidden-badge {
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--azure);
+  background: var(--surface);
+  border: 1px solid var(--azure);
+  border-radius: var(--radius-sm);
 }
 
 /* ---- Matchup rows ------------------------------------------------------- */
@@ -323,6 +350,18 @@
 }
 .matchup-row__empty {
   color: var(--text-faint);
+}
+/* One type badge + its damage-magnitude label, kept together (#12). */
+.matchup-row__entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.matchup-row__mult {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 /* ---- Key/value grid (move stats) --------------------------------------- */

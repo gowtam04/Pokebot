@@ -299,6 +299,17 @@ export const typeMatchupsDetailSchema = z.object({
     weak_to: z.array(z.string()),
     resists: z.array(z.string()),
     immune_to: z.array(z.string()),
+    // Quad-multiplier subsets of weak_to/resists, surfaced for the artifact
+    // viewer's matchup grid (x4 / x0.25). OPTIONAL (default []): omitted by every
+    // existing producer/consumer (chat answer, get_type_matchups tool, ingest)
+    // so they stay byte-for-byte compatible — only the artifact assembler fills
+    // them. weak_to / resists / immune_to semantics are UNCHANGED (quad_* are
+    // strict subsets). Kept `.optional()` rather than `.default([])` so the
+    // INFERRED OUTPUT type leaves them absent for producers that don't supply
+    // them (a forced default would require every type-chart producer to emit the
+    // fields and break typecheck).
+    quad_weak_to: z.array(z.string()).optional(),
+    quad_resists: z.array(z.string()).optional(),
   }),
 });
 

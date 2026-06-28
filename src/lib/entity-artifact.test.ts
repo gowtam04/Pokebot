@@ -43,6 +43,9 @@ const OK_POKEMON: EntityArtifactResponse = {
       weak_to: ["ice", "dragon", "fairy"],
       resists: ["rock", "fire", "poison", "electric"],
       immune_to: ["electric"],
+      // Quad subsets are strict subsets of weak_to / resists.
+      quad_weak_to: ["ice"],
+      quad_resists: [],
     },
     movepool: [
       {
@@ -137,6 +140,9 @@ const OK_TYPE: EntityArtifactResponse = {
       weak_to: ["water", "grass", "ice"],
       resists: ["poison", "rock"],
       immune_to: ["electric"],
+      // A single type never reaches 4× / 0.25×.
+      quad_weak_to: [],
+      quad_resists: [],
     },
   },
 };
@@ -160,6 +166,34 @@ describe("entityArtifactResponseSchema — ok envelopes", () => {
       // The pokemon-only fields are present and typed.
       expect(parsed.data.movepool).toHaveLength(2);
       expect(parsed.data.matchups.immune_to).toContain("electric");
+      // Quad subsets round-trip and stay strict subsets of weak_to / resists.
+      expect(parsed.data.matchups.quad_weak_to).toEqual(["ice"]);
+      expect(parsed.data.matchups.quad_resists).toEqual([]);
+      for (const t of parsed.data.matchups.quad_weak_to ?? []) {
+        expect(parsed.data.matchups.weak_to).toContain(t);
+      }
+    } else {
+      throw new Error("expected an ok pokemon artifact");
+    }
+  });
+
+  it("accepts an ok pokemon whose matchups omit the optional quad subsets", () => {
+    // The quad fields are additive/optional: existing payloads that predate them
+    // (no quad_weak_to / quad_resists) must still parse — weak_to / resists /
+    // immune_to semantics are unchanged.
+    const legacyMatchups = {
+      weak_to: ["ice", "dragon", "fairy"],
+      resists: ["rock", "fire", "poison", "electric"],
+      immune_to: ["electric"],
+    };
+    const payload = {
+      ...OK_POKEMON,
+      data: { ...OK_POKEMON.data, matchups: legacyMatchups },
+    };
+    const parsed = entityArtifactResponseSchema.parse(payload);
+    if (parsed.status === "ok" && parsed.kind === "pokemon") {
+      expect(parsed.data.matchups.weak_to).toEqual(legacyMatchups.weak_to);
+      expect(parsed.data.matchups.quad_weak_to).toBeUndefined();
     } else {
       throw new Error("expected an ok pokemon artifact");
     }

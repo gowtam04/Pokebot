@@ -24,9 +24,35 @@ const STAT_ROWS: { key: keyof PokemonArtifactData["base_stats"]; label: string }
     { key: "speed", label: "Speed" },
   ];
 
-/** Width of a stat bar as a % of a 255 ceiling (the max base stat). */
+/**
+ * Stat bars normalize against a legible single-stat ceiling (well under the
+ * theoretical 255 max) so typical base stats span the track instead of all
+ * hugging the left rail (#9).
+ */
+const STAT_BAR_CEILING = 200;
+
 function statPct(value: number): string {
-  return `${Math.min(100, Math.round((value / 255) * 100))}%`;
+  return `${Math.min(100, Math.round((value / STAT_BAR_CEILING) * 100))}%`;
+}
+
+/** Coarse value tier used to color the bar fill (low / mid / high) (#9). */
+function statTier(value: number): string {
+  if (value >= 110) return "stat-list__bar-fill--high";
+  if (value >= 75) return "stat-list__bar-fill--mid";
+  return "stat-list__bar-fill--low";
+}
+
+/**
+ * Title-case a slug-ish id (`cud-chew` → `Cud Chew`) for display. Mirrors the
+ * helper in ProposedTeamCard; the raw slug is still handed to EntityLink `q=`
+ * so links keep resolving (#3).
+ */
+function titleize(value: string): string {
+  return value
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 export interface PokemonArtifactProps {
@@ -36,19 +62,36 @@ export interface PokemonArtifactProps {
 export default function PokemonArtifact({
   data,
 }: PokemonArtifactProps): React.JSX.Element {
-  const { abilities } = data;
-  const abilityEntries: { slug: string; label: string }[] = [
-    { slug: abilities.slot1, label: abilities.slot1 },
+  const { abilities, matchups } = data;
+  // Titleize the DISPLAY label but keep the raw slug for EntityLink q= (#3);
+  // the hidden flag drives a separate badge rather than inline text (#4).
+  const abilityEntries: { slug: string; label: string; hidden: boolean }[] = [
+    { slug: abilities.slot1, label: titleize(abilities.slot1), hidden: false },
   ];
   if (abilities.slot2) {
-    abilityEntries.push({ slug: abilities.slot2, label: abilities.slot2 });
+    abilityEntries.push({
+      slug: abilities.slot2,
+      label: titleize(abilities.slot2),
+      hidden: false,
+    });
   }
   if (abilities.hidden) {
     abilityEntries.push({
       slug: abilities.hidden,
-      label: `${abilities.hidden} (Hidden)`,
+      label: titleize(abilities.hidden),
+      hidden: true,
     });
   }
+
+  // quad_weak_to / quad_resists are produced by another track (contract B);
+  // treat them as optional, defaulting to [] so magnitude rendering (#12) is
+  // safe whether or not that track has landed.
+  const defensive = matchups as typeof matchups & {
+    quad_weak_to?: string[];
+    quad_resists?: string[];
+  };
+  const quadWeakTo = defensive.quad_weak_to ?? [];
+  const quadResists = defensive.quad_resists ?? [];
 
   return (
     <div className="pokemon-artifact" data-testid="pokemon-artifact">
@@ -89,7 +132,9 @@ export default function PokemonArtifact({
               <span className="stat-list__value">{data.base_stats[key]}</span>
               <span className="stat-list__bar">
                 <span
-                  className="stat-list__bar-fill"
+                  className={`stat-list__bar-fill ${statTier(
+                    data.base_stats[key],
+                  )}`}
                   style={{ width: statPct(data.base_stats[key]) }}
                 />
               </span>
@@ -98,7 +143,6 @@ export default function PokemonArtifact({
           <li className="stat-list__row stat-list__row--total">
             <span className="stat-list__label">Total</span>
             <span className="stat-list__value">{data.base_stat_total}</span>
-            <span className="stat-list__bar" />
           </li>
         </ul>
       </section>
@@ -108,12 +152,15 @@ export default function PokemonArtifact({
         <div className="ability-chips" data-testid="pokemon-abilities">
           {abilityEntries.map((a) => (
             <EntityLink
-              key={a.label}
+              key={a.slug}
               kind="ability"
               q={a.slug}
               className="entity-link--chip"
             >
               {a.label}
+              {a.hidden && (
+                <span className="ability-chip__hidden-badge">Hidden</span>
+              )}
             </EntityLink>
           ))}
         </div>
@@ -124,18 +171,21 @@ export default function PokemonArtifact({
         <div className="matchup-grid" data-testid="pokemon-matchups">
           <MatchupRow
             label="Weak to"
-            types={data.matchups.weak_to}
+            types={matchups.weak_to}
             testid="matchups-weak"
+            multiplierFor={(t) => (quadWeakTo.includes(t) ? "x4" : "x2")}
           />
           <MatchupRow
             label="Resists"
-            types={data.matchups.resists}
+            types={matchups.resists}
             testid="matchups-resists"
+            multiplierFor={(t) => (quadResists.includes(t) ? "x1/4" : "x1/2")}
           />
           <MatchupRow
             label="Immune to"
-            types={data.matchups.immune_to}
+            types={matchups.immune_to}
             testid="matchups-immune"
+            multiplierFor={() => "x0"}
           />
         </div>
       </section>

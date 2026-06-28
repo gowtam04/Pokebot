@@ -64,6 +64,10 @@ describe("assembleEntityProfile — pokemon", () => {
       ["fire", "poison", "rock"].sort(),
     );
     expect(res.data.matchups.immune_to).toEqual(["electric"]);
+    // Quad subsets: Ground × Dragon stacks to 4× Ice (a subset of weak_to);
+    // no attacking type is resisted by both, so nothing is 0.25×.
+    expect(res.data.matchups.quad_weak_to).toEqual(["ice"]);
+    expect(res.data.matchups.quad_resists).toEqual([]);
 
     // Movepool grouped by method, names + types hydrated, sorted within a group.
     const levelUp = res.data.movepool.find((g) => g.method === "Level-up");
@@ -138,6 +142,10 @@ describe("assembleEntityProfile — move / ability / item / type", () => {
     expect(res.resolved.display_name).toBe("Ground");
     expect(res.data.offensive?.no_effect_against).toContain("flying");
     expect(res.data.defensive.immune_to).toContain("electric");
+    // A single type never reaches 4× / 0.25×, so the quad subsets are empty
+    // (but present, mirroring the Pokémon grid's shape).
+    expect(res.data.defensive.quad_weak_to).toEqual([]);
+    expect(res.data.defensive.quad_resists).toEqual([]);
   });
 
   it("returns not_found for a move with no reference row", async () => {

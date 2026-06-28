@@ -28,8 +28,10 @@ import type {
   MoveDetail,
   TypeMatchupsDetail,
 } from "@/agent/schemas";
+import { TYPE_NAMES } from "@/agent/schemas";
 import {
   combineDefensive,
+  defMultiplier,
   type DefensiveProfile,
 } from "@/agent/formulas/type-chart";
 import {
@@ -135,6 +137,40 @@ function groupMovepool(
 }
 
 // ---------------------------------------------------------------------------
+// Combined defensive grid (+ quad subsets) for the artifact viewer
+// ---------------------------------------------------------------------------
+
+/**
+ * Combine one or more single-type defensive profiles into the artifact's
+ * defensive grid, augmenting the classified `combineDefensive` result with the
+ * quad-multiplier subsets the matchup grid surfaces:
+ *   - `quad_weak_to`  = attacking types whose combined multiplier is exactly 4×
+ *                       (a subset of `weak_to`)
+ *   - `quad_resists`  = attacking types whose combined multiplier is exactly
+ *                       0.25× (a subset of `resists`)
+ *
+ * Per-attacking-type multipliers are the product of each member type's
+ * single-type multiplier (the shared `defMultiplier`), so `weak_to` / `resists`
+ * / `immune_to` are exactly what `combineDefensive` already reports — unchanged.
+ */
+function combinedDefensiveWithQuads(
+  defensives: DefensiveProfile[],
+): TypeMatchupsDetail["defensive"] {
+  const combined = combineDefensive(defensives);
+  const quad_weak_to: string[] = [];
+  const quad_resists: string[] = [];
+  for (const attacking of TYPE_NAMES) {
+    const multiplier = defensives.reduce(
+      (acc, def) => acc * defMultiplier(def, attacking),
+      1,
+    );
+    if (multiplier === 4) quad_weak_to.push(attacking);
+    else if (multiplier === 0.25) quad_resists.push(attacking);
+  }
+  return { ...combined, quad_weak_to, quad_resists };
+}
+
+// ---------------------------------------------------------------------------
 // Index availability
 // ---------------------------------------------------------------------------
 
@@ -215,7 +251,7 @@ async function assemblePokemon(
       defensives.push((ref as TypeMatchupsDetail).defensive);
     }
   }
-  const matchups = combineDefensive(defensives);
+  const matchups = combinedDefensiveWithQuads(defensives);
 
   // Full movepool, grouped by learn method, names/types hydrated in one read.
   const learned = await movesForPokemon(slug, format, db);
@@ -365,6 +401,9 @@ async function assembleType(
     };
   }
   const { found: _found, ...data } = ref as TypeMatchupsDetail;
+  // A single type never reaches 4× / 0.25×, but populate the quad subsets so the
+  // artifact's defensive grid carries the same shape the Pokémon grid does.
+  const defensive = combinedDefensiveWithQuads([data.defensive]);
   return {
     status: "ok",
     kind: "type",
@@ -378,6 +417,6 @@ async function assembleType(
         detail: "Offensive and defensive type matchups.",
       },
     ],
-    data,
+    data: { ...data, defensive },
   };
 }

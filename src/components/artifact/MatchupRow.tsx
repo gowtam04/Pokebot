@@ -16,12 +16,20 @@ export interface MatchupRowProps {
   label: string;
   types: string[];
   testid?: string;
+  /**
+   * Optional per-type damage-magnitude label (e.g. "x4", "x2", "x0"). When
+   * provided, a small badge is rendered after each type badge so the row shows
+   * HOW strong the matchup is (#12). Omitted by callers (the Type artifact's
+   * grids) that only need the badge list.
+   */
+  multiplierFor?: (type: string) => string | undefined;
 }
 
 export default function MatchupRow({
   label,
   types,
   testid,
+  multiplierFor,
 }: MatchupRowProps): React.JSX.Element {
   return (
     <div className="matchup-row" data-testid={testid}>
@@ -30,11 +38,19 @@ export default function MatchupRow({
         {types.length === 0 ? (
           <span className="matchup-row__empty">—</span>
         ) : (
-          types.map((t) => (
-            <EntityLink key={t} kind="type" q={t} className="entity-link--type">
-              <TypeBadge type={t as TypeName} />
-            </EntityLink>
-          ))
+          types.map((t) => {
+            const multiplier = multiplierFor?.(t);
+            return (
+              <span key={t} className="matchup-row__entry">
+                <EntityLink kind="type" q={t} className="entity-link--type">
+                  <TypeBadge type={t as TypeName} />
+                </EntityLink>
+                {multiplier && (
+                  <span className="matchup-row__mult">{multiplier}</span>
+                )}
+              </span>
+            );
+          })
         )}
       </span>
     </div>

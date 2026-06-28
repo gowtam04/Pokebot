@@ -27,24 +27,51 @@ import {
   DAMAGE_CALC_GARCHOMP,
   SUBJECT_GARCHOMP,
 } from "@/components/test-fixtures";
+import type { PokemonArtifactData } from "@/lib/entity-artifact";
 
 afterEach(() => cleanup());
 
 describe("PokemonArtifact", () => {
+  // Component fixture layering the contract-B quad arrays (#12) onto the shared
+  // Garchomp fixture: ice is a 4x weakness, fire a 1/4 resist.
+  const POKEMON_WITH_QUAD = {
+    ...POKEMON_ARTIFACT.data,
+    matchups: {
+      ...POKEMON_ARTIFACT.data.matchups,
+      quad_weak_to: ["ice"],
+      quad_resists: ["fire"],
+    },
+  } as PokemonArtifactData;
+
   it("renders stats, abilities, matchups, and a grouped clickable movepool", () => {
-    render(<PokemonArtifact data={POKEMON_ARTIFACT.data} />);
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} />);
 
     expect(screen.getByTestId("pokemon-artifact")).toBeInTheDocument();
-    // Base stats (value + bar) for all six + total.
+    // Base stats (per-stat value) + the total row.
     expect(screen.getByTestId("pokemon-stats")).toHaveTextContent("130");
     expect(screen.getByTestId("pokemon-stats")).toHaveTextContent("600");
 
-    // Abilities incl. the hidden-ability label.
+    // Abilities: titleized DISPLAY label (#3), with the hidden marker lifted
+    // into a standalone badge (#4) — not inline "(Hidden)" text.
     const abilities = screen.getByTestId("pokemon-abilities");
-    expect(within(abilities).getByText(/rough-skin \(Hidden\)/)).toBeInTheDocument();
+    expect(within(abilities).getByText("Rough Skin")).toBeInTheDocument();
+    expect(
+      within(abilities).queryByText(/\(Hidden\)/),
+    ).not.toBeInTheDocument();
+    const hiddenBadge = within(abilities).getByText("Hidden");
+    expect(hiddenBadge).toHaveClass("ability-chip__hidden-badge");
 
-    // Combined defensive grid.
-    expect(screen.getByTestId("matchups-immune")).toHaveTextContent("electric");
+    // Combined defensive grid + magnitudes (#12): quad members read x4 / x1/4,
+    // the remainder x2 / x1/2, immunities x0.
+    const weak = screen.getByTestId("matchups-weak");
+    expect(weak).toHaveTextContent("x4"); // ice (quad)
+    expect(weak).toHaveTextContent("x2"); // dragon / fairy
+    const resists = screen.getByTestId("matchups-resists");
+    expect(resists).toHaveTextContent("x1/4"); // fire (quad)
+    expect(resists).toHaveTextContent("x1/2"); // poison / rock
+    const immune = screen.getByTestId("matchups-immune");
+    expect(immune).toHaveTextContent("electric");
+    expect(immune).toHaveTextContent("x0");
 
     // Movepool grouped by method; moves are clickable EntityLink buttons.
     expect(screen.getByTestId("movepool-group-Level-up")).toBeInTheDocument();
