@@ -160,7 +160,9 @@ export default function TeamEditor({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+          // min(280px, 100%) lets a panel shrink below 280px on a narrow phone
+          // instead of forcing horizontal overflow; == 280px on desktop.
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
           gap: "var(--space-3)",
         }}
       >

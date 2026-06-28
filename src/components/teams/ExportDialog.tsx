@@ -77,6 +77,7 @@ export default function ExportDialog({
             data-testid="export-close"
             aria-label="Close export"
             onClick={onClose}
+            style={closeButtonStyle}
           >
             ×
           </button>
@@ -151,4 +152,20 @@ const titleStyle: React.CSSProperties = {
   margin: 0,
   font: "600 20px/1.3 var(--font-display)",
   color: "var(--text-strong)",
+};
+
+// 44px touch target for the "×" close (was unstyled, ~24px on a phone).
+const closeButtonStyle: React.CSSProperties = {
+  flex: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "44px",
+  height: "44px",
+  fontSize: "24px",
+  lineHeight: 1,
+  background: "none",
+  border: "none",
+  color: "var(--text-muted)",
+  cursor: "pointer",
 };

@@ -159,8 +159,8 @@ export default function TeamsPage() {
       style={{
         display: "flex",
         flexDirection: "column",
-        minHeight: "100vh",
-        padding: "var(--space-4)",
+        minHeight: "100dvh",
+        padding: "max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left))",
         gap: "var(--space-4)",
       }}
     >
@@ -169,6 +169,7 @@ export default function TeamsPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
           gap: "var(--space-3)",
         }}
       >
@@ -179,6 +180,7 @@ export default function TeamsPage() {
           style={{
             display: "inline-flex",
             alignItems: "center",
+            flexWrap: "wrap",
             gap: "var(--space-3)",
           }}
         >
@@ -193,6 +195,7 @@ export default function TeamsPage() {
             Format
             <select
               data-testid="teams-format"
+              style={{ minWidth: 0, maxWidth: "100%", fontSize: "16px" }}
               value={format}
               onChange={(e) => {
                 setFormat(e.target.value as Format);
@@ -227,14 +230,7 @@ export default function TeamsPage() {
           Sign in from the chat page to save and manage teams.
         </p>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(220px, 320px) 1fr",
-            gap: "var(--space-4)",
-            alignItems: "start",
-          }}
-        >
+        <div className="teams-grid">
           <TeamList
             teams={teams.teams}
             selectedId={selected?.id ?? null}

@@ -225,7 +225,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--body);
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -298,7 +298,13 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-10);
+  /* Safe-area aware: env() is 0 on desktop (and without viewport-fit=cover), so
+     these collapse to the plain 16px/40px gutters there and only grow into the
+     notch / landscape ears on devices that report insets. */
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: var(--space-4);
+  padding-left: max(var(--space-10), env(safe-area-inset-left));
+  padding-right: max(var(--space-10), env(safe-area-inset-right));
   background: linear-gradient(
     180deg,
     var(--poke-red) 0%,
@@ -316,7 +322,7 @@ img {
   margin: 0;
   font-family: var(--display);
   font-weight: 600;
-  font-size: 28px;
+  font-size: 1.75rem;
   line-height: 1.2;
   letter-spacing: 0.01em;
   color: var(--neutral-0);
@@ -337,6 +343,34 @@ img {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
+}
+/* The collapsible control group — inline on desktop; becomes a popover panel
+   under the gear on mobile (see the responsive section). */
+.chat-page__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+/* Mobile-only popover trigger; hidden on desktop where controls render inline. */
+.chat-page__more {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
+  transition: background var(--motion-fast);
+}
+.chat-page__more:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.chat-page__more svg {
+  width: 22px;
+  height: 22px;
 }
 .chat-page__header-divider {
   flex: none;
@@ -361,6 +395,34 @@ img {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+.active-team-selector__label {
+  color: var(--neutral-0);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+/* Match the translucent-white header pills (was a raw OS <select>). */
+.active-team-selector__select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  height: 40px;
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
+  font: inherit;
+  font-size: 1rem; /* avoid iOS focus-zoom */
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+/* The OS renders the option list on its own surface, so force dark text. */
+.active-team-selector__select option {
+  color: var(--neutral-900, #111);
 }
 
 /* Theme toggle (rendered by ThemeToggle.tsx, lives in the header band) */
@@ -408,6 +470,14 @@ img {
   border-right: 1px solid var(--border);
 }
 
+/* The actual scroll container (className on a flex column in page.tsx). Owns
+   scroll-padding so anchored scrolls clear the sticky composer, and smooth
+   behavior so auto-scroll-to-latest doesn't jump. */
+.chat-page__main {
+  scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
+  scroll-behavior: smooth;
+}
+
 /* Scrolling thread, centered text column */
 .chat-thread {
   flex: 1;
@@ -416,7 +486,6 @@ img {
   margin-inline: auto;
   /* Extra bottom room so trailing answer content clears the sticky composer. */
   padding: var(--space-8) var(--space-10) calc(var(--space-16) + var(--space-8));
-  scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -450,7 +519,7 @@ img {
      separates from the red-tinted page instead of blending into it. */
   background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
   color: var(--text-strong);
-  font-size: 15px;
+  font-size: 0.9375rem;
   border: 1px solid color-mix(in srgb, var(--poke-red) 30%, var(--border));
   border-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-sm);
@@ -473,7 +542,7 @@ img {
   border-radius: var(--radius-pill);
   font-family: var(--body);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1;
   letter-spacing: 0.03em;
   text-transform: capitalize;
@@ -524,9 +593,12 @@ img {
 /* Answer body — the primary read */
 .answer-body__content {
   max-width: 70ch;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.6;
   color: var(--text);
+  /* A long URL / hyphen-free identifier must break rather than widen the card
+     past a 390px viewport. Only acts on otherwise-unbreakable tokens. */
+  overflow-wrap: anywhere;
 }
 .answer-body__content strong {
   color: var(--text-strong);
@@ -540,6 +612,29 @@ img {
   gap: var(--space-3);
 }
 
+/* In-answer secondary actions ("Compare in viewer" / "Open in viewer") — were
+   raw UA buttons. Chip-styled to match the theme, 44px tall for touch. */
+.answer-card__open-viewer {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--azure);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    transform var(--motion-spring);
+}
+.answer-card__open-viewer:hover {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+}
+.answer-card__open-viewer:active {
+  transform: scale(0.98);
+}
+
 /* --------------------------------------------------------------------------
    7b. Markdown body — rendered answer/reasoning/streaming prose
    react-markdown (+ remark-gfm) output lives inside `.markdown-body`. The
@@ -550,6 +645,9 @@ img {
    -------------------------------------------------------------------------- */
 .markdown-body {
   color: inherit;
+  /* Inherits to links + inline code: keeps long tokens from blowing out the
+     column on a phone (fenced pre / tables keep their own overflow-x). */
+  overflow-wrap: anywhere;
 }
 /* Collapse the outer block margins so the body hugs its container. */
 .markdown-body > :first-child {
@@ -666,7 +764,7 @@ img {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow-x: auto;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 .markdown-body pre code {
@@ -706,7 +804,7 @@ img {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-variant-numeric: tabular-nums;
   box-shadow: var(--shadow-raised);
 }
@@ -716,7 +814,7 @@ img {
   background: var(--surface-sunken);
   border-bottom: 1px solid var(--border);
   font-family: var(--body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -757,7 +855,7 @@ img {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.6;
   color: var(--text);
 }
@@ -831,14 +929,14 @@ img {
   gap: var(--space-2);
   font-family: var(--display);
   font-weight: 500;
-  font-size: 18px;
+  font-size: 1.125rem;
   line-height: 1.35;
   color: var(--text-strong);
   text-transform: capitalize;
 }
 .sprite-card__dex {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -850,7 +948,7 @@ img {
   background: var(--warning-soft);
   color: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
   border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -874,19 +972,38 @@ img {
 .candidate-table__header {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
   background: var(--surface-sunken);
 }
+/* "Show all" drops to its own right-aligned line when the header can't fit on
+   one (narrow phones); harmless on desktop where it stays inline. */
+.candidate-table__show-all {
+  margin-left: auto;
+  padding: 4px var(--space-3);
+  min-height: 32px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--azure);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+.candidate-table__show-all:hover {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+}
 .candidate-table__count {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-strong);
 }
 .candidate-table__sort {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -898,19 +1015,35 @@ img {
    it out of the table formatting context and broke column alignment. */
 .candidate-table__scroll {
   overflow-x: auto;
+  /* Always-visible slim track + edge mask so right-hand columns (Stats /
+     Ability) read as scrollable on a phone instead of being silently clipped. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior-x: contain;
+}
+.candidate-table__scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.candidate-table__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.candidate-table__scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
 }
 .candidate-table__table {
   width: 100%;
   border-collapse: collapse;
 }
 .candidate-table__table thead th {
-  position: sticky;
-  top: 0;
+  /* (was position:sticky/top:0 — dead: the scroll container is x-only with no
+     bounded height, so the header never actually stuck. Removed to avoid a
+     misleading no-op.) */
   text-align: left;
   padding: var(--space-2) var(--space-3);
   background: var(--surface-sunken);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -933,7 +1066,7 @@ img {
 }
 .candidate-table__row td {
   padding: var(--space-2) var(--space-3);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text);
   vertical-align: middle;
 }
@@ -948,6 +1081,18 @@ img {
   align-items: center;
   gap: var(--space-2);
 }
+/* Persistent (non-hover) cue that the name drills into the artifact viewer —
+   touch devices never get :hover, so a rest-state underline is what tells a
+   phone user the row/name is interactive. */
+.candidate-table__name-link {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--azure) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.candidate-table__name-link:hover {
+  text-decoration-color: var(--azure);
+}
 .candidate-table__sprite {
   width: 32px;
   height: 32px;
@@ -955,7 +1100,7 @@ img {
 }
 .candidate-table__dex {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -975,7 +1120,7 @@ img {
 }
 .candidate-table__stat-item {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-strong);
   white-space: nowrap;
@@ -998,6 +1143,13 @@ img {
   max-width: 820px;
   margin-inline: auto;
   padding: var(--space-6) var(--space-10);
+  /* Clear the iOS home indicator; env() is 0 on desktop. */
+  padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  /* Lift the dock above the on-screen keyboard. Composer.tsx measures the
+     keyboard via visualViewport and sets --kb-inset (default 0 → identity
+     transform everywhere a keyboard isn't covering the field). */
+  transform: translateY(calc(-1 * var(--kb-inset, 0px)));
+  transition: transform var(--motion-fast);
   background: linear-gradient(180deg, transparent, var(--bg) 38%);
   backdrop-filter: blur(6px); /* softens the thread scrolling under the dock */
   -webkit-backdrop-filter: blur(6px);
@@ -1046,7 +1198,8 @@ img {
   background: transparent;
   color: var(--text);
   font-family: var(--body);
-  font-size: 15px;
+  /* 16px floor: iOS Safari auto-zooms the page on focus for anything smaller. */
+  font-size: 1rem;
   border: none;
 }
 .composer__input:focus {
@@ -1060,13 +1213,14 @@ img {
   cursor: not-allowed;
 }
 
-/* Send nested inside; muted + shrunk when empty, red + pops when there's text */
+/* Send nested inside; muted + shrunk when empty, red + pops when there's text.
+   44px so it's a comfortable touch target and sits flush with the 44px field. */
 .composer__send {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: none;
   font-size: 0; /* hide "Send" text node; accessible name preserved */
   color: var(--neutral-0);
@@ -1102,8 +1256,36 @@ img {
   cursor: not-allowed;
 }
 
-/* --------------------------------------------------------------------------
-   11. Disclosures — Reasoning · Sources · Assumptions
+/* Stop (abort streaming) — same 44px footprint as Send so the dock never shifts
+   mid-stream, but a distinct "halt" look (sunken fill, red square glyph) rather
+   than the unstyled OS button it used to render as. */
+.composer__stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  font-size: 0; /* hide "Stop" text node; accessible name preserved */
+  color: var(--poke-red);
+  background: var(--surface-sunken);
+  border: 1px solid color-mix(in srgb, var(--poke-red) 45%, var(--border-strong));
+  border-radius: var(--radius-pill);
+  transition: background var(--motion-fast), transform var(--motion-spring);
+}
+.composer__stop::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  border-radius: 3px; /* rounded square = universal "stop" */
+}
+.composer__stop:hover {
+  background: var(--poke-red-soft);
+}
+.composer__stop:active {
+  transform: scale(0.94);
+}
    -------------------------------------------------------------------------- */
 .reasoning-block,
 .source-list {
@@ -1121,7 +1303,7 @@ img {
   user-select: none;
   font-family: var(--display);
   font-weight: 500;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--text-strong);
   border-radius: var(--radius-sm);
 }
@@ -1160,7 +1342,7 @@ img {
   padding: var(--space-4);
   background: var(--surface-sunken);
   border-radius: var(--radius-md);
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.55;
   color: var(--text);
 }
@@ -1173,7 +1355,7 @@ img {
 }
 .source-list__item {
   padding: var(--space-2) 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
@@ -1209,7 +1391,7 @@ img {
 .caveat-strip__flag {
   position: relative;
   padding-left: 26px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.45;
   color: color-mix(in srgb, var(--warning) 32%, var(--text-strong));
@@ -1245,7 +1427,7 @@ img {
   align-items: center;
   gap: var(--space-2);
   font-family: var(--body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1254,7 +1436,7 @@ img {
 .inference-callout__item {
   position: relative;
   padding-left: 26px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text);
 }
@@ -1274,7 +1456,7 @@ img {
   margin-right: var(--space-1);
   padding: 0 8px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: lowercase;
@@ -1317,7 +1499,7 @@ img {
   background: var(--sunflower-soft);
   color: color-mix(in srgb, var(--sunflower) 45%, var(--text-strong));
   border: 1px solid color-mix(in srgb, var(--sunflower) 40%, transparent);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1329,7 +1511,7 @@ img {
 }
 .damage-readout__result-item {
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1337,7 +1519,7 @@ img {
   text-transform: capitalize;
 }
 .damage-readout__result-value {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.2;
   color: var(--text-strong);
@@ -1349,14 +1531,14 @@ img {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--text);
   white-space: pre-wrap;
   overflow-x: auto;
 }
 .damage-readout__assumptions-summary {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .damage-readout__assumptions-list {
   margin: var(--space-3) 0 0;
@@ -1364,7 +1546,7 @@ img {
   list-style: none;
 }
 .damage-readout__assumption-item {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -1388,7 +1570,7 @@ img {
   gap: var(--space-2);
 }
 .suggestion-chips__label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-muted);
 }
@@ -1401,7 +1583,7 @@ img {
   padding: 6px var(--space-3);
   background: var(--surface);
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
@@ -1449,12 +1631,12 @@ img {
   transform: translateY(0);
 }
 .question-options__label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-strong);
 }
 .question-options__desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -1480,7 +1662,7 @@ img {
   gap: var(--space-1);
 }
 .chat-thread__progress-item {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--text-faint);
 }
@@ -1490,7 +1672,7 @@ img {
   align-items: center;
   gap: var(--space-3);
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.5;
   color: var(--text-strong);
@@ -1534,7 +1716,7 @@ img {
   border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   border-left: 3px solid var(--danger);
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--danger) 30%, var(--text-strong));
 }
@@ -1558,7 +1740,7 @@ img {
   gap: var(--space-3);
   font-family: var(--display);
   font-weight: 600;
-  font-size: 34px;
+  font-size: 2.125rem;
   color: var(--text-strong);
 }
 .chat-empty__wordmark::before {
@@ -1571,7 +1753,7 @@ img {
 }
 .chat-empty__invite {
   margin: 0;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -1586,7 +1768,7 @@ img {
   padding: var(--space-2) var(--space-4);
   background: var(--surface);
   color: var(--text-strong);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   text-align: left;
   border: 1px solid var(--border-strong);
@@ -1636,6 +1818,12 @@ img {
   .chat-page__sidebar {
     transition: none;
   }
+  .chat-page__main {
+    scroll-behavior: auto;
+  }
+  .composer {
+    transition: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1658,4 +1846,270 @@ img {
 }
 .artifact-viewer__body::-webkit-scrollbar-thumb:hover {
   background: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   19b. Teams workbench grid (the /teams two-pane layout — list rail + editor)
+   -------------------------------------------------------------------------- */
+.teams-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+/* Grid/flex children default to min-width:auto, which lets wide inputs/tables
+   push the column past the viewport on a phone. Let them shrink + keep form
+   controls inside their cell. */
+.teams-grid > * {
+  min-width: 0;
+}
+.teams-grid input,
+.teams-grid select,
+.teams-grid textarea {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* History-row per-row actions (pin / rename / delete). Base gap is tight for the
+   dense desktop sidebar; the coarse-pointer block widens the targets + spacing. */
+.conv-row__actions {
+  gap: 2px;
+}
+
+/* ==========================================================================
+   20. Responsive — mobile-first overrides
+   The desktop layout lives entirely above. Everything here is scoped to
+   max-width / max-height / coarse-pointer queries, so the ≥desktop experience
+   is unchanged (there are no min-width rules to fight). Breakpoints:
+     768px — structural (history drawer, multi-column grids)
+     640px — header control popover + reduced gutters
+     480px — tightest portrait tweaks
+   ========================================================================== */
+
+/* Drawer scrim is desktop-hidden by default; the 768px block turns it on. */
+.chat-page__scrim {
+  display: none;
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- ≤768px: history sidebar becomes an overlay drawer ------------------- */
+@media (max-width: 768px) {
+  .chat-page__sidebar {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 30;
+    width: min(300px, 86vw);
+    transform: translateX(0);
+    transition: transform var(--motion-base);
+    box-shadow: var(--shadow-overlay);
+  }
+  /* width:0 can't hide a fixed element — slide it off-screen instead. */
+  .chat-page__sidebar--collapsed {
+    width: min(300px, 86vw);
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+  /* Cancel the desktop 300px floor so it never reintroduces page overflow. */
+  .chat-page__sidebar-inner {
+    width: 100%;
+  }
+  .chat-page__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    animation: scrim-in var(--motion-fast) both;
+  }
+  /* /teams collapses to a single column (list rail stacks above the editor). */
+  .teams-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- ≤640px: collapse the header controls behind the gear ---------------- */
+@media (max-width: 640px) {
+  /* Trim the 40px side gutters across the shell (recovers ~12% of width). */
+  .chat-page__header {
+    gap: var(--space-2);
+    padding-left: max(var(--space-4), env(safe-area-inset-left));
+    padding-right: max(var(--space-4), env(safe-area-inset-right));
+  }
+  .composer {
+    padding-left: max(var(--space-4), env(safe-area-inset-left));
+    padding-right: max(var(--space-4), env(safe-area-inset-right));
+  }
+  .chat-thread {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+  .answer-card {
+    padding: var(--space-4);
+  }
+  /* The account email (clamped to 200px, hover-only on desktop) would crowd /
+     overflow the phone header — drop it; "Sign out" + the avatar carry the
+     signed-in state. */
+  .auth-menu__email {
+    display: none;
+  }
+
+  /* Show the trigger; turn the control group into a popover panel. */
+  .chat-page__more {
+    display: inline-flex;
+  }
+  .chat-page__controls {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: max(var(--space-4), env(safe-area-inset-right));
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    min-width: 230px;
+    max-width: min(320px, calc(100vw - 2 * var(--space-4)));
+    padding: var(--space-4);
+    /* Re-use the Pokédex-red band so the translucent-white pills keep contrast
+       on the panel instead of vanishing against a light surface. */
+    background: linear-gradient(
+      180deg,
+      var(--poke-red) 0%,
+      color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+    );
+    border: 1px solid
+      color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+  }
+  .chat-page__controls--open {
+    display: flex;
+  }
+  .chat-page__controls .chat-page__header-divider {
+    display: none;
+  }
+  /* Each control becomes a full-width menu row. */
+  .chat-page__controls .model-selector-pill,
+  .chat-page__controls .champions-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .chat-page__controls .active-team-selector {
+    justify-content: space-between;
+  }
+  .chat-page__controls .active-team-selector__select {
+    flex: 1;
+    min-width: 0;
+  }
+  .chat-page__controls .theme-toggle {
+    align-self: flex-end;
+  }
+}
+
+/* ---- ≤480px: tightest portrait ------------------------------------------ */
+@media (max-width: 480px) {
+  /* Reclaim width for typed questions (was capped at 70% ≈ 217px). */
+  .chat-turn--user .chat-turn__content {
+    max-width: 90%;
+  }
+  /* Sprite cards fill the column / sit two-up instead of stranding dead space. */
+  .sprite-card {
+    width: auto;
+    flex: 1 1 140px;
+    max-width: 100%;
+  }
+  /* Let long names / abilities wrap rather than forcing a wide table. */
+  .candidate-table__name-cell,
+  .candidate-table__ability-cell {
+    white-space: normal;
+  }
+  /* Stack the welcome example chips full-width. */
+  .chat-empty__examples {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chat-empty__wordmark {
+    font-size: 1.875rem;
+  }
+  .chat-page__title {
+    font-size: 1.5rem;
+  }
+}
+
+/* ---- Short / landscape viewports: top-align + trim the hero -------------- */
+@media (max-height: 560px) {
+  .chat-empty {
+    margin-block: 0;
+    padding-block: var(--space-8);
+  }
+}
+
+/* ---- Touch devices: 44px minimum tap targets ---------------------------- */
+@media (pointer: coarse) {
+  .theme-toggle,
+  .chat-page__more {
+    width: 44px;
+    height: 44px;
+  }
+  /* min-height clamps the inline 40px height of the pill controls up to 44. */
+  .model-selector-pill,
+  .champions-toggle,
+  .auth-pill,
+  .active-team-selector__select,
+  .candidate-table__show-all {
+    min-height: 44px;
+  }
+  .suggestion-chips__chip,
+  .chat-empty__chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* A little more air so adjacent chips don't share an ambiguous tap zone. */
+  .suggestion-chips__list {
+    gap: var(--space-3);
+  }
+  /* The external-citation "↗" is otherwise a ~12px inline target. */
+  .source-list__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    vertical-align: middle;
+  }
+  /* History-row pin/rename/delete glyphs (28px, 2px apart on desktop). */
+  .conv-row__icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .conv-row__actions {
+    gap: var(--space-2);
+  }
+  /* History sidebar new-chat / search / format-filter controls. */
+  .conv-list__newchat,
+  .conv-list__search,
+  .conv-list__filter {
+    min-height: 44px;
+  }
+}
+
+/* ---- Reduced motion: drop the drawer/scrim animation (wins by source order) */
+@media (prefers-reduced-motion: reduce) {
+  .chat-page__sidebar {
+    transition: none;
+  }
+  .chat-page__scrim {
+    animation: none;
+  }
 }

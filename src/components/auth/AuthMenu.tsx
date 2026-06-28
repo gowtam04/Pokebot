@@ -60,6 +60,7 @@ export default function AuthMenu({
       <div className="auth-menu" data-testid="auth-menu">
         <button
           type="button"
+          className="auth-pill"
           data-testid="auth-signin-button"
           onClick={onSignInClick}
           style={pillButtonStyle(false)}
@@ -82,6 +83,7 @@ export default function AuthMenu({
     >
       {email && (
         <span
+          className="auth-menu__email"
           data-testid="auth-user-email"
           title={email}
           style={{
@@ -99,6 +101,7 @@ export default function AuthMenu({
       )}
       <button
         type="button"
+        className="auth-pill"
         data-testid="auth-signout-button"
         onClick={handleSignOut}
         disabled={busy}

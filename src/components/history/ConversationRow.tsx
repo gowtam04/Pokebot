@@ -116,7 +116,7 @@ export default function ConversationRow({
             flex: 1,
             minWidth: 0,
             font: "inherit",
-            fontSize: "14px",
+            fontSize: "16px", // 16px so iOS Safari doesn't zoom on focus
             padding: "var(--space-1) var(--space-2)",
             borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border-strong)",
@@ -186,11 +186,15 @@ export default function ConversationRow({
       )}
 
       {!editing && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "2px", flexShrink: 0 }}>
+        <div
+          className="conv-row__actions"
+          style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}
+        >
           {confirmingDelete ? (
             <>
               <button
                 type="button"
+                className="conv-row__icon-btn"
                 onClick={() => {
                   setConfirmingDelete(false);
                   onDelete();
@@ -202,6 +206,7 @@ export default function ConversationRow({
               </button>
               <button
                 type="button"
+                className="conv-row__icon-btn"
                 onClick={() => setConfirmingDelete(false)}
                 aria-label="Cancel delete"
                 style={{ ...iconBtn, width: "auto", paddingInline: "8px" }}
@@ -213,6 +218,7 @@ export default function ConversationRow({
             <>
               <button
                 type="button"
+                className="conv-row__icon-btn"
                 onClick={() => onPin(!conversation.pinned)}
                 aria-label={conversation.pinned ? "Unpin conversation" : "Pin conversation"}
                 aria-pressed={conversation.pinned}
@@ -226,6 +232,7 @@ export default function ConversationRow({
               </button>
               <button
                 type="button"
+                className="conv-row__icon-btn"
                 onClick={() => {
                   setDraft(conversation.title);
                   setEditing(true);
@@ -238,6 +245,7 @@ export default function ConversationRow({
               </button>
               <button
                 type="button"
+                className="conv-row__icon-btn"
                 onClick={() => setConfirmingDelete(true)}
                 aria-label="Delete conversation"
                 title="Delete"

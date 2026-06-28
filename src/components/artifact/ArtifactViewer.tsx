@@ -11,7 +11,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import CaveatStrip from "@/components/CaveatStrip";
 import type { EntityArtifactOk } from "@/lib/entity-artifact";
@@ -185,6 +185,20 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
 export default function ArtifactViewer(): React.JSX.Element | null {
   const { isOpen, current, canGoBack, back, close, askInChat } =
     useArtifactViewer();
+  const panelRef = useRef<HTMLElement>(null);
+
+  // Are we in the full-screen-overlay regime (mirrors the CSS 768px breakpoint)?
+  // There the panel is a modal dialog; on desktop it's a docked complementary
+  // panel that must leave the chat scrollable/focusable.
+  const [isMobileOverlay, setIsMobileOverlay] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(max-width: 768px)");
+    if (!mq) return;
+    const update = () => setIsMobileOverlay(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -195,16 +209,53 @@ export default function ArtifactViewer(): React.JSX.Element | null {
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, close]);
 
+  // Modal behavior for the mobile overlay only: lock the page behind it (so iOS
+  // can't scroll the hidden chat), move focus in, restore it on close, and trap
+  // Tab so keyboard/AT focus can't escape onto the obscured chat.
+  useEffect(() => {
+    if (!isOpen || !isMobileOverlay) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const panel = panelRef.current;
+    panel?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Tab" || !panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen, isMobileOverlay]);
+
   if (!isOpen || !current) return null;
 
   const { title, formatTag, askText } = headerFor(current);
 
   return (
     <aside
+      ref={panelRef}
       className="artifact-viewer"
       data-testid="artifact-viewer"
-      role="complementary"
+      role={isMobileOverlay ? "dialog" : "complementary"}
+      aria-modal={isMobileOverlay || undefined}
       aria-label="Artifact viewer"
+      tabIndex={-1}
     >
       <header className="artifact-viewer__header">
         <div className="artifact-viewer__topline">

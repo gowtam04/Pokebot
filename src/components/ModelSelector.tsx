@@ -34,6 +34,7 @@ export default function ModelSelector({
     configuredModels ? configuredModels.includes(key) : true;
   return (
     <label
+      className="model-selector-pill"
       title="Choose which AI model answers"
       style={{
         display: "inline-flex",
@@ -46,7 +47,8 @@ export default function ModelSelector({
         background: "rgba(255, 255, 255, 0.16)",
         color: "var(--neutral-0)",
         font: "inherit",
-        fontSize: "14px",
+        // 16px so iOS Safari doesn't auto-zoom when the native picker opens.
+        fontSize: "16px",
         fontWeight: 600,
         lineHeight: 1.2,
         whiteSpace: "nowrap",
@@ -88,6 +90,21 @@ export default function ModelSelector({
           );
         })}
       </select>
+      {/* Caret — `appearance:none` strips the native one, so without this the
+          pill reads as a static label on a phone rather than a tappable picker. */}
+      <span
+        aria-hidden="true"
+        style={{
+          width: "10px",
+          height: "10px",
+          flex: "none",
+          background: "currentColor",
+          WebkitMask: "var(--icon-chevron) center / contain no-repeat",
+          mask: "var(--icon-chevron) center / contain no-repeat",
+          transform: "rotate(90deg)",
+          opacity: 0.85,
+        }}
+      />
     </label>
   );
 }

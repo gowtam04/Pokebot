@@ -92,6 +92,7 @@ export default function ConversationList({
     >
       <button
         type="button"
+        className="conv-list__newchat"
         onClick={onNewChat}
         data-testid="new-chat"
         style={{
@@ -115,6 +116,7 @@ export default function ConversationList({
 
       <input
         type="search"
+        className="conv-list__search"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Search conversations…"
@@ -127,7 +129,7 @@ export default function ConversationList({
           background: "var(--surface)",
           color: "var(--text)",
           font: "inherit",
-          fontSize: "14px",
+          fontSize: "16px", // 16px so iOS Safari doesn't zoom on focus
         }}
       />
 
@@ -138,6 +140,7 @@ export default function ConversationList({
             <button
               key={f.label}
               type="button"
+              className="conv-list__filter"
               onClick={() => onFormatFilterChange(f.value)}
               aria-pressed={selected}
               style={{

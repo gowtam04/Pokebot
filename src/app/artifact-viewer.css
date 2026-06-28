@@ -103,6 +103,9 @@
 .artifact-viewer__body {
   flex: 1 1 auto;
   overflow-y: auto;
+  /* Stop scroll-chaining: at the ends of the panel, iOS won't rubber-band the
+     chat behind the full-screen overlay. Safe on the docked desktop panel too. */
+  overscroll-behavior: contain;
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
@@ -163,6 +166,36 @@
     max-height: 100%;
     border-radius: 0;
   }
+  /* Notch / home-indicator clearance for the full-bleed overlay. */
+  .artifact-viewer__header {
+    padding-top: max(var(--space-2), env(safe-area-inset-top));
+  }
+  .artifact-viewer__body {
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+  /* Give the title its own full-width line so Back + actions stop squeezing it
+     to a few characters. */
+  .artifact-viewer__topline {
+    flex-wrap: wrap;
+  }
+  .artifact-viewer__title {
+    flex-basis: 100%;
+    order: 1;
+  }
+  /* 44px touch targets for the (often only-way-back) controls. */
+  .artifact-viewer__btn,
+  .artifact-viewer__close {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Stack the move-stats key/value + moves grids on very narrow phones. */
+  .kv-grid,
+  .team-member__moves {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- Shared section bits ------------------------------------------------ */
@@ -198,17 +231,19 @@
   gap: var(--space-1);
   border-radius: var(--radius-sm);
 }
-.entity-link:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+/* (Removed a malformed `.entity-link:focus-visible { outline: 2px solid
+   var(--focus-ring) }` — --focus-ring is a box-shadow value, not a color, so the
+   outline never rendered. The global `:focus-visible { box-shadow: var(--focus-ring) }`
+   already gives every entity link a proper, radius-following focus ring.) */
 .entity-link--chip,
 .entity-link--move {
   padding: var(--space-1) var(--space-2);
   font-size: 0.82rem;
   font-weight: 600;
   background: var(--surface-sunken);
-  border: 1px solid var(--border);
+  /* Azure-tinted rest border so chips/moves read as interactive without relying
+     on :hover (which touch devices never get). */
+  border: 1px solid color-mix(in srgb, var(--azure) 28%, var(--border));
   border-radius: var(--radius-pill);
   color: var(--text);
   transition: background var(--motion-fast), border-color var(--motion-fast),

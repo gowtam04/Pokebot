@@ -494,7 +494,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--border-strong)",
   background: "var(--surface)",
   color: "var(--text)",
-  font: "400 15px/1.55 var(--font-body)",
+  // 16px so iOS Safari doesn't auto-zoom when the email/code field is focused.
+  font: "400 16px/1.55 var(--font-body)",
 };
 
 function primaryButtonStyle(disabled: boolean): React.CSSProperties {

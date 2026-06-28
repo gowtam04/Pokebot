@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
@@ -7,6 +7,22 @@ import "./artifact-viewer.css";
 export const metadata: Metadata = {
   title: "Oak",
   description: "Natural-language Pokémon question answering agent",
+};
+
+// Mobile foundation: map the layout to the real device width and let the page
+// bleed into the notch / home-indicator area so `env(safe-area-inset-*)` becomes
+// non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
+// is the prerequisite for any safe-area handling. We deliberately do NOT cap
+// zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
+// tints the browser chrome to match each theme's app background.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#161311" },
+    { media: "(prefers-color-scheme: light)", color: "#ee5a5a" },
+  ],
 };
 
 // Display / body / mono — exposed as CSS variables consumed by globals.css.

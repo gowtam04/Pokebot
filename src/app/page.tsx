@@ -188,14 +188,20 @@ export default function Home() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   useEffect(() => {
     try {
+      // On a phone the sidebar is an overlay drawer, so it must NEVER start open
+      // (it would cover the chat). Force-collapse there regardless of a stored
+      // desktop preference — without persisting, so the desktop choice survives.
+      const isMobile =
+        window.matchMedia?.("(max-width: 768px)").matches ?? false;
+      if (isMobile) {
+        setSidebarCollapsed(true);
+        return;
+      }
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
       if (stored === "true" || stored === "false") {
         setSidebarCollapsed(stored === "true");
-      } else {
-        setSidebarCollapsed(
-          window.matchMedia?.("(max-width: 768px)").matches ?? false,
-        );
       }
+      // else: keep the default (expanded) on desktop.
     } catch {
       /* storage/matchMedia unavailable — keep the default (expanded) */
     }
@@ -402,6 +408,30 @@ export default function Home() {
     setPrefill({ text });
   }, []);
 
+  // Header overflow menu (mobile): below 640px the secondary controls (model /
+  // champions / theme + the signed-in team controls) collapse behind a single
+  // gear button so they stop overflowing the red band off-screen. Desktop
+  // renders them inline and never shows the gear. Close on outside-tap / Escape.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const headerClusterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!headerClusterRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
   return (
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
@@ -421,33 +451,57 @@ export default function Home() {
           )}
           <h1 className="chat-page__title">Oak</h1>
         </div>
-        <div className="chat-page__header-cluster">
-          {auth.signedIn && (
-            <>
-              <ActiveTeamSelector
-                format={artifactFormat}
-                conversationId={sessionId}
-                value={activeTeamId}
-                onChange={setActiveTeamId}
-                enabled={auth.signedIn}
-              />
-              <a className="chat-page__teams-link" href="/teams">
-                Teams
-              </a>
-              <span className="chat-page__header-divider" aria-hidden></span>
-            </>
-          )}
-          <ModelSelector
-            value={selectedModel}
-            onChange={setSelectedModelPersisted}
-            configuredModels={configuredModels ?? undefined}
-          />
-          <ChampionsToggle
-            checked={championsMode}
-            onChange={handleChampionsToggle}
-          />
-          <span className="chat-page__header-divider" aria-hidden></span>
-          <ThemeToggle />
+        <div className="chat-page__header-cluster" ref={headerClusterRef}>
+          {/* Collapsible group: inline on desktop, a popover under the gear on
+              mobile (≤640px). The popover panel re-uses the red-band background
+              in CSS so the translucent-white pills keep their contrast. */}
+          <div
+            id="header-controls"
+            className={
+              "chat-page__controls" +
+              (menuOpen ? " chat-page__controls--open" : "")
+            }
+          >
+            {auth.signedIn && (
+              <>
+                <ActiveTeamSelector
+                  format={artifactFormat}
+                  conversationId={sessionId}
+                  value={activeTeamId}
+                  onChange={setActiveTeamId}
+                  enabled={auth.signedIn}
+                />
+                <a className="chat-page__teams-link" href="/teams">
+                  Teams
+                </a>
+                <span className="chat-page__header-divider" aria-hidden></span>
+              </>
+            )}
+            <ModelSelector
+              value={selectedModel}
+              onChange={setSelectedModelPersisted}
+              configuredModels={configuredModels ?? undefined}
+            />
+            <ChampionsToggle
+              checked={championsMode}
+              onChange={handleChampionsToggle}
+            />
+            <span className="chat-page__header-divider" aria-hidden></span>
+            <ThemeToggle />
+          </div>
+          {/* Mobile-only trigger for the control popover (CSS hides it ≥640px). */}
+          <button
+            type="button"
+            className="chat-page__more"
+            aria-label="More settings"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            aria-controls="header-controls"
+            data-testid="header-more"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <SlidersIcon />
+          </button>
           <AuthMenu
             signedIn={auth.signedIn}
             email={auth.email}
@@ -504,6 +558,19 @@ export default function Home() {
             </aside>
           )}
 
+          {/* Mobile drawer scrim: tap to dismiss the history sidebar. Only
+              rendered when the drawer is open; CSS shows it as a full-screen
+              overlay below 768px and hides it on desktop (where the sidebar is
+              an in-flow column, not an overlay). */}
+          {auth.signedIn && !sidebarCollapsed && (
+            <div
+              className="chat-page__scrim"
+              data-testid="sidebar-scrim"
+              aria-hidden="true"
+              onClick={() => setSidebarCollapsedPersisted(true)}
+            />
+          )}
+
           <div
             className="chat-page__main"
             style={{
@@ -548,5 +615,25 @@ export default function Home() {
         onSignedIn={handleSignedIn}
       />
     </main>
+  );
+}
+
+/** Sliders / settings glyph for the mobile header overflow trigger. */
+function SlidersIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2" />
+      <circle cx={16} cy={6} r={2} />
+      <circle cx={8} cy={12} r={2} />
+      <circle cx={16} cy={18} r={2} />
+    </svg>
   );
 }

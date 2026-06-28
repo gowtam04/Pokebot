@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/AnswerCard";
 import Markdown from "@/components/Markdown";
@@ -49,6 +49,30 @@ export default function ChatThread({
   onFollowUp,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
+
+  // Auto-scroll to the newest content (new turn / streamed token) — important on
+  // a phone where the composer occupies a big share of the screen, so a fresh
+  // answer lands below the fold. Only follow when the user is pinned to the
+  // bottom; if they've scrolled up to read, we don't yank them back down.
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true);
+  useEffect(() => {
+    const scroller = bottomRef.current?.closest(
+      ".chat-page__main",
+    ) as HTMLElement | null;
+    if (!scroller) return;
+    const onScroll = () => {
+      pinnedRef.current =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => scroller.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    // Optional-call: scrollIntoView is absent in jsdom (tests) — no-op there.
+    if (pinnedRef.current) bottomRef.current?.scrollIntoView?.({ block: "end" });
+  }, [turns, streamingMarkdown, status]);
 
   // Liveness heartbeat: while the turn is in flight, count wall-clock seconds so
   // a slow turn (long model "thinking" before the first tool, or while composing)
@@ -183,6 +207,9 @@ export default function ChatThread({
           Something went wrong ({transportError.code}). Please try again.
         </div>
       )}
+
+      {/* Scroll anchor for auto-follow (kept at the very bottom of the thread). */}
+      <div ref={bottomRef} aria-hidden="true" />
     </div>
   );
 }

@@ -30,6 +30,7 @@ export default function ChampionsToggle({
     <button
       type="button"
       role="switch"
+      className="champions-toggle"
       aria-checked={checked}
       aria-pressed={checked}
       aria-label={label}
