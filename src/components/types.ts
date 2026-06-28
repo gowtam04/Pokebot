@@ -255,6 +255,24 @@ export interface QuestionOptionsProps {
 // Chat shell
 // ---------------------------------------------------------------------------
 
+/**
+ * A client-side image attachment. Carries BOTH the wire fields (`mimeType` +
+ * raw-base64 `data`, sent in `ChatRequestBody.images`) and a `previewUrl` data
+ * URL for the on-screen thumbnail. Produced by `@/lib/image-attachments` from a
+ * picked/pasted file (downscaled + re-encoded client-side). Session-only: never
+ * persisted, so thumbnails vanish on reload of a saved conversation.
+ */
+export interface PendingImage {
+  id: string;
+  mimeType: string;
+  /** RAW base64 (no `data:` prefix) — the wire payload. */
+  data: string;
+  /** Full `data:` URL for the thumbnail preview. */
+  previewUrl: string;
+  /** Original filename (alt text / tooltip). */
+  name: string;
+}
+
 /** A committed user turn in the thread. */
 export interface UserTurn {
   id: string;
@@ -294,12 +312,21 @@ export interface ChatThreadProps {
   transportError: ErrorEvent | null;
   /** Threaded into each AnswerCard for suggestion/candidate follow-ups. */
   onFollowUp: OnFollowUp;
+  /**
+   * Thumbnail preview URLs for user turns that had image attachments, keyed by
+   * turn id (a session-only client side-channel — the turn itself stays text).
+   * Absent/empty ⇒ a text-only turn.
+   */
+  imagePreviews?: Record<string, string[]>;
 }
 
 /** Props for the `Composer` input box. */
 export interface ComposerProps {
-  /** Submit a new user turn. */
-  onSend: (message: string) => void;
+  /**
+   * Submit a new user turn. `images` is empty for a text-only turn; `message`
+   * may be empty when `images` is non-empty (an image-only upload).
+   */
+  onSend: (message: string, images: PendingImage[]) => void;
   /** Disabled while a turn is streaming (default: false). */
   disabled?: boolean;
   /**

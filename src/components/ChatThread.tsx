@@ -47,6 +47,7 @@ export default function ChatThread({
   streamingMarkdown,
   transportError,
   onFollowUp,
+  imagePreviews,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
@@ -146,7 +147,25 @@ export default function ChatThread({
             className="chat-turn chat-turn--user"
             data-testid="user-turn"
           >
-            <div className="chat-turn__content">{turn.content}</div>
+            {imagePreviews?.[turn.id]?.length ? (
+              <div
+                className="chat-turn__images"
+                data-testid="user-turn-images"
+              >
+                {imagePreviews[turn.id]!.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    className="chat-turn__image"
+                    src={url}
+                    alt="Attached image"
+                  />
+                ))}
+              </div>
+            ) : null}
+            {turn.content ? (
+              <div className="chat-turn__content">{turn.content}</div>
+            ) : null}
           </div>
         ) : (
           <div

@@ -189,4 +189,55 @@ describe("AnthropicProvider — tool result messages", () => {
     });
   });
 });
+
+describe("AnthropicProvider — image attachments", () => {
+  const newProvider = () =>
+    new AnthropicProvider({}, fakeClient({ content: [], usage: usage() }).client);
+
+  it("a text-only turn keeps content a plain string (byte-identical)", () => {
+    const t = newProvider().createTranscript([], "q") as any[];
+    expect(t[t.length - 1]).toEqual({ role: "user", content: "q" });
+    // Explicitly undefined images is the same as omitting them.
+    const t2 = newProvider().createTranscript([], "q", undefined) as any[];
+    expect(t2[t2.length - 1]).toEqual({ role: "user", content: "q" });
+  });
+
+  it("attaches base64 image blocks after the text block; only the last is cached", () => {
+    const t = newProvider().createTranscript([], "what is this?", [
+      { mimeType: "image/png", data: "AAAA" },
+      { mimeType: "image/jpeg", data: "BBBB" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "what is this?" },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: "AAAA" },
+        },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: "BBBB" },
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+    });
+  });
+
+  it("an image-only turn (empty text) emits image blocks with no text block", () => {
+    const t = newProvider().createTranscript([], "", [
+      { mimeType: "image/webp", data: "CCCC" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/webp", data: "CCCC" },
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+    });
+  });
+});
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -35,7 +35,12 @@ import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 
 import { DEFAULT_MODEL_KEY, type ModelKey } from "@/agent/models";
-import type { AgentContext, AgentMode, DbCtx } from "@/agent/types";
+import type {
+  AgentContext,
+  AgentMode,
+  DbCtx,
+  ImageAttachment,
+} from "@/agent/types";
 import type { OakDb } from "@/data/db";
 import type { ActiveTeam } from "@/server/teams/active-team";
 import { logger as defaultLogger } from "@/server/logger";
@@ -81,6 +86,12 @@ export interface CreateAgentContextOptions {
    * like `activeTeam`; `undefined` (default) means none pending.
    */
   proposedTeam?: import("@/agent/schemas").ProposedTeam;
+  /**
+   * Images attached to the turn's user message (validated + mime-sniffed by the
+   * route). Bound straight onto `AgentContext.images`; `undefined`/empty (the
+   * default) means a text-only turn. Server-controlled like `activeTeam`.
+   */
+  images?: ImageAttachment[];
 }
 
 /**
@@ -140,6 +151,7 @@ export async function createAgentContext(
     accountId: opts.accountId,
     sessionId: opts.sessionId,
     proposedTeam: opts.proposedTeam,
+    images: opts.images,
   };
 }
 

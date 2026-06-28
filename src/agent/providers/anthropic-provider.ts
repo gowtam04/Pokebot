@@ -31,7 +31,7 @@ import type {
   TurnRequest,
 } from "@/agent/providers/types";
 import type { ProviderKind } from "@/agent/models";
-import type { ChatMessage } from "@/agent/types";
+import type { ChatMessage, ImageAttachment } from "@/agent/types";
 
 // ---------------------------------------------------------------------------
 // Injectable client seam (kept identical so the recorded-transcript tests that
@@ -90,10 +90,11 @@ export class AnthropicProvider implements LLMProvider {
   createTranscript(
     history: ChatMessage[],
     message: string,
+    images?: ImageAttachment[],
   ): ProviderTranscript {
     const messages: Anthropic.MessageParam[] = [
       ...history.map((turn) => ({ role: turn.role, content: turn.content })),
-      { role: "user", content: message },
+      { role: "user", content: buildUserContent(message, images) },
     ];
     return messages;
   }
@@ -148,6 +149,34 @@ export class AnthropicProvider implements LLMProvider {
     }));
     return [{ role: "user", content }];
   }
+}
+
+/**
+ * Build the CURRENT user message content. Text-only (no images) stays a plain
+ * string so the request body is byte-identical to the pre-image path (prompt
+ * cache + recorded-stream stability). With images present, emit content blocks:
+ * the text block (omitted when the message is empty — an image-only "what is
+ * this?" turn) followed by one base64 image block per attachment. The LAST image
+ * carries an ephemeral cache breakpoint so loop iterations 2..N read the (large)
+ * images from cache instead of re-uploading them each turn.
+ */
+function buildUserContent(
+  message: string,
+  images?: ImageAttachment[],
+): string | Anthropic.ContentBlockParam[] {
+  if (!images || images.length === 0) return message;
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  if (message.length > 0) blocks.push({ type: "text", text: message });
+  images.forEach((img, i) => {
+    blocks.push({
+      type: "image",
+      source: { type: "base64", media_type: img.mimeType, data: img.data },
+      ...(i === images.length - 1
+        ? { cache_control: { type: "ephemeral" } }
+        : {}),
+    });
+  });
+  return blocks;
 }
 
 // ---------------------------------------------------------------------------

@@ -27,10 +27,28 @@
 
 import type { OakAnswer } from "@/agent/schemas";
 
+/**
+ * One image attached to a chat message (wire shape). `data` is RAW base64 (no
+ * `data:` prefix). The server re-sniffs the bytes to determine the canonical MIME
+ * type, so `mimeType` here is only the client's best-effort declaration. The
+ * client downscales/recompresses before sending; the server enforces count + size
+ * caps (`@/server/image-upload`).
+ */
+export interface ChatRequestImage {
+  mimeType: string;
+  data: string;
+}
+
 /** Request body for `POST /api/chat`. */
 export interface ChatRequestBody {
   session_id: string;
   message: string;
+  /**
+   * Images attached to this message (≤ 4). Optional ⇒ a text-only turn. The
+   * accompanying `message` MAY be empty when one or more images are present (an
+   * image-only "what is this?" upload).
+   */
+  images?: ChatRequestImage[];
   /**
    * Champions-mode toggle (server scopes the turn to Pokémon Champions when
    * true). Optional ⇒ old clients that omit it default to standard / Gen 9.

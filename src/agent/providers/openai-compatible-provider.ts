@@ -45,11 +45,12 @@ import type {
   TurnRequest,
 } from "@/agent/providers/types";
 import type { ProviderKind } from "@/agent/models";
-import type { ChatMessage } from "@/agent/types";
+import type { ChatMessage, ImageAttachment } from "@/agent/types";
 
 type ChatMessageParam = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 type ChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
+type ChatContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
 
 export interface OpenAICompatibleProviderConfig {
   /** "openai" or "xai" — selects the tuned prompt style + labels the trace. */
@@ -114,11 +115,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
   createTranscript(
     history: ChatMessage[],
     message: string,
+    images?: ImageAttachment[],
   ): ProviderTranscript {
     // System text rides on the request, not the transcript.
     const messages: ChatMessageParam[] = [
       ...history.map((turn) => ({ role: turn.role, content: turn.content })),
-      { role: "user" as const, content: message },
+      { role: "user" as const, content: buildUserContent(message, images) },
     ];
     return messages;
   }
@@ -178,6 +180,29 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }),
     );
   }
+}
+
+/**
+ * Build the CURRENT user message content. Text-only stays a plain string
+ * (byte-identical to the pre-image path). With images present, emit content
+ * parts: the text part (omitted for an image-only turn) followed by one
+ * `image_url` part per attachment, each a base64 `data:` URL (Chat Completions
+ * requires the data URL form, not a separate field).
+ */
+function buildUserContent(
+  message: string,
+  images?: ImageAttachment[],
+): string | ChatContentPart[] {
+  if (!images || images.length === 0) return message;
+  const parts: ChatContentPart[] = [];
+  if (message.length > 0) parts.push({ type: "text", text: message });
+  for (const img of images) {
+    parts.push({
+      type: "image_url",
+      image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+    });
+  }
+  return parts;
 }
 
 // ---------------------------------------------------------------------------

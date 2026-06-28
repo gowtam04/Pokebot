@@ -52,6 +52,51 @@ describe("ChatThread — in-flight streaming bubble", () => {
   });
 });
 
+describe("ChatThread — user-turn image thumbnails", () => {
+  it("renders attached-image thumbnails from imagePreviews, keyed by turn id", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [{ id: "u1", role: "user", content: "rate my team" }],
+          imagePreviews: {
+            u1: ["data:image/png;base64,AAA", "data:image/png;base64,BBB"],
+          },
+        })}
+      />,
+    );
+    const strip = screen.getByTestId("user-turn-images");
+    const imgs = within(strip).getAllByRole("img");
+    expect(imgs).toHaveLength(2);
+    expect(imgs[0]).toHaveAttribute("src", "data:image/png;base64,AAA");
+    // The text still renders alongside the thumbnails.
+    expect(screen.getByText("rate my team")).toBeInTheDocument();
+  });
+
+  it("renders an image-only user turn (empty text) with no empty text bubble", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [{ id: "u2", role: "user", content: "" }],
+          imagePreviews: { u2: ["data:image/png;base64,CCC"] },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("user-turn-images")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("user-turn").querySelector(".chat-turn__content"),
+    ).toBeNull();
+  });
+
+  it("renders no image strip for a text-only turn", () => {
+    render(
+      <ChatThread
+        {...props({ turns: [{ id: "u3", role: "user", content: "hi" }] })}
+      />,
+    );
+    expect(screen.queryByTestId("user-turn-images")).toBeNull();
+  });
+});
+
 describe("ChatThread — in-flight current sub-task line", () => {
   it("shows the latest activity as the current line and earlier ones as a dim trail", () => {
     render(

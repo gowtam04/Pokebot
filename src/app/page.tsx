@@ -23,6 +23,7 @@ import type {
   ChatStatus,
   ChatTurn,
   OakAnswer,
+  PendingImage,
   SavedTeam,
 } from "@/components/types";
 
@@ -65,6 +66,11 @@ function makeId(): string {
 export default function Home() {
   const [sessionId, setSessionId] = useState<string>(() => makeId());
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  // Session-only thumbnails for user turns that attached images, keyed by turn id
+  // (a client side-channel — the turn + persisted history stay text-only).
+  const [imagePreviews, setImagePreviews] = useState<Record<string, string[]>>(
+    {},
+  );
   const { status, activities, answer, streamingMarkdown, error, send, reset } =
     useSseClient();
 
@@ -298,13 +304,23 @@ export default function Home() {
   }, [status, answer, auth.signedIn, refreshConversations]);
 
   const handleSend = useCallback(
-    (message: string) => {
+    (message: string, images: PendingImage[] = []) => {
       requestStartRef.current = Date.now();
       inFlightMessageRef.current = message;
+      const userTurnId = makeId();
       setTurns((prev) => [
         ...prev,
-        { id: makeId(), role: "user", content: message },
+        { id: userTurnId, role: "user", content: message },
       ]);
+      // Stash the thumbnails in a session-only side-channel keyed by turn id, so
+      // the user bubble can show what they sent without putting (large, transient)
+      // image data on the ChatTurn itself — keeping history/import payloads text.
+      if (images.length > 0) {
+        setImagePreviews((prev) => ({
+          ...prev,
+          [userTurnId]: images.map((img) => img.previewUrl),
+        }));
+      }
       committedAnswerRef.current = null;
       // Build the body as a variable (not a fresh literal) so the additive
       // team-builder field `active_team_id` rides along without tripping
@@ -316,6 +332,11 @@ export default function Home() {
         champions_mode: championsMode,
         active_team_id: activeTeamId,
         model: selectedModel,
+        // Wire-only image fields (mimeType + raw base64); the preview URLs stay
+        // client-side. Omitted entirely for a text-only turn.
+        ...(images.length > 0
+          ? { images: images.map((img) => ({ mimeType: img.mimeType, data: img.data })) }
+          : {}),
       };
       send(body);
     },
@@ -330,6 +351,7 @@ export default function Home() {
     committedAnswerRef.current = null;
     setSessionId(makeId());
     setTurns([]);
+    setImagePreviews({});
     setActiveTeamId(null);
   }, [reset]);
 
@@ -344,6 +366,7 @@ export default function Home() {
         committedAnswerRef.current = null;
         setSessionId(detail.id);
         setTurns(detail.turns);
+        setImagePreviews({}); // session-only thumbnails don't survive a reload
         setChampionsModePersisted(detail.format === "champions");
         // Restore the conversation's bound active team (AC-8.1). The server only
         // ever persists a format-matched team, so the restored id is already
@@ -378,6 +401,7 @@ export default function Home() {
     committedAnswerRef.current = null;
     if (elapsed < QUICK_STOP_MS) {
       setTurns([]);
+      setImagePreviews({});
       setSessionId(makeId());
       setActiveTeamId(null);
       setPrefill({ text: inFlightMessageRef.current });
@@ -618,6 +642,7 @@ export default function Home() {
               streamingMarkdown={streamingMarkdown}
               transportError={status === "error" ? error : null}
               onFollowUp={handleSend}
+              imagePreviews={imagePreviews}
             />
 
             <Composer

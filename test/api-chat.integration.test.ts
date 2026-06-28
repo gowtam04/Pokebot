@@ -42,6 +42,7 @@ vi.mock("@/agent/context", () => ({
 }));
 
 import { POST } from "@/app/api/chat/route";
+import { createAgentContext } from "@/agent/context";
 import { _resetStoreForTests } from "@/server/rate-limit";
 import { clearSession } from "@/server/session-store";
 
@@ -159,6 +160,7 @@ afterEach(() => {
   clearSession("s-fail");
   clearSession("s-throw");
   clearSession("s-thread");
+  clearSession("s-img");
 });
 
 // --- Happy path: streamed answer + progress --------------------------------
@@ -417,5 +419,70 @@ describe("POST /api/chat — session history", () => {
       { role: "user", content: "first question" },
       { role: "assistant", content: "first answer" },
     ]);
+  });
+});
+
+// --- Image attachments (vision input) --------------------------------------
+
+/** A minimal valid PNG payload (8-byte signature + filler), base64-encoded. */
+const PNG_B64 = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(16),
+]).toString("base64");
+
+describe("POST /api/chat — image attachments", () => {
+  it("accepts an image-only message (empty text) and binds the image onto the context", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    vi.mocked(createAgentContext).mockClear();
+
+    const res = await post({
+      session_id: "s-img",
+      message: "",
+      images: [{ mimeType: "image/png", data: PNG_B64 }],
+    });
+    expect(res.status).toBe(200);
+    const events = await readSse(res);
+    expect(events.filter((e) => e.event === "answer")).toHaveLength(1);
+    expect(mockRunOak).toHaveBeenCalledTimes(1);
+
+    // The validated, mime-sniffed image is bound onto ctx.images (consume-on-turn).
+    const opts = vi.mocked(createAgentContext).mock.calls[0]![0] as {
+      images?: { mimeType: string; data: string }[];
+    };
+    expect(opts.images).toHaveLength(1);
+    expect(opts.images![0]!.mimeType).toBe("image/png");
+  });
+
+  it("rejects more than 4 images with 400 before streaming", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    const one = { mimeType: "image/png", data: PNG_B64 };
+    const res = await post({
+      session_id: "s-img",
+      message: "compare these",
+      images: [one, one, one, one, one],
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("too_many_images");
+    expect(mockRunOak).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-image attachment with 400 invalid_image", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    const res = await post({
+      session_id: "s-img",
+      message: "what is this?",
+      images: [
+        { mimeType: "image/png", data: Buffer.from("not an image").toString("base64") },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("invalid_image");
+    expect(mockRunOak).not.toHaveBeenCalled();
+  });
+
+  it("still rejects an empty message with NO images (400)", async () => {
+    const res = await post({ session_id: "s-img", message: "" });
+    expect(res.status).toBe(400);
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 });

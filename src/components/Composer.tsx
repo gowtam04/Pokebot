@@ -1,15 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { ComposerProps } from "@/components/types";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type FormEvent,
+} from "react";
+import type { ComposerProps, PendingImage } from "@/components/types";
+import {
+  filesToPendingImages,
+  MAX_ATTACHMENTS,
+} from "@/lib/image-attachments";
 
 /**
- * Composer — the chat input box. Submits a trimmed, non-empty message via
- * `onSend` and clears the field. While a turn is streaming the input is disabled
- * and the Send button is swapped for a Stop button (`onStop`) so the user can
- * abort the running request. A new `prefill` object reloads the input (used to
- * restore a stopped message). Visual styling deferred to the `frontend-design`
- * skill.
+ * Composer — the chat input box. Submits via `onSend(message, images)` and clears
+ * the field. A message is sendable when it has non-empty text OR at least one
+ * attached image (an image-only "what is this?" upload). Images are picked (the
+ * attach button) or pasted, downscaled + re-encoded client-side, shown as
+ * removable thumbnails, and capped at {@link MAX_ATTACHMENTS}. While a turn is
+ * streaming the input is disabled and Send becomes Stop (`onStop`). A new
+ * `prefill` object reloads the text input (used to restore a stopped message).
  */
 export default function Composer({
   onSend,
@@ -19,7 +31,10 @@ export default function Composer({
   prefill = null,
 }: ComposerProps) {
   const [value, setValue] = useState("");
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reload the input whenever the parent pushes a fresh `prefill` object (e.g.
   // restoring the message after a quick Stop). Keyed on object identity so the
@@ -59,18 +74,123 @@ export default function Composer({
     };
   }, []);
 
+  // Decode + downscale picked/pasted files, capping the total at MAX_ATTACHMENTS
+  // and surfacing any per-file decode failures (e.g. an unsupported HEIC).
+  async function addFiles(files: File[]) {
+    if (files.length === 0 || disabled) return;
+    setAttachError(null);
+    const room = Math.max(0, MAX_ATTACHMENTS - pendingImages.length);
+    const accepted = files.slice(0, room);
+    const overflow = files.length - accepted.length;
+    const { images, errors } = await filesToPendingImages(accepted);
+    if (images.length > 0) {
+      setPendingImages((prev) =>
+        [...prev, ...images].slice(0, MAX_ATTACHMENTS),
+      );
+    }
+    const msgs = [...errors];
+    if (overflow > 0)
+      msgs.push(`You can attach up to ${MAX_ATTACHMENTS} images.`);
+    if (msgs.length > 0) setAttachError(msgs.join(" "));
+  }
+
+  function handleFiles(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    void addFiles(files);
+    e.target.value = ""; // allow re-selecting the same file
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const f = item.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault(); // don't also paste the image's name as text
+      void addFiles(files);
+    }
+  }
+
+  function removeImage(id: string) {
+    setPendingImages((prev) => prev.filter((img) => img.id !== id));
+    setAttachError(null);
+  }
+
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (disabled) return;
     const trimmed = value.trim();
-    if (trimmed.length === 0 || disabled) return;
-    onSend(trimmed);
+    if (trimmed.length === 0 && pendingImages.length === 0) return;
+    onSend(trimmed, pendingImages);
     setValue("");
+    setPendingImages([]);
+    setAttachError(null);
   }
+
+  const atCapacity = pendingImages.length >= MAX_ATTACHMENTS;
+  const nothingToSend = value.trim().length === 0 && pendingImages.length === 0;
 
   return (
     <form className="composer" data-testid="composer" onSubmit={handleSubmit}>
+      {pendingImages.length > 0 && (
+        <div
+          className="composer__attachments"
+          data-testid="composer-attachments"
+        >
+          {pendingImages.map((img) => (
+            <div key={img.id} className="composer__thumb">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="composer__thumb-img"
+                src={img.previewUrl}
+                alt={img.name}
+              />
+              <button
+                type="button"
+                className="composer__thumb-remove"
+                onClick={() => removeImage(img.id)}
+                aria-label={`Remove ${img.name}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {attachError && (
+        <div className="composer__attach-error" role="alert">
+          {attachError}
+        </div>
+      )}
       <div className="composer__field">
-        <span className="composer__leading" aria-hidden="true" />
+        <button
+          className="composer__attach"
+          data-testid="composer-attach"
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || atCapacity}
+          aria-label="Attach an image"
+          title={
+            atCapacity
+              ? `Up to ${MAX_ATTACHMENTS} images`
+              : "Attach an image"
+          }
+        />
+        <input
+          ref={fileInputRef}
+          className="composer__file-input"
+          data-testid="composer-file-input"
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/*"
+          multiple
+          hidden
+          onChange={handleFiles}
+        />
         <input
           ref={inputRef}
           className="composer__input"
@@ -78,6 +198,7 @@ export default function Composer({
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onPaste={handlePaste}
           onFocus={() => {
             // Fallback for browsers without visualViewport handling: nudge the
             // field into view once the keyboard has had a moment to open.
@@ -105,7 +226,7 @@ export default function Composer({
             className="composer__send"
             data-testid="composer-send"
             type="submit"
-            disabled={disabled || value.trim().length === 0}
+            disabled={disabled || nothingToSend}
           >
             Send
           </button>

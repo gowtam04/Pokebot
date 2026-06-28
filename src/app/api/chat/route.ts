@@ -46,6 +46,7 @@ import { ProviderTransportError } from "@/agent/providers/errors";
 import type {
   AgentMode,
   ChatMessage,
+  ImageAttachment,
   OnAnswerDelta,
   OnAnswerStart,
   OnProgress,
@@ -58,6 +59,7 @@ import {
   GUEST_CONFIG,
   SIGNED_IN_CONFIG,
 } from "@/server/rate-limit";
+import { validateImages } from "@/server/image-upload";
 import {
   appendTurn,
   getHistory,
@@ -75,6 +77,14 @@ import {
 // statically optimized — this is a live streaming handler.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Cheap DoS guard: reject by `Content-Length` BEFORE buffering the body. The real
+ * per-image/total caps run in `validateImages` on the DECODED bytes; this just
+ * stops an absurd payload from being read into memory. Generous headroom over the
+ * 10 MiB decoded image total (base64 inflates ~33%, plus JSON + text).
+ */
+const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // SSE response headers (RISK DIRECTIVE — SSE route)
@@ -143,12 +153,19 @@ type ParsedChatBody = ChatRequestBody & {
   model: ModelKey;
 };
 
-function parseBody(value: unknown): ParsedChatBody | null {
+function parseBody(
+  value: unknown,
+  hasImages: boolean,
+): ParsedChatBody | null {
   if (typeof value !== "object" || value === null) return null;
   const { session_id, message, champions_mode, active_team_id, model } =
     value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
-  if (typeof message !== "string" || message.length === 0) return null;
+  // The message must be a string, but may be EMPTY when one or more images are
+  // attached (an image-only "what is this?" upload). Text-only turns still
+  // require non-empty text.
+  if (typeof message !== "string") return null;
+  if (message.length === 0 && !hasImages) return null;
   // Coerce defensively: anything that is not strictly boolean `true` is
   // standard mode (old clients omit the field entirely).
   // `active_team_id` is optional; anything that is not a non-empty string means
@@ -179,6 +196,14 @@ function parseBody(value: unknown): ParsedChatBody | null {
 export async function POST(req: Request): Promise<Response> {
   const requestId = randomUUID();
 
+  // 0. Cheap size guard BEFORE buffering the body — an image-bearing request can
+  //    be several MB of base64; reject an oversized payload by Content-Length so
+  //    we never read it into memory (the precise decoded caps run below).
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+    return jsonError(413, "payload_too_large", "Request body is too large.");
+  }
+
   // 1. Parse + validate the body (Next 15: await req.json()). A malformed body
   //    is a client error, surfaced as a plain 400 before any streaming.
   let raw: unknown;
@@ -192,12 +217,24 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const body = parseBody(raw);
+  // 1a. Validate + canonicalize any attached images (count + size caps, magic-
+  //     byte MIME sniff) before opening the stream — a bad attachment is a real
+  //     HTTP status, not a mid-stream error. Returns the sniffed, re-encoded
+  //     attachments bound onto the agent context below.
+  const imageResult = validateImages(
+    (raw as { images?: unknown } | null)?.images,
+  );
+  if (!imageResult.ok) {
+    return jsonError(imageResult.status, imageResult.code, imageResult.message);
+  }
+  const images: ImageAttachment[] = imageResult.images;
+
+  const body = parseBody(raw, images.length > 0);
   if (body === null) {
     return jsonError(
       400,
       "invalid_request",
-      "Request body must be { session_id: string, message: string } with non-empty values.",
+      "Request body must be { session_id: string, message: string } — message may be empty only when an image is attached.",
     );
   }
 
@@ -438,6 +475,10 @@ export async function POST(req: Request): Promise<Response> {
             // ("save it") persists the EXACT set the user saw.
             accountId: account?.id,
             proposedTeam,
+            // Images attached to THIS turn (validated + mime-sniffed above).
+            // Consume-on-turn: handed straight to the model in the current user
+            // message, never stored in history. `undefined` ⇒ a text-only turn.
+            images: images.length > 0 ? images : undefined,
             // Forward the inbound abort signal so a client disconnect (the user
             // pressed Stop) tears down the Anthropic stream immediately and the
             // loop bails between iterations — no wasted tokens.
@@ -485,6 +526,16 @@ export async function POST(req: Request): Promise<Response> {
             answer.saved_team = ctx.savedTeam;
           }
 
+          // What to store as the user turn's text for FUTURE turns (history) and
+          // the conversation title. The current turn already got the real image
+          // via ctx.images (consume-on-turn); the raw image is not persisted, so
+          // an image-only message (empty text) records a marker instead of a
+          // blank turn.
+          const userTurnText =
+            message.length > 0
+              ? message
+              : `[image attached${images.length > 1 ? ` ×${images.length}` : ""}]`;
+
           if (account) {
             // SIGNED IN: durable, account-scoped persistence (chat-history
             // HIST-AD-3/BR-H2). Deliver the answer FIRST, then write — keeping
@@ -500,7 +551,7 @@ export async function POST(req: Request): Promise<Response> {
                 conversationId: session_id,
                 format: formatForMode(mode),
                 userTurnId: repo.newTurnId(),
-                userMessage: message,
+                userMessage: userTurnText,
                 assistantTurnId: repo.newTurnId(),
                 answer,
                 now: Date.now(),
@@ -525,8 +576,9 @@ export async function POST(req: Request): Promise<Response> {
               );
             }
           } else {
-            // GUEST: in-memory session store, exactly as before (byte-identical).
-            appendTurn(session_id, { role: "user", content: message });
+            // GUEST: in-memory session store, exactly as before (byte-identical
+            // for text-only turns; image-only turns store the marker text).
+            appendTurn(session_id, { role: "user", content: userTurnText });
             appendTurn(session_id, {
               role: "assistant",
               content: answer.answer_markdown,

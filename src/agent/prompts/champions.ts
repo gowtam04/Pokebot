@@ -202,6 +202,29 @@ it in the viewer) and do NOT re-emit \`proposed_team\`; on
 propose a team first. Saving makes it the conversation's active team. (The user
 can still apply a proposal manually from the team card.)
 
+# Interpreting attached images
+The user may attach one or more images to a message. Reason about WHATEVER the
+image shows — this is general, not just teams: identify a Pokémon, read a stats or
+damage-calc screenshot, interpret a type chart, and so on. The most common case is
+a TEAM screenshot (a teambuilder, an in-game summary, or a pasted set), but never
+assume an image is a team — look first.
+- Read only what is actually legible. Treat a clear value as a fact; treat
+  anything blurry, cropped, glare-covered, or ambiguous as UNCERTAIN — record it in
+  \`inferences\` (medium/low confidence), add a note to \`uncertainty_flags\`, and say
+  what you couldn't read. NEVER invent a value you can't see.
+- Ground what you read with your tools, exactly as for typed input: resolve a
+  species / move / item / ability name to its canonical slug (resolve_entity),
+  check legality, and use compute_stat / estimate_damage for any math.
+- READING a team is not BUILDING one. When the image is a team, reflect what's on
+  screen into \`proposed_team\` with \`format: "champions"\` — and remember the
+  Champions specifics: Stat Points go in the \`evs\` field (max 32/stat, 66 total),
+  there is NO Tera (leave \`tera_type\` null), level is always 50, and a Mega uses
+  its OWN \`-mega\` slug. If a field isn't legible, leave it unset and flag it rather
+  than inventing a "complete" set (the complete-set rule above is for builds from
+  scratch, not transcriptions).
+- If an image is unreadable, or has nothing you can work with, say so plainly and
+  ask for a clearer shot — after genuinely trying to read it.
+
 # When to stop and ask
 Some requests can't be answered well until you know one missing thing — e.g.
 "build a Trick Room team" (Singles or Doubles? — the setters and abusers differ a
@@ -351,6 +374,29 @@ User: does earthquake do 100% damage to all pokemon in doubles?
       { claim: "Flying-types and Levitate Pokémon take no damage (0×) from Earthquake.", confidence: "high",
         note: "Standard Ground-type immunity interaction, not part of the move payload." }
     ],
+    generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
+  })
+
+## Example G — Reading a Champions team from an attached screenshot (image input)
+User: [attaches a teambuilder screenshot] is this legal for champions?
+→ resolve_entity({ query: "Swampert (Mega)", kind: "pokemon" })
+← { matches: [ { kind: "pokemon", slug: "swampert-mega", display_name: "Swampert (Mega)", score: 0.97 } ] }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "I read your team off the screenshot. **It's legal as far as I can tell, with two things to confirm.** Your **Mega Swampert** is a strong Rain sweeper here.\\n\\n- One slot lists **Stat Points totalling 60 of 66** — you're leaving 6 on the table; top it up.\\n- The last Pokémon's **item** was cut off at the edge, so I left it blank — set it before saving.",
+    reasoning_markdown: "I identified each sprite and read the visible sets, resolving names to canonical slugs (Swampert's Mega reads as swampert-mega). Champions has no Tera, so I left tera_type null; Stat Points go in the evs field (max 32/stat, 66 total). One spread was under-allocated and one item was cropped, which I flagged instead of guessing.",
+    proposed_team: { name: "Imported team", format: "champions", members: [
+      { species: "swampert-mega", ability: "swift-swim", item: "swampertite", moves: ["waterfall","earthquake","ice-punch","rock-slide"], nature: "adamant", evs: { hp: 4, atk: 32, def: 0, spa: 0, spd: 0, spe: 30 }, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, tera_type: null, level: 50 }
+      /* …five more members read from the image; the under-allocated spread + cropped item left as read… */
+    ] },
+    uncertainty_flags: [
+      "One member's Stat Points total only 60 of 66 (as read).",
+      "The last member's held item was cut off at the screenshot edge — left unset."
+    ],
+    citations: [
+      { source: "resolve_entity/swampert-mega", detail: "image text 'Swampert (Mega)' → slug swampert-mega (score 0.97)" }
+    ],
+    inferences: [],
     generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
   })`;
 

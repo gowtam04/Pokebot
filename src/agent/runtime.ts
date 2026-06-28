@@ -665,8 +665,9 @@ export async function runWithProvider(
   };
 
   // The opaque, provider-owned transcript: prior in-session turns + the current
-  // message. The loop only ever PUSHES provider-produced values into it.
-  const transcript = provider.createTranscript(history, message);
+  // message (with any attached images, consume-on-turn from ctx.images). The loop
+  // only ever PUSHES provider-produced values into it.
+  const transcript = provider.createTranscript(history, message, ctx.images);
 
   // Server-controlled scope + provider together select the tuned system prompt
   // (loop-invariant). Built once per turn; the same byte-identical segments are

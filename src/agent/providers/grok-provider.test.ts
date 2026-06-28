@@ -390,6 +390,55 @@ describe("GrokProvider — transcript + result message shapes", () => {
   });
 });
 
+describe("GrokProvider — image attachments", () => {
+  it("a text-only turn keeps content a plain string (byte-identical)", () => {
+    const provider = makeProvider(fakeGrokClient([]).client);
+    const t = provider.createTranscript([], "q") as any[];
+    expect(t[t.length - 1]).toEqual({ role: "user", content: "q" });
+  });
+
+  it("attaches input_image data-URL parts after the input_text part", () => {
+    const provider = makeProvider(fakeGrokClient([]).client);
+    const t = provider.createTranscript([], "what is this?", [
+      { mimeType: "image/png", data: "AAAA" },
+      { mimeType: "image/jpeg", data: "BBBB" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        { type: "input_text", text: "what is this?" },
+        {
+          type: "input_image",
+          detail: "auto",
+          image_url: "data:image/png;base64,AAAA",
+        },
+        {
+          type: "input_image",
+          detail: "auto",
+          image_url: "data:image/jpeg;base64,BBBB",
+        },
+      ],
+    });
+  });
+
+  it("an image-only turn (empty text) emits input_image parts with no text part", () => {
+    const provider = makeProvider(fakeGrokClient([]).client);
+    const t = provider.createTranscript([], "", [
+      { mimeType: "image/webp", data: "CCCC" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "input_image",
+          detail: "auto",
+          image_url: "data:image/webp;base64,CCCC",
+        },
+      ],
+    });
+  });
+});
+
 describe("GrokProvider — transport error mapping", () => {
   it("maps an xAI APIError to ProviderTransportError with its status", async () => {
     const apiError = new OpenAI.APIError(401, undefined, "unauthorized", undefined);

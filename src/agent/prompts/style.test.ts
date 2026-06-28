@@ -64,6 +64,24 @@ describe("GPT-5.5 style — tuned scaffolding", () => {
   });
 });
 
+describe("Interpreting attached images — present in both modes and all styles", () => {
+  for (const provider of ["anthropic", "openai", "xai"] as const) {
+    for (const mode of ["standard", "champions"] as const) {
+      it(`carries the image-interpreting section + few-shot (${provider}, ${mode})`, () => {
+        const text = buildSystemSegments({ provider, mode })
+          .map((s) => s.text)
+          .join("\n");
+        expect(text).toContain("# Interpreting attached images");
+        // The general-not-just-teams guarantee + the uncertainty discipline cue.
+        expect(text).toContain("general, not just teams");
+        expect(text).toContain("uncertainty_flags");
+        // The image few-shot example rides in the examples/few-shot segment.
+        expect(text).toContain("attached screenshot");
+      });
+    }
+  }
+});
+
 describe("Grok 4.3 style — XML-tagged scaffolding", () => {
   const text = buildSystemSegments({ provider: "xai", mode: "standard" })
     .map((s) => s.text)

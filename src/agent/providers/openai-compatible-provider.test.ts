@@ -347,4 +347,41 @@ describe("OpenAICompatibleProvider — tool result messages", () => {
     });
   });
 });
+
+describe("OpenAICompatibleProvider — image attachments", () => {
+  it("a text-only turn keeps content a plain string (byte-identical)", () => {
+    const provider = makeProvider(fakeClient([]).client);
+    const t = provider.createTranscript([], "q") as any[];
+    expect(t[t.length - 1]).toEqual({ role: "user", content: "q" });
+  });
+
+  it("attaches image_url data-URL parts after the text part", () => {
+    const provider = makeProvider(fakeClient([]).client);
+    const t = provider.createTranscript([], "what is this?", [
+      { mimeType: "image/png", data: "AAAA" },
+      { mimeType: "image/jpeg", data: "BBBB" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "what is this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } },
+        { type: "image_url", image_url: { url: "data:image/jpeg;base64,BBBB" } },
+      ],
+    });
+  });
+
+  it("an image-only turn (empty text) emits image_url parts with no text part", () => {
+    const provider = makeProvider(fakeClient([]).client);
+    const t = provider.createTranscript([], "", [
+      { mimeType: "image/webp", data: "CCCC" },
+    ]) as any[];
+    expect(t[t.length - 1]).toEqual({
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: "data:image/webp;base64,CCCC" } },
+      ],
+    });
+  });
+});
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -37,6 +37,21 @@ export type DbCtx = {
 };
 
 /**
+ * One image attached to the current user message. The canonical in-process
+ * shape: the provider adapters format it for their wire protocol (Anthropic uses
+ * the raw base64 + `mimeType`; OpenAI/xAI build a `data:` URL from both).
+ *
+ * `mimeType` is restricted to the set every provider accepts and is the type the
+ * SERVER sniffed from the bytes (not the client's declared type) — Anthropic
+ * 400s if the declared media type disagrees with the actual bytes. `data` is RAW
+ * base64 with no `data:` prefix.
+ */
+export interface ImageAttachment {
+  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  data: string;
+}
+
+/**
  * Per-request agent context. Built in src/agent/context.ts; threaded into every
  * tool `run` call and into `runOak`.
  */
@@ -103,6 +118,15 @@ export interface AgentContext {
    * and to persist the conversation's active team. `undefined` ⇒ nothing saved.
    */
   savedTeam?: import("@/agent/schemas").SavedTeam;
+  /**
+   * Images attached to THIS turn's user message (validated + sniffed by the
+   * route). Server-bound and handed straight to the model in the current user
+   * message — never routed through any content-specific preprocessing; the model
+   * decides what the image is. Consume-on-turn: images are NOT stored in history,
+   * so this only ever carries the current turn's attachments. `undefined`/empty ⇒
+   * a text-only turn (the providers then keep `content` a plain string).
+   */
+  images?: ImageAttachment[];
 }
 
 /**

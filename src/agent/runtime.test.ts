@@ -246,6 +246,30 @@ describe("request shape (RISK DIRECTIVE: no forced tool_choice on Sonnet 4.6)", 
     expect(messages[1]).toEqual({ role: "assistant", content: "prev answer" });
     expect(messages[2]).toEqual({ role: "user", content: "follow up" });
   });
+
+  it("threads ctx.images onto the current user message (consume-on-turn)", async () => {
+    const { client, snapshots } = scriptedClient([
+      message([toolUse("submit_answer", validAnswer, "t1")]),
+    ]);
+    const ctxWithImage = {
+      ...ctx,
+      images: [{ mimeType: "image/png", data: "AAAA" }],
+    } as unknown as AgentContext;
+
+    await runOakWith(client, "what's on this team?", [], ctxWithImage);
+
+    const { messages } = snapshots[0];
+    const last = messages[messages.length - 1];
+    expect(last.role).toBe("user");
+    expect(last.content).toEqual([
+      { type: "text", text: "what's on this team?" },
+      {
+        type: "image",
+        source: { type: "base64", media_type: "image/png", data: "AAAA" },
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
+  });
 });
 
 // --- Happy paths -----------------------------------------------------------

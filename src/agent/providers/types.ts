@@ -23,7 +23,7 @@
 
 import type { ProviderKind } from "@/agent/models";
 import type { JsonSchema } from "@/agent/schemas";
-import type { ChatMessage } from "@/agent/types";
+import type { ChatMessage, ImageAttachment } from "@/agent/types";
 
 /**
  * Reasoning knob, normalized across providers. Anthropic uses adaptive thinking
@@ -136,10 +136,18 @@ export interface LLMProvider {
   /** The concrete API model id, surfaced in the per-turn trace. */
   readonly apiModelId: string;
 
-  /** Build the initial transcript: prior in-session history, then the message. */
+  /**
+   * Build the initial transcript: prior in-session history, then the current
+   * message. When `images` are present they ride on the CURRENT user message as
+   * provider-native content parts (history turns are always text-only, since
+   * images are consume-on-turn and never stored in history). With no images the
+   * current message stays a plain string so the request body is byte-identical
+   * to the text-only path (prompt-cache + recorded-stream stability).
+   */
   createTranscript(
     history: ChatMessage[],
     message: string,
+    images?: ImageAttachment[],
   ): ProviderTranscript;
 
   /** Open one streaming turn against the request signal. */

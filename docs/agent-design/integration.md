@@ -9,7 +9,8 @@ The web backend exposes a chat endpoint that drives the agent:
 
 ```
 POST /api/chat
-Request:  { "session_id": string, "message": string }
+Request:  { "session_id": string, "message": string,
+            "images"?: { "mimeType": string, "data": string }[] }  // ≤ 4, base64
 Response: streamed — tool-activity progress events, then a final
           { "answer": OakAnswer }   (see output-formats.md)
 ```
@@ -33,8 +34,9 @@ async function runOak(
 
 | Field        | Used by the agent                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `message`    | The user's question — the primary input.                                                                                |
-| `history`    | Prior turns this session, for multi-turn refinement (US-10). The agent reads the prior candidate set / topic from here. |
+| `message`    | The user's question — the primary input. MAY be empty when `images` is present (an image-only "what is this?" upload). |
+| `images`     | Up to 4 images attached to THIS turn, reasoned about by the model directly (general vision — team screenshots, a Pokémon to ID, a damage-calc, etc.). **Consume-on-turn**: validated + MIME-sniffed by the route, bound onto `AgentContext.images`, and handed straight to the model in the current user message — NOT stored in history. The model decides what the image is; it is never routed through a content-specific parser. A team screenshot's extracted `proposed_team` carries forward via the existing `answer_json` path. |
+| `history`    | Prior turns this session, for multi-turn refinement (US-10). The agent reads the prior candidate set / topic from here. Text only — images are not replayed (re-attach to revisit a non-team image). |
 | `session_id` | Orchestration only (routing to the right in-memory history); not seen by the model.                                     |
 
 ## Output Contract

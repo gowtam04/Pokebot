@@ -56,9 +56,10 @@ import type {
   TurnRequest,
 } from "@/agent/providers/types";
 import type { ProviderKind } from "@/agent/models";
-import type { ChatMessage } from "@/agent/types";
+import type { ChatMessage, ImageAttachment } from "@/agent/types";
 
 type RInputItem = OpenAI.Responses.ResponseInputItem;
+type RInputContent = OpenAI.Responses.ResponseInputContent;
 type RStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 type RResponse = OpenAI.Responses.Response;
 type RUsage = OpenAI.Responses.ResponseUsage;
@@ -128,13 +129,17 @@ export class GrokProvider implements LLMProvider {
   createTranscript(
     history: ChatMessage[],
     message: string,
+    images?: ImageAttachment[],
   ): ProviderTranscript {
     // System text rides on `instructions`, not the transcript.
     const items: RInputItem[] = [
       ...history.map(
         (turn): REasyMessage => ({ role: turn.role, content: turn.content }),
       ),
-      { role: "user", content: message } satisfies REasyMessage,
+      {
+        role: "user",
+        content: buildUserContent(message, images),
+      } satisfies REasyMessage,
     ];
     return items;
   }
@@ -206,6 +211,32 @@ export class GrokProvider implements LLMProvider {
       }),
     );
   }
+}
+
+/**
+ * Build the CURRENT user message content. Text-only stays a plain string (so the
+ * request body is byte-identical to the pre-image path — `instructions` + a
+ * string-content message — keeping xAI's automatic prefix cache warm). With
+ * images present, emit Responses content parts: the `input_text` part (omitted
+ * for an image-only turn) followed by one `input_image` part per attachment,
+ * each a base64 `data:` URL. The image rides INSIDE this message's `content`
+ * array, so the transcript's depth-1 `.flat()` in `streamTurn` never disturbs it.
+ */
+function buildUserContent(
+  message: string,
+  images?: ImageAttachment[],
+): string | RInputContent[] {
+  if (!images || images.length === 0) return message;
+  const parts: RInputContent[] = [];
+  if (message.length > 0) parts.push({ type: "input_text", text: message });
+  for (const img of images) {
+    parts.push({
+      type: "input_image",
+      detail: "auto",
+      image_url: `data:${img.mimeType};base64,${img.data}`,
+    });
+  }
+  return parts;
 }
 
 // ---------------------------------------------------------------------------
