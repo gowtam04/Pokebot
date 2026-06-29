@@ -4,14 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/AnswerCard";
 import Markdown from "@/components/Markdown";
-
-/** Fresh-session example prompts (design-system.md "Empty state"). */
-const EXAMPLE_QUERIES = [
-  "Pokémon that learn Trick Room and Will-O-Wisp",
-  "Does Fake Out work on Farigiraf?",
-  "Fastest Fire types",
-  "What's strong against Dragapult?",
-];
+import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
 
 /**
  * Heuristic: has the streaming answer begun laying out a markdown table? A table
@@ -52,6 +45,19 @@ export default function ChatThread({
   imagePreviews,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
+
+  // Empty-state starter chips: show a fresh random 4 each time the empty state
+  // appears (page load, or returning to it after a "new chat" resets `turns`),
+  // so a user discovers Oak's full range over repeated visits. The initial value
+  // is the deterministic first-4 so the server render and first client render
+  // match (this is a Client Component — `Math.random()` at render time would
+  // hydration-mismatch); the post-mount effect then swaps in the random set.
+  const [examples, setExamples] = useState<string[]>(() =>
+    STARTER_PROMPTS.slice(0, 4),
+  );
+  useEffect(() => {
+    if (showEmptyState) setExamples(pickRandomPrompts(4));
+  }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
   // a phone where the composer occupies a big share of the screen, so a fresh
@@ -142,7 +148,7 @@ export default function ChatThread({
             calcs, or a quick Pokédex lookup.
           </p>
           <div className="chat-empty__examples">
-            {EXAMPLE_QUERIES.map((query) => (
+            {examples.map((query) => (
               <button
                 key={query}
                 type="button"

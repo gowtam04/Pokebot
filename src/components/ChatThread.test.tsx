@@ -4,6 +4,7 @@ import { render, screen, cleanup, within, act } from "@testing-library/react";
 afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
 import type { ChatThreadProps } from "./types";
+import { STARTER_PROMPTS } from "@/lib/example-prompts";
 
 /** Minimal props with sensible defaults; override per test. */
 function props(overrides: Partial<ChatThreadProps> = {}): ChatThreadProps {
@@ -49,6 +50,31 @@ describe("ChatThread — in-flight streaming bubble", () => {
       />,
     );
     expect(screen.queryByTestId("streaming-answer")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatThread — empty-state starter chips", () => {
+  it("renders exactly 4 starter chips, each drawn from the prompt pool", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    const chips = screen.getAllByTestId("chat-empty-example");
+    // After mount the effect swaps the deterministic first-4 for a random 4.
+    expect(chips).toHaveLength(4);
+    for (const chip of chips) {
+      expect(STARTER_PROMPTS).toContain(chip.textContent);
+    }
+    // No duplicates within the shown set (sampled without replacement).
+    const shown = chips.map((c) => c.textContent);
+    expect(new Set(shown).size).toBe(4);
+  });
+
+  it("shows no starter chips once the conversation has turns", () => {
+    render(
+      <ChatThread
+        {...props({ turns: [{ id: "u1", role: "user", content: "hi" }] })}
+      />,
+    );
+    expect(screen.queryByTestId("chat-empty")).toBeNull();
+    expect(screen.queryByTestId("chat-empty-example")).toBeNull();
   });
 });
 
