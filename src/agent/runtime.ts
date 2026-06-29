@@ -77,7 +77,7 @@ export type { AnthropicClientLike, MessageStreamLike };
 // ---------------------------------------------------------------------------
 
 /** Hard cap on model turns per user message (integration.md / D-loop). */
-export const MAX_ITERATIONS = 10;
+export const MAX_ITERATIONS = 14;
 
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
 export const MAX_SUBMIT_RETRIES = 2;
@@ -98,6 +98,31 @@ const EMPTY_TURN_NUDGE =
   "ONLY way to reply. Call submit_answer now with your complete answer (or a " +
   "clarification_needed payload if you genuinely still need to ask). Do not " +
   "reply with plain text.";
+
+/**
+ * How many iterations from the MAX_ITERATIONS cap to start nudging the model to
+ * wrap up. A data-gathering turn that's still calling read/compute tools this
+ * close to the cap is at risk of exhausting the loop before it ever submits —
+ * the cap is the hard backstop, and a model that keeps second-guessing (e.g.
+ * recomputing a damage roll for a second spread) can burn the remaining budget
+ * and trip `max_iterations_reached`. Firing once at cap − N leaves a couple of
+ * iterations for the model to act on the nudge before the backstop hits.
+ */
+export const SUBMIT_NUDGE_REMAINING = 3;
+
+/**
+ * The corrective user turn appended (once) when the loop is within
+ * SUBMIT_NUDGE_REMAINING iterations of the cap and the model is still gathering
+ * data rather than submitting. It does NOT force a premature answer — it tells
+ * the model to submit IF it already has enough, or to report insufficient_data
+ * cleanly otherwise, instead of letting the cap synthesize a generic apology.
+ */
+const SUBMIT_NUDGE =
+  "You are close to the tool-call limit for this turn. If you already have " +
+  "enough information to answer, call submit_answer NOW with what you have — " +
+  "do not gather or recompute more data. If you genuinely cannot answer, call " +
+  "submit_answer with an insufficient_data payload explaining what's missing. " +
+  "Either way, submit_answer on your next turn.";
 
 // ---------------------------------------------------------------------------
 // Provider-neutral tool definitions (T1..T11 plus the inlined T12
@@ -679,6 +704,8 @@ export async function runWithProvider(
 
   let submitRetries = 0;
   let emptyTurnNudges = 0;
+  // Fire the late-iteration submit nudge at most once per turn (see SUBMIT_NUDGE).
+  let submitNudged = false;
 
   // get_pokemon profiles fetched this turn — used by answer enrichment to
   // synthesize subjects[] when the model omits it on a single-entity answer.
@@ -891,6 +918,17 @@ export async function runWithProvider(
     // Hand the tool results back (provider-shaped) and loop.
     for (const m of provider.buildToolResultMessages(toolResults)) {
       transcript.push(m);
+    }
+
+    // Late-iteration submit nudge: once we're within SUBMIT_NUDGE_REMAINING of
+    // the cap and the model is STILL gathering (it reached here, so it called
+    // tools but not a valid submit_answer), remind it to wrap up. Appended after
+    // the tool_result message as a separate user turn (providers accept a
+    // tool_result turn followed by a user turn — Anthropic combines same-role
+    // messages, Grok/OpenAI treat them as ordinary items). Fired once.
+    if (!submitNudged && iteration >= MAX_ITERATIONS - SUBMIT_NUDGE_REMAINING) {
+      submitNudged = true;
+      transcript.push(provider.buildUserMessage(SUBMIT_NUDGE));
     }
   }
 

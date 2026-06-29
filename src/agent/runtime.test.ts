@@ -56,6 +56,7 @@ import {
   MAX_EMPTY_TURN_NUDGES,
   MAX_ITERATIONS,
   runOakWith,
+  SUBMIT_NUDGE_REMAINING,
 } from "./runtime";
 
 // --- Fixtures --------------------------------------------------------------
@@ -444,6 +445,43 @@ describe("orchestration fallbacks", () => {
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain("max_iterations_reached");
     expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+  });
+
+  it("nudges the model to submit once, SUBMIT_NUDGE_REMAINING iterations before the cap", async () => {
+    // The model never submits — always asks for another tool, so the loop runs
+    // every iteration and the late-iteration submit nudge fires. Script one
+    // tool-use response per iteration (rather than mockImplementation, which
+    // would bypass the snapshot recorder).
+    const { client, stream, snapshots } = scriptedClient(
+      Array.from({ length: MAX_ITERATIONS }, () =>
+        message([toolUse("query_pokedex", {}, "t")]),
+      ),
+    );
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(client, "q", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    const nudgeCount = (params: {
+      messages: { role: string; content: unknown }[];
+    }) =>
+      params.messages.filter(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("close to the tool-call limit"),
+      ).length;
+
+    // Fires once at iteration (cap − SUBMIT_NUDGE_REMAINING): absent from the
+    // request *at* that iteration, present (and last) on the very next one.
+    const fireAt = MAX_ITERATIONS - SUBMIT_NUDGE_REMAINING;
+    expect(nudgeCount(snapshots[fireAt])).toBe(0);
+    expect(nudgeCount(snapshots[fireAt + 1])).toBe(1);
+    expect(snapshots[fireAt + 1].messages.at(-1).content).toContain(
+      "close to the tool-call limit",
+    );
+    // Never duplicated, even though several iterations remain after it fires.
+    expect(nudgeCount(snapshots.at(-1))).toBe(1);
   });
 
   it("nudges back to submit_answer when a turn ends with no tool call, then accepts the submit", async () => {
