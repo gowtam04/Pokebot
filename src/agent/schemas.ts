@@ -53,6 +53,41 @@ export const TYPE_NAMES = [
 
 export const typeNameSchema = z.enum(TYPE_NAMES);
 
+/**
+ * Type display order used in-game by Pokémon Champions (NOT alphabetical and NOT
+ * the `TYPE_NAMES` enum order). A permutation of TYPE_NAMES — same 18 members,
+ * presentation order only. Pinned as a permutation by schemas.test.ts.
+ */
+export const TYPE_DISPLAY_ORDER = [
+  "normal",
+  "grass",
+  "fire",
+  "water",
+  "electric",
+  "bug",
+  "flying",
+  "rock",
+  "poison",
+  "ground",
+  "ice",
+  "fighting",
+  "psychic",
+  "ghost",
+  "dragon",
+  "dark",
+  "steel",
+  "fairy",
+] as const;
+
+const TYPE_DISPLAY_RANK = new Map<string, number>(
+  TYPE_DISPLAY_ORDER.map((t, i) => [t, i]),
+);
+
+/** Sort index for a type slug in Champions display order; unknown/"" sorts last. */
+export function typeDisplayIndex(type: string): number {
+  return TYPE_DISPLAY_RANK.get(type) ?? Number.MAX_SAFE_INTEGER;
+}
+
 /** Stat keys usable in query_pokedex filters/sort (tools.md T2). */
 export const STAT_KEYS = [
   "hp",

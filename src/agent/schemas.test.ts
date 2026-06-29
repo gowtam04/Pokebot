@@ -19,6 +19,9 @@ import {
   getActiveTeamInputSchema,
   TOOL_NAMES,
   toolInputJsonSchemas,
+  TYPE_DISPLAY_ORDER,
+  TYPE_NAMES,
+  typeDisplayIndex,
   type OakAnswer,
 } from "@/agent/schemas";
 import type { TeamMember } from "@/data/teams/team-schema";
@@ -153,6 +156,33 @@ describe("get_active_team I/O (T12)", () => {
     expect(
       getActiveTeamInputSchema.safeParse({ team_id: "abc" }).success,
     ).toBe(false);
+  });
+});
+
+describe("TYPE_DISPLAY_ORDER / typeDisplayIndex (Champions display order)", () => {
+  it("is a permutation of TYPE_NAMES (same 18 members, presentation order only)", () => {
+    expect(TYPE_DISPLAY_ORDER).toHaveLength(18);
+    expect(new Set(TYPE_DISPLAY_ORDER).size).toBe(TYPE_DISPLAY_ORDER.length);
+    expect(new Set(TYPE_DISPLAY_ORDER)).toEqual(new Set(TYPE_NAMES));
+  });
+
+  it("starts with the Champions order normal, grass, fire, water", () => {
+    expect(TYPE_DISPLAY_ORDER.slice(0, 4)).toEqual([
+      "normal",
+      "grass",
+      "fire",
+      "water",
+    ]);
+  });
+
+  it("returns the slot index; unknown/empty sorts last", () => {
+    expect(typeDisplayIndex("normal")).toBe(0);
+    expect(typeDisplayIndex("grass")).toBe(1);
+    expect(typeDisplayIndex("fire")).toBe(2);
+    expect(typeDisplayIndex("water")).toBe(3);
+    expect(typeDisplayIndex("fairy")).toBe(17);
+    expect(typeDisplayIndex("")).toBe(Number.MAX_SAFE_INTEGER);
+    expect(typeDisplayIndex("notatype")).toBe(Number.MAX_SAFE_INTEGER);
   });
 });
 

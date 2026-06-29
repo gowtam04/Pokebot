@@ -8,7 +8,7 @@
 "use client";
 
 import TypeBadge from "@/components/TypeBadge";
-import type { TypeName } from "@/agent/schemas";
+import { typeDisplayIndex, type TypeName } from "@/agent/schemas";
 import type { PokemonArtifactData } from "@/lib/entity-artifact";
 
 import EntityLink from "./EntityLink";
@@ -56,20 +56,19 @@ function titleize(value: string): string {
 }
 
 /**
- * Order a group's moves by type (alphabetical), then alphabetically by name
- * within each type, so same-type moves cluster together in the chip grid and
- * their colored badges read as type groups. Untyped moves sort last.
+ * Order a group's moves by type in Pokémon Champions display order, then
+ * alphabetically by name within each type, so same-type moves cluster together
+ * in the chip grid and their colored badges read as type groups. Untyped moves
+ * sort last (typeDisplayIndex returns MAX_SAFE_INTEGER for "").
  */
 function sortMovesByType<T extends { type: string; display_name: string }>(
   moves: readonly T[],
 ): T[] {
-  return [...moves].sort((a, b) => {
-    const typeA = a.type || "￿";
-    const typeB = b.type || "￿";
-    return (
-      typeA.localeCompare(typeB) || a.display_name.localeCompare(b.display_name)
-    );
-  });
+  return [...moves].sort(
+    (a, b) =>
+      typeDisplayIndex(a.type) - typeDisplayIndex(b.type) ||
+      a.display_name.localeCompare(b.display_name),
+  );
 }
 
 export interface PokemonArtifactProps {
@@ -109,6 +108,11 @@ export default function PokemonArtifact({
   };
   const quadWeakTo = defensive.quad_weak_to ?? [];
   const quadResists = defensive.quad_resists ?? [];
+
+  // Order the matchup lists by Champions display order so this panel reads
+  // consistently with the movepool. quad_* stay unsorted (membership-only).
+  const orderTypes = (types: readonly string[]): string[] =>
+    [...types].sort((a, b) => typeDisplayIndex(a) - typeDisplayIndex(b));
 
   return (
     <div className="pokemon-artifact" data-testid="pokemon-artifact">
@@ -189,19 +193,19 @@ export default function PokemonArtifact({
         <div className="matchup-grid" data-testid="pokemon-matchups">
           <MatchupRow
             label="Weak to"
-            types={matchups.weak_to}
+            types={orderTypes(matchups.weak_to)}
             testid="matchups-weak"
             multiplierFor={(t) => (quadWeakTo.includes(t) ? "x4" : "x2")}
           />
           <MatchupRow
             label="Resists"
-            types={matchups.resists}
+            types={orderTypes(matchups.resists)}
             testid="matchups-resists"
             multiplierFor={(t) => (quadResists.includes(t) ? "x1/4" : "x1/2")}
           />
           <MatchupRow
             label="Immune to"
-            types={matchups.immune_to}
+            types={orderTypes(matchups.immune_to)}
             testid="matchups-immune"
             multiplierFor={() => "x0"}
           />

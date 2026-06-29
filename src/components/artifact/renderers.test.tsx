@@ -80,6 +80,33 @@ describe("PokemonArtifact", () => {
     // No provider mounted → click is a safe no-op (does not throw).
     expect(() => fireEvent.click(moveBtn)).not.toThrow();
   });
+
+  it("orders movepool types and matchup rows by Champions display order", () => {
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} />);
+
+    // Movepool: within a method group, types follow Champions order
+    // (fire=2 before dragon=14), not alphabetical (which gave dragon first).
+    const levelUp = screen.getByTestId("movepool-group-Level-up");
+    const moveIds = Array.from(
+      levelUp.querySelectorAll('[data-testid^="movepool-move-"]'),
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(moveIds).toEqual([
+      "movepool-move-fire-fang",
+      "movepool-move-dragon-claw",
+    ]);
+
+    // Matchups: Resists reads fire, rock, poison (Champions order),
+    // reordered from the fixture's [fire, poison, rock].
+    const resists = screen.getByTestId("matchups-resists");
+    const resistIds = Array.from(
+      resists.querySelectorAll('[data-testid^="type-badge-"]'),
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(resistIds).toEqual([
+      "type-badge-fire",
+      "type-badge-rock",
+      "type-badge-poison",
+    ]);
+  });
 });
 
 describe("MoveArtifact", () => {
