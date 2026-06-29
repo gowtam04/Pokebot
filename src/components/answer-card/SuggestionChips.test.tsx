@@ -6,7 +6,7 @@ import SuggestionChips from "./SuggestionChips";
 import {
   RESOLUTION_FAILED_ANSWER,
   CLARIFICATION_ANSWER,
-} from "./test-fixtures";
+} from "@/components/test-fixtures";
 
 describe("SuggestionChips", () => {
   it("renders nothing when suggestions is empty", () => {

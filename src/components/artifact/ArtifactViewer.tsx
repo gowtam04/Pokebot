@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import CaveatStrip from "@/components/CaveatStrip";
+import CaveatStrip from "@/components/answer-card/CaveatStrip";
 import type { EntityArtifactOk } from "@/lib/entity-artifact";
 
 import { useArtifactViewer } from "./useArtifactViewer";

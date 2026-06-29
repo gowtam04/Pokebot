@@ -6,7 +6,7 @@
 
 "use client";
 
-import SpriteCard from "@/components/SpriteCard";
+import SpriteCard from "@/components/answer-card/SpriteCard";
 import type { Subject } from "@/agent/schemas";
 
 export interface ComparisonArtifactProps {

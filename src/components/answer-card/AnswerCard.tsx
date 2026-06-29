@@ -1,16 +1,16 @@
 "use client";
 
 import type { AnswerCardProps } from "@/components/types";
-import AnswerBody from "@/components/AnswerBody";
-import ReasoningBlock from "@/components/ReasoningBlock";
-import SpriteCard from "@/components/SpriteCard";
-import CandidateTable from "@/components/CandidateTable";
-import SourceList from "@/components/SourceList";
-import InferenceCallout from "@/components/InferenceCallout";
-import CaveatStrip from "@/components/CaveatStrip";
-import DamageReadout from "@/components/DamageReadout";
-import SuggestionChips from "@/components/SuggestionChips";
-import QuestionOptions from "@/components/QuestionOptions";
+import AnswerBody from "@/components/answer-card/AnswerBody";
+import ReasoningBlock from "@/components/answer-card/ReasoningBlock";
+import SpriteCard from "@/components/answer-card/SpriteCard";
+import CandidateTable from "@/components/answer-card/CandidateTable";
+import SourceList from "@/components/answer-card/SourceList";
+import InferenceCallout from "@/components/answer-card/InferenceCallout";
+import CaveatStrip from "@/components/answer-card/CaveatStrip";
+import DamageReadout from "@/components/answer-card/DamageReadout";
+import SuggestionChips from "@/components/answer-card/SuggestionChips";
+import QuestionOptions from "@/components/answer-card/QuestionOptions";
 import ProposedTeamCard from "@/components/teams/ProposedTeamCard";
 import SavedTeamCard from "@/components/teams/SavedTeamCard";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";

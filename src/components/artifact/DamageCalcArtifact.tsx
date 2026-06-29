@@ -6,7 +6,7 @@
 
 "use client";
 
-import DamageReadout from "@/components/DamageReadout";
+import DamageReadout from "@/components/answer-card/DamageReadout";
 import type { DamageCalc } from "@/agent/schemas";
 
 export interface DamageCalcArtifactProps {

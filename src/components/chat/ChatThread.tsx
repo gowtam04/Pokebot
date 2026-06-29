@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
-import AnswerCard from "@/components/AnswerCard";
+import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
 

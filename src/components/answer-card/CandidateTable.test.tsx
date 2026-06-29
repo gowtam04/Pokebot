@@ -10,7 +10,7 @@ import {
 // Spy on the artifact viewer: every row now opens that Pokémon's artifact, so
 // assert against openEntity. Hoisted so the vi.mock factory can close over it.
 const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
-vi.mock("./artifact/useArtifactViewer", () => ({
+vi.mock("@/components/artifact/useArtifactViewer", () => ({
   useArtifactViewer: () => ({
     isOpen: false,
     current: null,
@@ -33,8 +33,8 @@ import {
   CANDIDATES_TRUNCATED,
   CANDIDATES_EXACT,
   CANDIDATES_KEYSTATS_ONLY,
-} from "./test-fixtures";
-import type { Candidates } from "./types";
+} from "@/components/test-fixtures";
+import type { Candidates } from "@/components/types";
 
 describe("CandidateTable", () => {
   describe("N-of-M header when truncated", () => {

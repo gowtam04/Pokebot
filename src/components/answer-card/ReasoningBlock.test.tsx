@@ -3,7 +3,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ReasoningBlock from "./ReasoningBlock";
-import { CANONICAL_ANSWER } from "./test-fixtures";
+import { CANONICAL_ANSWER } from "@/components/test-fixtures";
 
 describe("ReasoningBlock", () => {
   const markdown = CANONICAL_ANSWER.reasoning_markdown;

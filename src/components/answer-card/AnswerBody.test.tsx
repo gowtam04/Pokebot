@@ -3,7 +3,7 @@ import { render, screen, cleanup, within } from "@testing-library/react";
 import AnswerBody from "./AnswerBody";
 
 afterEach(() => cleanup());
-import { CANONICAL_ANSWER, MINIMAL_ANSWER } from "./test-fixtures";
+import { CANONICAL_ANSWER, MINIMAL_ANSWER } from "@/components/test-fixtures";
 
 describe("AnswerBody", () => {
   it("renders the markdown text", () => {

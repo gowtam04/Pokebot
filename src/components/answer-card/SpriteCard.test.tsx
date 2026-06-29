@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 // Spy on the artifact viewer: the sprite (and name) open the Pokémon's artifact.
 const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
-vi.mock("./artifact/useArtifactViewer", () => ({
+vi.mock("@/components/artifact/useArtifactViewer", () => ({
   useArtifactViewer: () => ({
     isOpen: false,
     current: null,
@@ -22,7 +22,7 @@ afterEach(() => {
   openEntity.mockClear();
 });
 import SpriteCard from "./SpriteCard";
-import { SUBJECT_GARCHOMP, SUBJECT_MEWTWO_FALLBACK } from "./test-fixtures";
+import { SUBJECT_GARCHOMP, SUBJECT_MEWTWO_FALLBACK } from "@/components/test-fixtures";
 
 describe("SpriteCard", () => {
   describe("normal (non-fallback) subject", () => {

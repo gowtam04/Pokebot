@@ -3,7 +3,7 @@ import { render, screen, cleanup, within, act } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
-import type { ChatThreadProps } from "./types";
+import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
 
 /** Minimal props with sensible defaults; override per test. */

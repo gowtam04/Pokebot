@@ -3,8 +3,8 @@ import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import DamageReadout from "./DamageReadout";
-import { DAMAGE_CALC_GARCHOMP } from "./test-fixtures";
-import type { DamageCalc } from "./types";
+import { DAMAGE_CALC_GARCHOMP } from "@/components/test-fixtures";
+import type { DamageCalc } from "@/components/types";
 
 describe("DamageReadout", () => {
   it("always shows the 'Estimate' tag", () => {

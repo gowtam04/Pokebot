@@ -4,7 +4,7 @@
  * cited treatment as answers.
  */
 
-import SourceList from "@/components/SourceList";
+import SourceList from "@/components/answer-card/SourceList";
 import type { Citation } from "@/agent/schemas";
 
 export interface ArtifactSourcesProps {

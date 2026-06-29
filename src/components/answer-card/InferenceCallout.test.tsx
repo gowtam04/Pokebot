@@ -3,8 +3,8 @@ import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import InferenceCallout from "./InferenceCallout";
-import { INFERENCE_SPEED, INFERENCE_LOW_CONFIDENCE } from "./test-fixtures";
-import type { Inference } from "./types";
+import { INFERENCE_SPEED, INFERENCE_LOW_CONFIDENCE } from "@/components/test-fixtures";
+import type { Inference } from "@/components/types";
 
 describe("InferenceCallout", () => {
   it("renders nothing when inferences array is empty", () => {

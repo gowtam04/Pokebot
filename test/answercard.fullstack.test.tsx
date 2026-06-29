@@ -21,7 +21,7 @@ import {
   cleanup,
 } from "@testing-library/react";
 
-import AnswerCard from "@/components/AnswerCard";
+import AnswerCard from "@/components/answer-card/AnswerCard";
 import {
   CANONICAL_ANSWER,
   MINIMAL_ANSWER,

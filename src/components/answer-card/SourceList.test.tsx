@@ -7,7 +7,7 @@ import {
   CITATION_GARCHOMP,
   CITATION_EARTHQUAKE,
   CANONICAL_ANSWER,
-} from "./test-fixtures";
+} from "@/components/test-fixtures";
 
 describe("SourceList", () => {
   const citations = CANONICAL_ANSWER.citations;

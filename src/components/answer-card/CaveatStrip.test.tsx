@@ -6,7 +6,7 @@ import CaveatStrip from "./CaveatStrip";
 import {
   GENERATION_BASIS_GEN9,
   GENERATION_BASIS_FALLBACK,
-} from "./test-fixtures";
+} from "@/components/test-fixtures";
 
 describe("CaveatStrip", () => {
   it("renders nothing when no flags and fallback=false", () => {

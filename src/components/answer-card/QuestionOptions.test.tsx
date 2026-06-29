@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import QuestionOptions from "./QuestionOptions";
-import { QUESTION_ANSWER } from "./test-fixtures";
+import { QUESTION_ANSWER } from "@/components/test-fixtures";
 
 const OPTIONS = QUESTION_ANSWER.question!.options;
 

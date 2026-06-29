@@ -18,7 +18,7 @@ vi.mock("@/lib/api/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
 import { fetchEntityArtifact } from "@/lib/api/entity-client";
 import type { EntityKind } from "@/agent/schemas";
 
-import AnswerCard from "@/components/AnswerCard";
+import AnswerCard from "@/components/answer-card/AnswerCard";
 import { CANONICAL_ANSWER } from "@/components/test-fixtures";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";

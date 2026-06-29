@@ -18,7 +18,7 @@ vi.mock("@/lib/image-attachments", () => ({
 afterEach(() => cleanup());
 
 import Composer from "./Composer";
-import type { ComposerProps, PendingImage } from "./types";
+import type { ComposerProps, PendingImage } from "@/components/types";
 import { filesToPendingImages } from "@/lib/image-attachments";
 
 /** Minimal props with sensible defaults; override per test. */
