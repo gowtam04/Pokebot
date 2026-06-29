@@ -8,7 +8,8 @@
  * (with a confirm step the row owns — AC-8.1). Stateless apart from the local
  * rename-edit and delete-confirm UI; the parent owns the data + persistence.
  *
- * Inline styles + design tokens, matching ChampionsToggle / the chat shell.
+ * Styling lives in `globals.css` (`.conv-row*`); the active look is driven off
+ * the `data-active` attribute and the pin look off `aria-pressed`.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -69,34 +70,11 @@ export default function ConversationRow({
     else setDraft(conversation.title);
   }
 
-  const iconBtn = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "28px",
-    height: "28px",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    background: "transparent",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    font: "inherit",
-    fontSize: "13px",
-  } as const;
-
   return (
     <div
+      className="conv-row"
       data-testid="conversation-row"
       data-active={active || undefined}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-2)",
-        padding: "var(--space-2) var(--space-3)",
-        borderRadius: "var(--radius-md)",
-        background: active ? "var(--surface-sunken)" : "transparent",
-        border: active ? "1px solid var(--border)" : "1px solid transparent",
-      }}
     >
       {editing ? (
         <input
@@ -112,72 +90,18 @@ export default function ConversationRow({
               setEditing(false);
             }
           }}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            font: "inherit",
-            fontSize: "16px", // 16px so iOS Safari doesn't zoom on focus
-            padding: "var(--space-1) var(--space-2)",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--border-strong)",
-            background: "var(--surface)",
-            color: "var(--text)",
-          }}
+          className="conv-row__rename"
         />
       ) : (
         <button
           type="button"
+          className="conv-row__open"
           onClick={onOpen}
           title={conversation.title}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: "2px",
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            font: "inherit",
-            textAlign: "left",
-            padding: 0,
-            color: "var(--text)",
-          }}
         >
-          <span
-            style={{
-              maxWidth: "100%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: "14px",
-              fontWeight: active ? 600 : 500,
-              color: "var(--text-strong)",
-            }}
-          >
-            {conversation.title}
-          </span>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--space-2)",
-              fontSize: "12px",
-              color: "var(--text-faint)",
-            }}
-          >
-            <span
-              data-testid="format-badge"
-              style={{
-                padding: "0 6px",
-                borderRadius: "var(--radius-pill)",
-                background: "var(--surface-sunken)",
-                border: "1px solid var(--border)",
-                color: "var(--text-muted)",
-                fontWeight: 600,
-              }}
-            >
+          <span className="conv-row__title">{conversation.title}</span>
+          <span className="conv-row__meta">
+            <span data-testid="format-badge" className="conv-row__badge">
               {formatLabel(conversation.format)}
             </span>
             <span>{relativeTime(conversation.updatedAt)}</span>
@@ -186,30 +110,25 @@ export default function ConversationRow({
       )}
 
       {!editing && (
-        <div
-          className="conv-row__actions"
-          style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}
-        >
+        <div className="conv-row__actions">
           {confirmingDelete ? (
             <>
               <button
                 type="button"
-                className="conv-row__icon-btn"
+                className="conv-row__icon-btn conv-row__icon-btn--wide conv-row__icon-btn--danger"
                 onClick={() => {
                   setConfirmingDelete(false);
                   onDelete();
                 }}
                 aria-label="Confirm delete"
-                style={{ ...iconBtn, width: "auto", paddingInline: "8px", color: "var(--danger)", fontWeight: 600 }}
               >
                 Delete?
               </button>
               <button
                 type="button"
-                className="conv-row__icon-btn"
+                className="conv-row__icon-btn conv-row__icon-btn--wide"
                 onClick={() => setConfirmingDelete(false)}
                 aria-label="Cancel delete"
-                style={{ ...iconBtn, width: "auto", paddingInline: "8px" }}
               >
                 Cancel
               </button>
@@ -223,10 +142,6 @@ export default function ConversationRow({
                 aria-label={conversation.pinned ? "Unpin conversation" : "Pin conversation"}
                 aria-pressed={conversation.pinned}
                 title={conversation.pinned ? "Unpin" : "Pin"}
-                style={{
-                  ...iconBtn,
-                  color: conversation.pinned ? "var(--poke-red)" : "var(--text-muted)",
-                }}
               >
                 {conversation.pinned ? "★" : "☆"}
               </button>
@@ -239,7 +154,6 @@ export default function ConversationRow({
                 }}
                 aria-label="Rename conversation"
                 title="Rename"
-                style={iconBtn}
               >
                 ✎
               </button>
@@ -249,7 +163,6 @@ export default function ConversationRow({
                 onClick={() => setConfirmingDelete(true)}
                 aria-label="Delete conversation"
                 title="Delete"
-                style={iconBtn}
               >
                 🗑
               </button>

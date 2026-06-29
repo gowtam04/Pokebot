@@ -42,16 +42,8 @@ export default function TeamList({
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   return (
-    <div
-      className="team-list"
-      data-testid="team-list"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-3)",
-      }}
-    >
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+    <div className="team-list" data-testid="team-list">
+      <div className="team-list__actions">
         <button type="button" data-testid="team-new" onClick={onNew}>
           New team
         </button>
@@ -61,62 +53,30 @@ export default function TeamList({
       </div>
 
       {teams.length === 0 ? (
-        <p
-          data-testid="team-list-empty"
-          style={{
-            font: "500 14px/1.5 var(--font-body)",
-            color: "var(--text-muted)",
-          }}
-        >
+        <p className="team-list__empty" data-testid="team-list-empty">
           No teams yet. Create one or import a Showdown paste to get started.
         </p>
       ) : (
-        <ul
-          data-testid="team-list-items"
-          style={{ listStyle: "none", margin: 0, padding: 0 }}
-        >
+        <ul className="team-list__items" data-testid="team-list-items">
           {teams.map((team) => {
             const selected = team.id === selectedId;
             const confirming = confirmingId === team.id;
             return (
               <li
                 key={team.id}
+                className="team-list__row"
                 data-testid={`team-row-${team.id}`}
                 data-selected={selected ? "true" : "false"}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--space-1)",
-                  padding: "var(--space-2)",
-                  borderRadius: "var(--radius-md)",
-                  border: `1px solid ${
-                    selected ? "var(--azure)" : "var(--border)"
-                  }`,
-                  marginBottom: "var(--space-2)",
-                }}
               >
                 <button
                   type="button"
+                  className="team-list__open"
                   data-testid={`team-open-${team.id}`}
                   onClick={() => onSelect(team.id)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    padding: 0,
-                    font: "700 15px/1.3 var(--font-body)",
-                    color: "var(--text-strong)",
-                  }}
                 >
                   {team.name || "Untitled team"}
                 </button>
-                <span
-                  style={{
-                    font: "500 12px/1.4 var(--font-body)",
-                    color: "var(--text-muted)",
-                  }}
-                >
+                <span className="team-list__meta">
                   {team.format} · {team.memberCount}/6
                   {team.incomplete && (
                     <span data-testid={`team-incomplete-${team.id}`}>
@@ -126,7 +86,7 @@ export default function TeamList({
                   )}
                 </span>
 
-                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <div className="team-list__row-actions">
                   <button
                     type="button"
                     data-testid={`team-duplicate-${team.id}`}

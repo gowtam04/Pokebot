@@ -63,53 +63,20 @@ export default function ConversationList({
   );
 
   const heading = (text: string) => (
-    <div
-      style={{
-        padding: "var(--space-2) var(--space-3) var(--space-1)",
-        fontSize: "11px",
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
-        color: "var(--text-faint)",
-      }}
-    >
-      {text}
-    </div>
+    <div className="conv-list__heading">{text}</div>
   );
 
   return (
     <nav
+      className="conv-list"
       data-testid="conversation-list"
       aria-label="Conversation history"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
-        gap: "var(--space-3)",
-        padding: "var(--space-3)",
-      }}
     >
       <button
         type="button"
         className="conv-list__newchat"
         onClick={onNewChat}
         data-testid="new-chat"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "var(--space-2)",
-          height: "40px",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid var(--border)",
-          background: "var(--poke-red)",
-          color: "var(--neutral-0)",
-          font: "inherit",
-          fontSize: "14px",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
       >
         + New chat
       </button>
@@ -121,19 +88,9 @@ export default function ConversationList({
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Search conversations…"
         aria-label="Search conversations"
-        style={{
-          height: "36px",
-          padding: "0 var(--space-3)",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          color: "var(--text)",
-          font: "inherit",
-          fontSize: "16px", // 16px so iOS Safari doesn't zoom on focus
-        }}
       />
 
-      <div role="group" aria-label="Filter by format" style={{ display: "inline-flex", gap: "var(--space-1)" }}>
+      <div role="group" aria-label="Filter by format" className="conv-list__filters">
         {FILTERS.map((f) => {
           const selected = formatFilter === f.value;
           return (
@@ -143,18 +100,6 @@ export default function ConversationList({
               className="conv-list__filter"
               onClick={() => onFormatFilterChange(f.value)}
               aria-pressed={selected}
-              style={{
-                flex: 1,
-                height: "30px",
-                borderRadius: "var(--radius-pill)",
-                border: "1px solid var(--border)",
-                background: selected ? "var(--surface-sunken)" : "transparent",
-                color: selected ? "var(--text-strong)" : "var(--text-muted)",
-                font: "inherit",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
             >
               {f.label}
             </button>
@@ -162,17 +107,9 @@ export default function ConversationList({
         })}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px" }}>
+      <div className="conv-list__scroll">
         {conversations.length === 0 ? (
-          <p
-            data-testid="history-empty"
-            style={{
-              padding: "var(--space-4) var(--space-3)",
-              color: "var(--text-faint)",
-              fontSize: "13px",
-              textAlign: "center",
-            }}
-          >
+          <p data-testid="history-empty" className="conv-list__empty">
             {filtersActive
               ? "No conversations match your search."
               : "No conversations yet. Start chatting to build your history."}

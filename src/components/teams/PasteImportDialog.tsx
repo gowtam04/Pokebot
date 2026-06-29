@@ -75,7 +75,6 @@ export default function PasteImportDialog({
       className="import-dialog__backdrop"
       data-testid="import-dialog-backdrop"
       onClick={onClose}
-      style={backdropStyle}
     >
       <div
         className="import-dialog"
@@ -84,37 +83,29 @@ export default function PasteImportDialog({
         aria-modal="true"
         aria-label="Import team from paste"
         onClick={(e) => e.stopPropagation()}
-        style={dialogStyle}
       >
-        <div style={headerStyle}>
-          <h2 style={titleStyle}>Import from paste ({format})</h2>
+        <div className="import-dialog__header">
+          <h2 className="import-dialog__title">Import from paste ({format})</h2>
           <button
             type="button"
+            className="import-dialog__close"
             data-testid="import-close"
             aria-label="Close import"
             onClick={onClose}
-            style={closeButtonStyle}
           >
             ×
           </button>
         </div>
 
         {phase.kind === "done" ? (
-          <div
-            data-testid="import-result"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-2)",
-            }}
-          >
+          <div className="import-dialog__result" data-testid="import-result">
             <p data-testid="import-success" role="status">
               Imported. {phase.notes.length === 0
                 ? "Everything resolved cleanly."
                 : `${phase.notes.length} item(s) need a look:`}
             </p>
             {phase.notes.length > 0 && (
-              <ul data-testid="import-notes" style={{ margin: 0 }}>
+              <ul className="import-dialog__notes" data-testid="import-notes">
                 {phase.notes.map((note, i) => (
                   <li
                     key={`${note.slot}-${note.kind}-${i}`}
@@ -139,19 +130,15 @@ export default function PasteImportDialog({
               </p>
             )}
             <textarea
+              className="import-dialog__textarea"
               data-testid="import-text"
               aria-label="Showdown paste"
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={12}
               placeholder="Paste a Showdown export here…"
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                font: "400 13px/1.5 var(--font-mono)",
-              }}
             />
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div className="import-dialog__actions">
               <button
                 type="button"
                 data-testid="import-submit"
@@ -167,57 +154,3 @@ export default function PasteImportDialog({
     </div>
   );
 }
-
-const backdropStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "var(--space-4)",
-  background: "rgba(35, 31, 28, 0.45)",
-  zIndex: 50,
-};
-
-const dialogStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: "560px",
-  background: "var(--surface)",
-  color: "var(--text)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "var(--shadow-overlay)",
-  padding: "var(--space-6)",
-  display: "flex",
-  flexDirection: "column",
-  gap: "var(--space-3)",
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "var(--space-3)",
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  font: "600 20px/1.3 var(--font-display)",
-  color: "var(--text-strong)",
-};
-
-// 44px touch target for the "×" close (was unstyled, ~24px on a phone).
-const closeButtonStyle: React.CSSProperties = {
-  flex: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "44px",
-  height: "44px",
-  fontSize: "24px",
-  lineHeight: 1,
-  background: "none",
-  border: "none",
-  color: "var(--text-muted)",
-  cursor: "pointer",
-};

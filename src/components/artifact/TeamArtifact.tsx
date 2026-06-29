@@ -70,6 +70,7 @@ function MemberCard({
   const cardStyle: CssVars = { "--member-type": `var(--type-${primaryType})` };
 
   return (
+    // eslint-disable-next-line react/forbid-dom-props -- dynamic --member-type CSS var bound per species
     <div className="team-member" style={cardStyle}>
       <div className="team-member__head">
         <span className="team-member__sprite-chip">
@@ -105,6 +106,7 @@ function MemberCard({
             {member.tera_type && (
               <span
                 className="team-member__tera"
+                // eslint-disable-next-line react/forbid-dom-props -- dynamic --tera-type CSS var
                 style={
                   { "--tera-type": `var(--type-${member.tera_type})` } as CssVars
                 }
@@ -153,6 +155,7 @@ function MemberCard({
                 <span className="team-stat__bar">
                   <span
                     className="team-stat__bar-fill"
+                    // eslint-disable-next-line react/forbid-dom-props -- runtime-computed bar width
                     style={{ width: `${width}%` }}
                   />
                 </span>

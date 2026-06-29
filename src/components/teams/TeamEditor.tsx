@@ -96,41 +96,16 @@ export default function TeamEditor({
   const teamLevelWarnings = team.validation.filter((w) => w.slot === undefined);
 
   return (
-    <div
-      className="team-editor"
-      data-testid="team-editor"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-2)",
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="team-editor" data-testid="team-editor">
+      <div className="team-editor__header">
         <input
+          className="team-editor__name"
           data-testid="team-name"
           aria-label="Team name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: "160px",
-            font: "600 18px/1.3 var(--font-display)",
-          }}
         />
-        <span
-          data-testid="team-editor-format"
-          style={{
-            font: "600 12px/1.4 var(--font-body)",
-            color: "var(--text-muted)",
-          }}
-        >
+        <span className="team-editor__format" data-testid="team-editor-format">
           {team.format}
         </span>
         <button
@@ -157,15 +132,9 @@ export default function TeamEditor({
         testid="team-level-warnings"
       />
 
-      <div
-        style={{
-          display: "grid",
-          // min(280px, 100%) lets a panel shrink below 280px on a narrow phone
-          // instead of forcing horizontal overflow; == 280px on desktop.
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
-          gap: "var(--space-3)",
-        }}
-      >
+      {/* min(280px, 100%) lets a panel shrink below 280px on a narrow phone
+          instead of forcing horizontal overflow; == 280px on desktop. */}
+      <div className="team-editor__grid">
         {members.map((member, i) => (
           <TeamMemberPanel
             key={i}
@@ -190,9 +159,9 @@ export default function TeamEditor({
       {members.length < 6 && (
         <button
           type="button"
+          className="team-editor__add"
           data-testid="team-add-member"
           onClick={addMember}
-          style={{ alignSelf: "flex-start" }}
         >
           Add Pokémon ({members.length}/6)
         </button>

@@ -8,8 +8,8 @@
  * key + its localStorage persistence and just passes `{ value, onChange }`. The
  * options come straight from the shared `MODELS` registry so the dropdown and
  * the server-side whitelist never drift. A native `<select>` is used (3 options)
- * for free keyboard/screen-reader behavior; styling is inline to match the
- * translucent-white header pills it sits beside.
+ * for free keyboard/screen-reader behavior; styling lives in `globals.css`
+ * (`.model-selector-pill*`) to match the translucent-white header pills.
  */
 
 import { MODELS, type ModelKey } from "@/agent/models";
@@ -33,45 +33,13 @@ export default function ModelSelector({
   const isConfigured = (key: ModelKey): boolean =>
     configuredModels ? configuredModels.includes(key) : true;
   return (
-    <label
-      className="model-selector-pill"
-      title="Choose which AI model answers"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-2)",
-        height: "40px",
-        paddingInline: "var(--space-3)",
-        borderRadius: "var(--radius-pill)",
-        border: "1px solid rgba(255, 255, 255, 0.45)",
-        background: "rgba(255, 255, 255, 0.16)",
-        color: "var(--neutral-0)",
-        font: "inherit",
-        // 16px so iOS Safari doesn't auto-zoom when the native picker opens.
-        fontSize: "16px",
-        fontWeight: 600,
-        lineHeight: 1.2,
-        whiteSpace: "nowrap",
-        cursor: "pointer",
-      }}
-    >
+    <label className="model-selector-pill" title="Choose which AI model answers">
       <select
+        className="model-selector-pill__select"
         data-testid="model-selector"
         aria-label="Answering model"
         value={value}
         onChange={(e) => onChange(e.target.value as ModelKey)}
-        style={{
-          appearance: "none",
-          WebkitAppearance: "none",
-          MozAppearance: "none",
-          border: "none",
-          background: "transparent",
-          color: "inherit",
-          font: "inherit",
-          fontWeight: 600,
-          cursor: "pointer",
-          paddingInlineEnd: "var(--space-1)",
-        }}
       >
         {MODELS.map((m) => {
           const configured = isConfigured(m.key);
@@ -82,7 +50,7 @@ export default function ModelSelector({
               key={m.key}
               value={m.key}
               disabled={!configured}
-              style={{ color: "var(--neutral-900, #111)" }}
+              className="model-selector-pill__option"
             >
               {m.label}
               {configured ? "" : " (not configured)"}
@@ -92,19 +60,7 @@ export default function ModelSelector({
       </select>
       {/* Caret — `appearance:none` strips the native one, so without this the
           pill reads as a static label on a phone rather than a tappable picker. */}
-      <span
-        aria-hidden="true"
-        style={{
-          width: "10px",
-          height: "10px",
-          flex: "none",
-          background: "currentColor",
-          WebkitMask: "var(--icon-chevron) center / contain no-repeat",
-          mask: "var(--icon-chevron) center / contain no-repeat",
-          transform: "rotate(90deg)",
-          opacity: 0.85,
-        }}
-      />
+      <span aria-hidden="true" className="pill-caret" />
     </label>
   );
 }

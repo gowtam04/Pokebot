@@ -156,46 +156,17 @@ export default function TeamsPage() {
     <main
       className="teams-page"
       data-testid="teams-page"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "100dvh",
-        padding: "max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left))",
-        gap: "var(--space-4)",
-      }}
     >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "var(--space-3)",
-        }}
-      >
-        <h1 style={{ margin: 0, font: "700 24px/1.2 var(--font-display)" }}>
+      <header className="teams-page__header">
+        <h1 className="teams-page__title">
           Teams
         </h1>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "var(--space-3)",
-          }}
-        >
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--space-2)",
-              font: "600 13px/1.4 var(--font-body)",
-            }}
-          >
+        <div className="teams-page__controls">
+          <label className="teams-page__format-label">
             Format
             <select
               data-testid="teams-format"
-              style={{ minWidth: 0, maxWidth: "100%", fontSize: "16px" }}
+              className="teams-page__format-select"
               value={format}
               onChange={(e) => {
                 setFormat(e.target.value as Format);
@@ -212,7 +183,7 @@ export default function TeamsPage() {
           <Link
             href="/"
             data-testid="teams-back"
-            style={{ font: "600 14px/1.4 var(--font-body)" }}
+            className="teams-page__back"
           >
             Back to chat
           </Link>
@@ -222,10 +193,7 @@ export default function TeamsPage() {
       {!auth.signedIn ? (
         <p
           data-testid="teams-guest"
-          style={{
-            font: "500 15px/1.6 var(--font-body)",
-            color: "var(--text-muted)",
-          }}
+          className="teams-page__guest"
         >
           Sign in from the chat page to save and manage teams.
         </p>
@@ -253,10 +221,7 @@ export default function TeamsPage() {
           ) : (
             <p
               data-testid="teams-no-selection"
-              style={{
-                font: "500 14px/1.5 var(--font-body)",
-                color: "var(--text-muted)",
-              }}
+              className="teams-page__empty"
             >
               Select a team to edit, or create a new one.
             </p>

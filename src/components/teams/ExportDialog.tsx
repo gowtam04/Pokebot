@@ -57,7 +57,6 @@ export default function ExportDialog({
       className="export-dialog__backdrop"
       data-testid="export-dialog-backdrop"
       onClick={onClose}
-      style={backdropStyle}
     >
       <div
         className="export-dialog"
@@ -66,18 +65,17 @@ export default function ExportDialog({
         aria-modal="true"
         aria-label="Export team"
         onClick={(e) => e.stopPropagation()}
-        style={dialogStyle}
       >
-        <div style={headerStyle}>
-          <h2 style={titleStyle}>
+        <div className="export-dialog__header">
+          <h2 className="export-dialog__title">
             Export {teamName ? `“${teamName}”` : "team"}
           </h2>
           <button
             type="button"
+            className="export-dialog__close"
             data-testid="export-close"
             aria-label="Close export"
             onClick={onClose}
-            style={closeButtonStyle}
           >
             ×
           </button>
@@ -93,18 +91,13 @@ export default function ExportDialog({
           <>
             <textarea
               ref={textRef}
+              className="export-dialog__text"
               data-testid="export-text"
               readOnly
               value={paste}
               rows={12}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                fontFamily: "var(--font-mono)",
-                font: "400 13px/1.5 var(--font-mono)",
-              }}
             />
-            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div className="export-dialog__actions">
               <button type="button" data-testid="export-copy" onClick={copy}>
                 {copied ? "Copied!" : "Copy"}
               </button>
@@ -115,57 +108,3 @@ export default function ExportDialog({
     </div>
   );
 }
-
-const backdropStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "var(--space-4)",
-  background: "rgba(35, 31, 28, 0.45)",
-  zIndex: 50,
-};
-
-const dialogStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: "560px",
-  background: "var(--surface)",
-  color: "var(--text)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "var(--shadow-overlay)",
-  padding: "var(--space-6)",
-  display: "flex",
-  flexDirection: "column",
-  gap: "var(--space-3)",
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "var(--space-3)",
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  font: "600 20px/1.3 var(--font-display)",
-  color: "var(--text-strong)",
-};
-
-// 44px touch target for the "×" close (was unstyled, ~24px on a phone).
-const closeButtonStyle: React.CSSProperties = {
-  flex: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "44px",
-  height: "44px",
-  fontSize: "24px",
-  lineHeight: 1,
-  background: "none",
-  border: "none",
-  color: "var(--text-muted)",
-  cursor: "pointer",
-};

@@ -32,8 +32,8 @@ import {
  * conversation (BR-A10).
  *
  * All network calls go through `@/lib/auth-client` (no direct `fetch` here), so
- * this component stays a pure jsdom-testable unit. Styling uses the design-system
- * tokens inline (`src/app/globals.css`) so it needs no new global CSS.
+ * this component stays a pure jsdom-testable unit. Styling lives in the global
+ * BEM `auth-dialog` block (`src/app/globals.css`).
  */
 
 export interface AuthDialogProps {
@@ -248,16 +248,6 @@ export default function AuthDialog({
       className="auth-dialog__backdrop"
       data-testid="auth-dialog-backdrop"
       onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--space-4)",
-        background: "rgba(35, 31, 28, 0.45)",
-        zIndex: 50,
-      }}
     >
       <div
         className="auth-dialog"
@@ -269,34 +259,12 @@ export default function AuthDialog({
         onKeyDown={(e) => {
           if (e.key === "Escape") onClose();
         }}
-        style={{
-          width: "100%",
-          maxWidth: "400px",
-          background: "var(--surface)",
-          color: "var(--text)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-overlay)",
-          padding: "var(--space-6)",
-        }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: "var(--space-3)",
-            marginBottom: "var(--space-4)",
-          }}
-        >
+        <div className="auth-dialog__header">
           <h2
             id={titleId}
             data-testid="auth-dialog-title"
-            style={{
-              margin: 0,
-              font: "600 22px/1.3 var(--font-display)",
-              color: "var(--text-strong)",
-            }}
+            className="auth-dialog__title"
           >
             {step === "email" ? "Sign in to Oak" : "Enter your code"}
           </h2>
@@ -305,15 +273,7 @@ export default function AuthDialog({
             data-testid="auth-close"
             aria-label="Close sign in"
             onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: "20px",
-              lineHeight: 1,
-              padding: "var(--space-1)",
-            }}
+            className="auth-dialog__close"
           >
             ×
           </button>
@@ -323,20 +283,9 @@ export default function AuthDialog({
           <p
             data-testid="auth-feedback"
             data-kind={fb.kind}
+            data-error={isError(fb.kind)}
             role={isError(fb.kind) ? "alert" : "status"}
-            style={{
-              margin: "0 0 var(--space-4)",
-              padding: "var(--space-3)",
-              borderRadius: "var(--radius-md)",
-              font: "600 13px/1.5 var(--font-body)",
-              background: isError(fb.kind)
-                ? "var(--danger-soft)"
-                : "var(--azure-soft)",
-              color: isError(fb.kind) ? "var(--danger)" : "var(--text)",
-              border: `1px solid ${
-                isError(fb.kind) ? "var(--danger)" : "var(--azure)"
-              }`,
-            }}
+            className="auth-dialog__feedback"
           >
             {message}
           </p>
@@ -346,27 +295,13 @@ export default function AuthDialog({
           <form
             data-testid="auth-email-step"
             onSubmit={submitEmail}
-            style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+            className="auth-dialog__form"
           >
-            <p
-              style={{
-                margin: 0,
-                font: "400 15px/1.55 var(--font-body)",
-                color: "var(--text-muted)",
-              }}
-            >
+            <p className="auth-dialog__intro">
               Enter your email and we&apos;ll send you a one-time code. No password
               needed.
             </p>
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-2)",
-                font: "700 13px/1.5 var(--font-body)",
-                color: "var(--text-strong)",
-              }}
-            >
+            <label className="auth-dialog__label">
               Email
               <input
                 ref={emailRef}
@@ -378,16 +313,14 @@ export default function AuthDialog({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                style={inputStyle}
+                className="auth-dialog__input"
               />
             </label>
             <button
               type="submit"
               data-testid="auth-send-code"
               disabled={submitting || email.trim().length === 0}
-              style={primaryButtonStyle(
-                submitting || email.trim().length === 0,
-              )}
+              className="auth-dialog__submit"
             >
               {submitting ? "Sending…" : "Send code"}
             </button>
@@ -396,17 +329,9 @@ export default function AuthDialog({
           <form
             data-testid="auth-code-step"
             onSubmit={submitCode}
-            style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+            className="auth-dialog__form"
           >
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--space-2)",
-                font: "700 13px/1.5 var(--font-body)",
-                color: "var(--text-strong)",
-              }}
-            >
+            <label className="auth-dialog__label">
               6-digit code
               <input
                 ref={codeRef}
@@ -421,39 +346,25 @@ export default function AuthDialog({
                 }
                 placeholder="123456"
                 aria-label="One-time code"
-                style={{
-                  ...inputStyle,
-                  fontFamily: "var(--font-mono)",
-                  letterSpacing: "0.3em",
-                }}
+                className="auth-dialog__input auth-dialog__input--code"
               />
             </label>
             <button
               type="submit"
               data-testid="auth-verify"
               disabled={submitting || code.trim().length === 0}
-              style={primaryButtonStyle(
-                submitting || code.trim().length === 0,
-              )}
+              className="auth-dialog__submit"
             >
               {submitting ? "Verifying…" : "Verify"}
             </button>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "var(--space-3)",
-                font: "500 13px/1.5 var(--font-body)",
-              }}
-            >
+            <div className="auth-dialog__resend-row">
               <button
                 type="button"
                 data-testid="auth-resend"
                 onClick={resend}
                 disabled={submitting || cooldown > 0}
-                style={linkButtonStyle(submitting || cooldown > 0)}
+                className="auth-dialog__link"
               >
                 Resend code
               </button>
@@ -461,7 +372,7 @@ export default function AuthDialog({
                 <span
                   data-testid="auth-resend-countdown"
                   aria-live="polite"
-                  style={{ color: "var(--text-muted)" }}
+                  className="auth-dialog__countdown"
                 >
                   Resend in {cooldown}s
                 </span>
@@ -472,10 +383,7 @@ export default function AuthDialog({
               type="button"
               data-testid="auth-change-email"
               onClick={changeEmail}
-              style={{
-                ...linkButtonStyle(false),
-                alignSelf: "flex-start",
-              }}
+              className="auth-dialog__link auth-dialog__link--inline"
             >
               Use a different email
             </button>
@@ -484,42 +392,4 @@ export default function AuthDialog({
       </div>
     </div>
   );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "var(--space-3) var(--space-4)",
-  borderRadius: "var(--radius-md)",
-  border: "1px solid var(--border-strong)",
-  background: "var(--surface)",
-  color: "var(--text)",
-  // 16px so iOS Safari doesn't auto-zoom when the email/code field is focused.
-  font: "400 16px/1.55 var(--font-body)",
-};
-
-function primaryButtonStyle(disabled: boolean): React.CSSProperties {
-  return {
-    height: "38px",
-    padding: "0 var(--space-4)",
-    borderRadius: "var(--radius-md)",
-    border: "none",
-    background: disabled ? "var(--neutral-300)" : "var(--poke-red)",
-    color: disabled ? "var(--text-faint)" : "var(--neutral-0)",
-    font: "600 15px/1 var(--font-body)",
-    cursor: disabled ? "not-allowed" : "pointer",
-    transition: "background var(--motion-fast)",
-  };
-}
-
-function linkButtonStyle(disabled: boolean): React.CSSProperties {
-  return {
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    color: disabled ? "var(--text-faint)" : "var(--azure)",
-    font: "600 13px/1.5 var(--font-body)",
-    cursor: disabled ? "not-allowed" : "pointer",
-    textDecoration: disabled ? "none" : "underline",
-  };
 }

@@ -488,13 +488,7 @@ export default function Home() {
   return (
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--space-3)",
-          }}
-        >
+        <div className="chat-page__title-cluster">
           {auth.signedIn && (
             <SidebarToggle
               collapsed={sidebarCollapsed}
@@ -565,15 +559,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div
-        className="chat-page__body"
-        style={{
-          display: "flex",
-          flex: 1,
-          minHeight: 0,
-          alignItems: "stretch",
-        }}
-      >
+      <div className="chat-page__body">
         <ArtifactViewerProvider
           format={artifactFormat}
           onAskInChat={handleAskInChat}
@@ -628,17 +614,7 @@ export default function Home() {
             />
           )}
 
-          <div
-            className="chat-page__main"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              minWidth: 0,
-              minHeight: 0,
-              overflowY: "auto",
-            }}
-          >
+          <div className="chat-page__main">
             <ChatThread
               turns={turns}
               activity={activities}

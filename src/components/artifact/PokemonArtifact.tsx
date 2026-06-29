@@ -152,6 +152,7 @@ export default function PokemonArtifact({
                   className={`stat-list__bar-fill ${statTier(
                     data.base_stats[key],
                   )}`}
+                  // eslint-disable-next-line react/forbid-dom-props -- runtime-computed bar width
                   style={{ width: statPct(data.base_stats[key]) }}
                 />
               </span>

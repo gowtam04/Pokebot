@@ -161,36 +161,10 @@ export default function TeamMemberPanel({
   };
 
   return (
-    <div
-      className="team-member-panel"
-      data-testid={id("panel")}
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-md)",
-        padding: "var(--space-3)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-3)",
-        background: "var(--surface)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--space-2)",
-        }}
-      >
-        <span
-          style={{
-            font: "700 12px/1.4 var(--font-body)",
-            color: "var(--text-muted)",
-          }}
-        >
-          Slot {slot + 1}
-        </span>
-        <div style={{ display: "inline-flex", gap: "var(--space-1)" }}>
+    <div className="team-member-panel" data-testid={id("panel")}>
+      <div className="team-member-panel__header">
+        <span className="team-member-panel__slot-label">Slot {slot + 1}</span>
+        <div className="team-member-panel__actions">
           <button
             type="button"
             data-testid={id("up")}
@@ -257,25 +231,9 @@ export default function TeamMemberPanel({
         />
       </Field>
 
-      <fieldset
-        style={{ border: "none", margin: 0, padding: 0 }}
-        data-testid={id("moves")}
-      >
-        <legend
-          style={{
-            font: "700 12px/1.5 var(--font-body)",
-            color: "var(--text-strong)",
-          }}
-        >
-          Moves
-        </legend>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "var(--space-2)",
-          }}
-        >
+      <fieldset className="team-member-panel__moves" data-testid={id("moves")}>
+        <legend className="team-member-panel__moves-legend">Moves</legend>
+        <div className="team-member-panel__moves-grid">
           {[0, 1, 2, 3].map((i) => (
             <input
               key={i}
@@ -288,13 +246,7 @@ export default function TeamMemberPanel({
         </div>
       </fieldset>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: "var(--space-2)",
-        }}
-      >
+      <div className="team-member-panel__meta-grid">
         <Field label="Nature" htmlFor={id("nature")}>
           <input
             id={id("nature")}
@@ -324,14 +276,10 @@ export default function TeamMemberPanel({
         </Field>
       </div>
 
-      <table
-        className="team-member-panel__stats"
-        data-testid={id("stats")}
-        style={{ borderCollapse: "collapse", width: "100%" }}
-      >
+      <table className="team-member-panel__stats" data-testid={id("stats")}>
         <thead>
-          <tr style={{ font: "700 11px/1.4 var(--font-body)" }}>
-            <th style={{ textAlign: "left" }}>Stat</th>
+          <tr className="team-member-panel__stats-head-row">
+            <th className="team-member-panel__col-head">Stat</th>
             <th>EV</th>
             <th>IV</th>
             {baseStats && <th data-testid={id("stats-live-head")}>Final</th>}
@@ -342,9 +290,7 @@ export default function TeamMemberPanel({
             const live = baseStats ? liveStat(row, member, baseStats) : null;
             return (
               <tr key={row.spread}>
-                <td style={{ font: "600 12px/1.5 var(--font-body)" }}>
-                  {row.label}
-                </td>
+                <td className="team-member-panel__stat-name">{row.label}</td>
                 <td>
                   <input
                     data-testid={id(`ev-${row.spread}`)}
@@ -356,7 +302,7 @@ export default function TeamMemberPanel({
                     onChange={(e) =>
                       setSpread("evs", row.spread, e.target.value)
                     }
-                    style={{ width: "56px" }}
+                    className="team-member-panel__spread-input"
                   />
                 </td>
                 <td>
@@ -370,16 +316,13 @@ export default function TeamMemberPanel({
                     onChange={(e) =>
                       setSpread("ivs", row.spread, e.target.value)
                     }
-                    style={{ width: "56px" }}
+                    className="team-member-panel__spread-input"
                   />
                 </td>
                 {baseStats && (
                   <td
                     data-testid={id(`stat-${row.spread}`)}
-                    style={{
-                      font: "700 13px/1.5 var(--font-mono)",
-                      textAlign: "center",
-                    }}
+                    className="team-member-panel__stat-final"
                   >
                     {live ?? "—"}
                   </td>
@@ -410,16 +353,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-1)",
-        font: "700 12px/1.5 var(--font-body)",
-        color: "var(--text-strong)",
-      }}
-    >
+    <label htmlFor={htmlFor} className="team-member-panel__field">
       {label}
       {children}
     </label>

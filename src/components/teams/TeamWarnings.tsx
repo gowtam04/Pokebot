@@ -34,37 +34,15 @@ export default function TeamWarnings({
       className="team-warnings"
       data-testid={testid ?? "team-warnings"}
       role="status"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-1)",
-      }}
     >
-      {title && (
-        <span
-          className="team-warnings__title"
-          style={{
-            font: "700 12px/1.4 var(--font-body)",
-            color: "var(--text-strong)",
-          }}
-        >
-          {title}
-        </span>
-      )}
-      <ul
-        className="team-warnings__list"
-        style={{ margin: 0, paddingLeft: "var(--space-4)" }}
-      >
+      {title && <span className="team-warnings__title">{title}</span>}
+      <ul className="team-warnings__list">
         {warnings.map((w, i) => (
           <li
             key={`${w.code}-${w.slot ?? "team"}-${w.field ?? i}`}
             className={`team-warning team-warning--${w.code}`}
             data-testid="team-warning"
             data-code={w.code}
-            style={{
-              font: "500 12px/1.5 var(--font-body)",
-              color: "var(--text-muted)",
-            }}
           >
             {w.message}
           </li>

@@ -63,7 +63,6 @@ export default function AuthMenu({
           className="auth-pill"
           data-testid="auth-signin-button"
           onClick={onSignInClick}
-          style={pillButtonStyle(false)}
         >
           Sign in
         </button>
@@ -72,29 +71,12 @@ export default function AuthMenu({
   }
 
   return (
-    <div
-      className="auth-menu"
-      data-testid="auth-menu"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-2)",
-      }}
-    >
+    <div className="auth-menu" data-testid="auth-menu">
       {email && (
         <span
           className="auth-menu__email"
           data-testid="auth-user-email"
           title={email}
-          style={{
-            maxWidth: "200px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            color: "var(--neutral-0)",
-            font: "600 14px/1.2 var(--font-body)",
-            opacity: 0.92,
-          }}
         >
           {email}
         </span>
@@ -105,29 +87,9 @@ export default function AuthMenu({
         data-testid="auth-signout-button"
         onClick={handleSignOut}
         disabled={busy}
-        style={pillButtonStyle(busy)}
       >
         {busy ? "Signing out…" : "Sign out"}
       </button>
     </div>
   );
-}
-
-/** Header-band pill control, styled like the other translucent-white chrome. */
-function pillButtonStyle(disabled: boolean): React.CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    height: "40px",
-    paddingInline: "var(--space-3)",
-    borderRadius: "var(--radius-pill)",
-    border: "1px solid rgba(255, 255, 255, 0.45)",
-    background: "rgba(255, 255, 255, 0.16)",
-    color: "var(--neutral-0)",
-    font: "600 14px/1.2 var(--font-body)",
-    whiteSpace: "nowrap",
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    transition: "background var(--motion-fast)",
-  };
 }
