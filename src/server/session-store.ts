@@ -40,11 +40,24 @@ export const DEFAULT_HISTORY_TOKEN_BUDGET = 100_000;
 // ---------------------------------------------------------------------------
 
 /**
- * Module-level in-memory store. One Map instance per server process (D9).
- * Exported only so tests can inspect or replace it if needed; prefer the
- * public API functions.
+ * In-memory store. One Map per server process (D9), memoized on `globalThis`
+ * (the same pattern as the Postgres pool in `@/data/db`) so Next's dev
+ * hot-reload / route re-evaluation reuses the SAME Map instead of silently
+ * wiping every guest conversation on a recompile. (`globalThis` is per-process,
+ * so this survives module re-evaluation, NOT a full process restart — durable
+ * guest history would be a separate change.) Not exported; reach it via the
+ * public API functions, or `_resetStoreForTests` in tests.
  */
-const store = new Map<string, ChatMessage[]>();
+const globalForSessionStore = globalThis as typeof globalThis & {
+  __oakSessionStore?: Map<string, ChatMessage[]>;
+};
+
+function getStore(): Map<string, ChatMessage[]> {
+  if (!globalForSessionStore.__oakSessionStore) {
+    globalForSessionStore.__oakSessionStore = new Map();
+  }
+  return globalForSessionStore.__oakSessionStore;
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -59,7 +72,7 @@ const store = new Map<string, ChatMessage[]>();
  * use `appendTurn` so future `getHistory` calls stay consistent.
  */
 export function getHistory(sessionId: string): ChatMessage[] {
-  return store.get(sessionId) ?? [];
+  return getStore().get(sessionId) ?? [];
 }
 
 /**
@@ -68,6 +81,7 @@ export function getHistory(sessionId: string): ChatMessage[] {
  * when you want to enforce the context budget.
  */
 export function appendTurn(sessionId: string, message: ChatMessage): void {
+  const store = getStore();
   let history = store.get(sessionId);
   if (!history) {
     history = [];
@@ -140,7 +154,7 @@ export function trim(
   sessionId: string,
   budgetTokens: number = DEFAULT_HISTORY_TOKEN_BUDGET,
 ): void {
-  const history = store.get(sessionId);
+  const history = getStore().get(sessionId);
   if (!history || history.length === 0) return;
 
   // trimMessages only ever drops from the front, so the number kept equals the
@@ -158,7 +172,7 @@ export function trim(
  * new (no entry in the store) until the next `appendTurn`.
  */
 export function clearSession(sessionId: string): void {
-  store.delete(sessionId);
+  getStore().delete(sessionId);
 }
 
 /**
@@ -166,5 +180,16 @@ export function clearSession(sessionId: string): void {
  * diagnostics and tests.
  */
 export function activeSessionCount(): number {
-  return store.size;
+  return getStore().size;
+}
+
+/**
+ * Wipe ALL session history. Call from `beforeEach`/`afterEach` to isolate tests
+ * from each other now that the store lives on `globalThis` (mirrors
+ * `rate-limit`'s `_resetStoreForTests`).
+ *
+ * @internal
+ */
+export function _resetStoreForTests(): void {
+  getStore().clear();
 }

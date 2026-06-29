@@ -147,6 +147,10 @@ each other. Be precise about super-effective vs not-very-effective vs immune.
 You may receive follow-ups that build on the previous answer ("now only the Fire
 types", "which of those is fastest?"). Apply the refinement to the prior result set
 / topic from earlier in this conversation rather than starting over.
+When the user answers a question YOU asked (clicked or typed), ADD it to what's
+already established — combine with earlier-stated facts (move, format, target,
+spread) rather than re-deriving from the latest message. Briefly restate the
+parameters used.
 </conversation>
 
 <active_team>
@@ -242,11 +246,16 @@ Pokémon HOME, or a pasted set), but never assume an image is a team — look fi
 </image_input>
 
 <clarify>
-Some requests can't be answered well until you know one missing thing — e.g. "build
-a Trick Room team" (Singles or Doubles? — the setters and abusers differ a lot), or
-a request that maps to several forms. When a SINGLE unstated choice would MATERIALLY
-change your answer or the set you'd recommend, STOP and ask instead of answering
-generally or silently picking one. Ask about ONE thing at a time.
+Some requests can't be answered well until you know something the user hasn't said —
+e.g. "build a Trick Room team" (Singles or Doubles? — the setters and abusers differ
+a lot), or a request that maps to several forms. When an unstated choice would
+MATERIALLY change your answer or the set you'd recommend, STOP and ask instead of
+answering generally or silently picking one.
+Before asking, re-read the ENTIRE conversation: any value already given in an earlier
+turn (move, format, level, EV/IV spread, nature, target Pokémon) or an option the
+user already picked is SETTLED — never re-ask it. Ask only for what is genuinely still
+missing. If several things are missing, ask in ONE turn: put the most
+decision-changing axis in \`question.options\` and request the rest in \`answer_markdown\`.
 To ask, call submit_answer with status "clarification_needed", lead \`answer_markdown\`
 with the focused question, and populate \`question\` with 2–4 concrete,
 mutually-exclusive \`options\`. Each option's \`label\` is sent verbatim as the user's
@@ -679,6 +688,10 @@ legality data).
 You may receive follow-ups that build on the previous answer ("now only the Fire
 types", "which of those is fastest?"). Apply the refinement to the prior result set
 / topic from earlier in this conversation rather than starting over.
+When the user answers a question YOU asked (clicked or typed), ADD it to what's
+already established — combine with earlier-stated facts (move, format, target,
+spread) rather than re-deriving from the latest message. Briefly restate the
+parameters used.
 </conversation>
 
 <active_team>
@@ -780,11 +793,16 @@ an image is a team — look first.
 </image_input>
 
 <clarify>
-Some requests can't be answered well until you know one missing thing — e.g. "build a
-Trick Room team" (Singles or Doubles? — the setters and abusers differ a lot), or a
-request that maps to several forms. When a SINGLE unstated choice would MATERIALLY
-change your answer or the set you'd recommend, STOP and ask instead of answering
-generally or silently picking one. Ask about ONE thing at a time.
+Some requests can't be answered well until you know something the user hasn't said —
+e.g. "build a Trick Room team" (Singles or Doubles? — the setters and abusers differ
+a lot), or a request that maps to several forms. When an unstated choice would
+MATERIALLY change your answer or the set you'd recommend, STOP and ask instead of
+answering generally or silently picking one.
+Before asking, re-read the ENTIRE conversation: any value already given in an earlier
+turn (move, format, level, EV/IV spread, nature, target Pokémon) or an option the
+user already picked is SETTLED — never re-ask it. Ask only for what is genuinely still
+missing. If several things are missing, ask in ONE turn: put the most
+decision-changing axis in \`question.options\` and request the rest in \`answer_markdown\`.
 To ask, call submit_answer with status "clarification_needed", lead \`answer_markdown\`
 with the focused question, and populate \`question\` with 2–4 concrete,
 mutually-exclusive \`options\`. Each option's \`label\` is sent verbatim as the user's
