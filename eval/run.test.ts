@@ -18,11 +18,12 @@ vi.mock("server-only", () => ({}));
 import {
   formatAssertReport,
   formatJudgeReport,
+  formatRepeatedJudgeReport,
   main,
   parseArgs,
   selectCases,
 } from "./run";
-import type { AssertResult, JudgeResult } from "./judge";
+import type { AssertResult, JudgeResult, RubricDimension } from "./judge";
 
 describe("parseArgs", () => {
   it("defaults to the full judged suite", () => {
@@ -32,6 +33,8 @@ describe("parseArgs", () => {
     expect(o.fixture).toBe(false);
     expect(o.json).toBe(false);
     expect(o.caseIds).toBeUndefined();
+    expect(o.repeat).toBe(1);
+    expect(o.invalidRepeat).toBeUndefined();
   });
 
   it("parses every flag", () => {
@@ -59,6 +62,16 @@ describe("parseArgs", () => {
     const bad = parseArgs(["--model=bogus"]);
     expect(bad.model).toBeUndefined();
     expect(bad.invalidModel).toBe("bogus");
+  });
+
+  it("accepts a valid --repeat and flags an invalid one", () => {
+    expect(parseArgs(["--repeat=5"]).repeat).toBe(5);
+
+    for (const bad of ["0", "-1", "abc", "2.5", "05"]) {
+      const o = parseArgs([`--repeat=${bad}`]);
+      expect(o.repeat).toBe(1); // stays at the default
+      expect(o.invalidRepeat).toBe(bad);
+    }
   });
 });
 
@@ -142,6 +155,48 @@ describe("report formatting", () => {
     expect(out).toContain("[PASS] G2");
     expect(out).toContain("Judged: 1/1 cases passed.");
     expect(out).toContain("answer_correctness=2.00");
+  });
+
+  it("aggregates a repeated run by caseId with a FLAKY marker", () => {
+    const dims: RubricDimension[] = [
+      "answer_correctness",
+      "inference_flagging",
+      "mechanics_precision",
+      "scope_adherence",
+      "transparency",
+    ];
+    const makeRun = (caseId: string, pass: boolean): JudgeResult => ({
+      caseId,
+      input: "q",
+      answer: { status: "answered" } as never,
+      toolCalls: [],
+      structuralFailures: [],
+      scores: dims.map((dimension) => ({
+        dimension,
+        pass,
+        score: (pass ? 2 : 0) as 0 | 1 | 2,
+        reason: "",
+      })),
+      overallPass: pass,
+      agentLatencyMs: 100,
+      judgeLatencyMs: 5,
+      covers: [],
+    });
+
+    // G8: 1 pass + 1 fail → flaky; G1: 2 passes → stable-pass.
+    const results: JudgeResult[] = [
+      makeRun("G8", true),
+      makeRun("G8", false),
+      makeRun("G1", true),
+      makeRun("G1", true),
+    ];
+    const out = formatRepeatedJudgeReport(results, 2);
+    expect(out).toContain("[1/2] G8  FLAKY");
+    expect(out).toContain("[2/2] G1  stable-pass");
+    expect(out).toContain(
+      "Judged (repeat=2): 1 stable-pass / 1 flaky / 0 stable-fail  (2 cases)",
+    );
+    expect(out).toContain("Mean agent latency: 100ms");
   });
 });
 

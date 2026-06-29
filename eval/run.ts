@@ -33,6 +33,9 @@
  *   --case=G4,G11          run only these case IDs
  *   --model=<key>          run the JUDGED agent on this model (default: Grok). Use
  *                          it to A/B the same golden cases across agent models.
+ *   --repeat=N             run each JUDGED case N times (default 1) and report
+ *                          per-case pass-rate + score variance (JUDGED path only;
+ *                          the deterministic subset is mocked, so it ignores it).
  *   --fixture              force an isolated, seeded Postgres fixture schema
  *   --live-index[=URI]     force the live Postgres index (default: $DATABASE_URL)
  *   --json                 emit a machine-readable JSON report
@@ -133,6 +136,16 @@ export interface EvalOptions {
    * exits non-zero. (Kept type-safe: `model` only ever holds a real `ModelKey`.)
    */
   invalidModel?: string;
+  /**
+   * How many times to run each JUDGED case (default 1). >1 measures run-to-run
+   * variance; the deterministic subset ignores it (mocked, deterministic provider).
+   */
+  repeat: number;
+  /**
+   * A `--repeat=<n>` value that was not an integer >= 1. `main()` reports it and
+   * exits non-zero. (Kept type-safe: `repeat` only ever holds a valid count.)
+   */
+  invalidRepeat?: string;
   /** Force an isolated, seeded Postgres fixture schema. */
   fixture: boolean;
   /** Force the live index; value is the Postgres URI (defaults to DATABASE_URL). */
@@ -147,6 +160,7 @@ export function parseArgs(argv: string[]): EvalOptions {
     deterministic: false,
     fixture: false,
     json: false,
+    repeat: 1,
   };
 
   for (const arg of argv) {
@@ -168,6 +182,11 @@ export function parseArgs(argv: string[]): EvalOptions {
       const key = arg.slice("--model=".length).trim();
       if (isModelKey(key)) opts.model = key;
       else opts.invalidModel = key;
+    } else if (arg.startsWith("--repeat=")) {
+      const raw = arg.slice("--repeat=".length).trim();
+      const n = Number.parseInt(raw, 10);
+      if (Number.isInteger(n) && n >= 1 && String(n) === raw) opts.repeat = n;
+      else opts.invalidRepeat = raw;
     }
   }
 
@@ -316,6 +335,68 @@ export function formatJudgeReport(results: JudgeResult[]): string {
   return lines.join("\n");
 }
 
+/**
+ * Aggregate a repeated judged run (--repeat=N, N>1) by caseId. For each case it
+ * prints the pass-rate (k/N), a status marker (stable-pass / FLAKY / stable-fail),
+ * mean agent latency, and the mean score per rubric dimension; then an overall
+ * tally and mean agent latency across all runs. (N==1 uses formatJudgeReport
+ * instead, which keeps the single-run output byte-stable.)
+ */
+export function formatRepeatedJudgeReport(
+  results: JudgeResult[],
+  repeat: number,
+): string {
+  // Group by caseId, preserving first-seen order.
+  const byCase = new Map<string, JudgeResult[]>();
+  for (const r of results) {
+    const arr = byCase.get(r.caseId);
+    if (arr) arr.push(r);
+    else byCase.set(r.caseId, [r]);
+  }
+
+  const lines: string[] = [];
+  let stablePass = 0;
+  let flaky = 0;
+  let stableFail = 0;
+  let latencySum = 0;
+  let runCount = 0;
+
+  for (const [caseId, runs] of byCase) {
+    const n = runs.length;
+    const k = runs.filter((r) => r.overallPass).length;
+    const status = k === n ? "stable-pass" : k === 0 ? "stable-fail" : "FLAKY";
+    if (k === n) stablePass += 1;
+    else if (k === 0) stableFail += 1;
+    else flaky += 1;
+
+    const caseLatency = runs.reduce((a, r) => a + r.agentLatencyMs, 0);
+    latencySum += caseLatency;
+    runCount += n;
+
+    const dimMeans = RUBRIC_DIMENSIONS.map((dim) => {
+      const vals = runs.map(
+        (r) => r.scores.find((s) => s.dimension === dim)?.score ?? 0,
+      );
+      const avg = vals.reduce<number>((a, b) => a + b, 0) / vals.length;
+      return `${dim}=${avg.toFixed(2)}`;
+    });
+
+    lines.push(
+      `[${k}/${n}] ${caseId}  ${status}  (mean agent ${Math.round(caseLatency / n)}ms)`,
+    );
+    lines.push(`        rubric mean: ${dimMeans.join("  ")}`);
+  }
+
+  lines.push("");
+  lines.push(
+    `Judged (repeat=${repeat}): ${stablePass} stable-pass / ${flaky} flaky / ${stableFail} stable-fail  (${byCase.size} cases)`,
+  );
+  lines.push(
+    `Mean agent latency: ${runCount > 0 ? Math.round(latencySum / runCount) : 0}ms`,
+  );
+  return lines.join("\n");
+}
+
 export function formatAssertReport(results: AssertResult[]): string {
   const lines: string[] = [];
   let passed = 0;
@@ -348,6 +429,14 @@ export async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
+  if (opts.invalidRepeat !== undefined) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[eval] invalid --repeat "${opts.invalidRepeat}". Must be an integer >= 1.`,
+    );
+    return 1;
+  }
+
   const { cases: selected, excludedFromDeterministic } = selectCases(opts);
 
   if (selected.length === 0) {
@@ -373,7 +462,9 @@ export async function main(argv: string[]): Promise<number> {
 
     if (opts.deterministic) {
       // Dynamic import: pulls the agent runtime (server-only) — load it only
-      // after the shim above has run.
+      // after the shim above has run. NOTE: --repeat is inert here — the
+      // deterministic subset uses a mocked, deterministic provider, so repeating
+      // a case yields identical results.
       const { runDeterministic } = await import("./deterministic");
       const results = await runDeterministic(selected, built.ctx);
       if (opts.json) {
@@ -402,12 +493,22 @@ export async function main(argv: string[]): Promise<number> {
       );
     // Dynamic import: pulls the agent runtime + judge (server-only) after the shim.
     const { runJudged } = await import("./judge");
-    const results = await runJudged(selected, built.ctx);
+    const results = await runJudged(selected, built.ctx, opts.repeat);
     if (opts.json) {
-      log(JSON.stringify({ mode, db: built.label, results }, null, 2));
+      log(
+        JSON.stringify(
+          { mode, db: built.label, repeat: opts.repeat, results },
+          null,
+          2,
+        ),
+      );
+    } else if (opts.repeat > 1) {
+      log(formatRepeatedJudgeReport(results, opts.repeat));
     } else {
       log(formatJudgeReport(results));
     }
+    // Strict gate: the flat results array holds every run, so any failed/flaky
+    // run (an individual run that didn't pass) makes the whole eval exit non-zero.
     return results.every((r) => r.overallPass) ? 0 : 1;
   } finally {
     await built.close();

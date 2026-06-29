@@ -73,6 +73,14 @@ export interface GoldenCase {
     };
     /** true → this case is in the Vitest CI subset (eval/deterministic.ts). */
     deterministic?: boolean;
+    /**
+     * Judge-only expected-behavior note. Ignored by runStructural; surfaced to the
+     * LLM judge via buildJudgeUserMessage as a "## Expected Behavior" line. Use it to
+     * tell the judge what a CORRECT response looks like when status alone is
+     * ambiguous — e.g. that an out-of-scope decline (status "answered" with empty
+     * citations) is the right outcome.
+     */
+    rubricNote?: string;
   };
   /** Requirement IDs covered by this case, e.g. ["US-1", "BR-7", "BR-2"]. */
   covers: string[];
@@ -307,6 +315,29 @@ RUBRIC DIMENSIONS
    1 = mostly transparent — one assumption unstated or one unexplained reasoning step.
    0 = opaque — no reasoning, no assumptions stated for math, or no citations for factual claims.
 
+ABSTENTIONS AND DECLINES
+A correct answer is sometimes NON-factual. Two cases:
+  (a) Out-of-scope DECLINE — status "answered" that politely declines a topic Oak does
+      NOT cover (egg moves, catch/encounter locations, breeding, full battle simulation)
+      and offers in-scope help instead.
+  (b) Data-unavailable ABSTENTION — status "insufficient_data" when the tools genuinely
+      lack the data needed.
+Note: "answered" is the status enum value Oak uses for BOTH factual answers AND polite
+declines, so an "Expected status: answered" line alone does NOT mean a factual answer is
+required — read the "## Expected Behavior" note to tell which is intended.
+When the response is a correct decline/abstention, score this way:
+  - answer_correctness: judge whether declining/abstaining was the CORRECT action and the
+    response accurately states the boundary — NOT on the presence of Pokémon facts. A
+    correct, clearly-explained decline is a 2.
+  - scope_adherence: a polite decline of an out-of-scope query is CORRECT handling = 2. Do
+    NOT infer from "Expected status: answered" that the query is in-scope.
+  - transparency: empty citations[]/inferences[] are EXPECTED for a decline — do NOT
+    penalize their absence; score on whether it clearly says why it won't/can't answer.
+  - inference_flagging / mechanics_precision: with no deductions or mechanics to judge,
+    default to 2; don't invent something to dock.
+Give a 0 on these dimensions ONLY if the agent fabricated data, declined a clearly
+IN-scope query, or answered an out-of-scope query as fact.
+
 Use the submit_judgment tool to return your five scores. Keep each reason field to ≤ 2 sentences.`;
 
 /**
@@ -374,7 +405,7 @@ function clampScore(raw: number | undefined): 0 | 1 | 2 {
   return 1;
 }
 
-function buildJudgeUserMessage(gc: GoldenCase, answer: OakAnswer): string {
+export function buildJudgeUserMessage(gc: GoldenCase, answer: OakAnswer): string {
   const questionText = Array.isArray(gc.input)
     ? gc.input.map((q, i) => `Turn ${i + 1}: ${JSON.stringify(q)}`).join("\n")
     : `Question: ${JSON.stringify(gc.input)}`;
@@ -382,6 +413,11 @@ function buildJudgeUserMessage(gc: GoldenCase, answer: OakAnswer): string {
   const expectLines: string[] = [
     `Case ${gc.id} | covers: ${gc.covers.join(", ")}`,
   ];
+  // Per-case judge guidance leads the section so the judge reads it before the
+  // (sometimes ambiguous) status line below.
+  if (gc.expect.rubricNote) {
+    expectLines.push(gc.expect.rubricNote);
+  }
   if (gc.expect.status) {
     expectLines.push(`Expected status: ${gc.expect.status}`);
   }
@@ -544,16 +580,22 @@ async function runOneCase(
  * Injectable entry point: run the full pipeline with supplied judge client and
  * runOak function. Use in tests (pass mocked clients); can also be used by
  * advanced callers that need custom injection.
+ *
+ * `repeat` (default 1) runs each case N times for variance measurement; results
+ * stay a flat array (each entry carries `caseId`, so the caller aggregates by it).
  */
 export async function runJudgedWith(
   cases: GoldenCase[],
   ctx: AgentContext,
   judgeClient: JudgeClientLike,
   runOak: RunOakFn,
+  repeat = 1,
 ): Promise<JudgeResult[]> {
   const results: JudgeResult[] = [];
   for (const gc of cases) {
-    results.push(await runOneCase(gc, ctx, judgeClient, runOak));
+    for (let i = 0; i < repeat; i++) {
+      results.push(await runOneCase(gc, ctx, judgeClient, runOak));
+    }
   }
   return results;
 }
@@ -567,6 +609,7 @@ export async function runJudgedWith(
 export async function runJudged(
   cases: GoldenCase[],
   ctx: AgentContext,
+  repeat = 1,
 ): Promise<JudgeResult[]> {
-  return runJudgedWith(cases, ctx, getJudgeClient(), defaultRunOak);
+  return runJudgedWith(cases, ctx, getJudgeClient(), defaultRunOak, repeat);
 }

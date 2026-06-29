@@ -29,6 +29,7 @@ vi.mock("@/agent/runtime", () => ({
 import {
   runStructural,
   runJudgedWith,
+  buildJudgeUserMessage,
   type GoldenCase,
   type JudgeClientLike,
   type RunOakFn,
@@ -673,6 +674,60 @@ describe("runJudgedWith", () => {
       (s) => s.dimension === "mechanics_precision",
     );
     expect(mech?.reason).toBe("Immunity stated correctly as 0×.");
+  });
+
+  it("runs each case `repeat` times, tagging every run with its caseId", async () => {
+    const cases = [makeGoldenCase({ id: "G1" }), makeGoldenCase({ id: "G2" })];
+    const results = await runJudgedWith(
+      cases,
+      SILENT_CTX,
+      judgeClient,
+      runOak,
+      3,
+    );
+    // 2 cases × 3 repeats = 6 results; runOak + judge each called 6 times.
+    expect(results).toHaveLength(6);
+    expect(runOak).toHaveBeenCalledTimes(6);
+    expect(judgeClient.messages.create).toHaveBeenCalledTimes(6);
+    expect(results.filter((r) => r.caseId === "G1")).toHaveLength(3);
+    expect(results.filter((r) => r.caseId === "G2")).toHaveLength(3);
+  });
+
+  it("defaults to a single run per case when repeat is omitted", async () => {
+    const cases = [makeGoldenCase({ id: "G1" }), makeGoldenCase({ id: "G2" })];
+    const results = await runJudgedWith(cases, SILENT_CTX, judgeClient, runOak);
+    expect(results).toHaveLength(2);
+  });
+});
+
+// ─── buildJudgeUserMessage (rubricNote threading) ─────────────────────────────
+
+describe("buildJudgeUserMessage", () => {
+  it("surfaces a case's rubricNote in the Expected Behavior section", () => {
+    const gc = makeGoldenCase({
+      id: "G20",
+      input: "what egg moves does Dratini get?",
+      expect: {
+        status: "answered",
+        rubricNote:
+          "Out of scope (egg moves): must politely decline; having no facts to cite is correct.",
+      },
+      covers: ["Out-of-Scope"],
+    });
+    const msg = buildJudgeUserMessage(gc, BASE_ANSWER);
+    expect(msg).toContain("## Expected Behavior");
+    expect(msg).toContain(
+      "Out of scope (egg moves): must politely decline; having no facts to cite is correct.",
+    );
+  });
+
+  it("omits the rubricNote line when a case does not set one", () => {
+    const gc = makeGoldenCase({
+      expect: { status: "answered" },
+    });
+    const msg = buildJudgeUserMessage(gc, BASE_ANSWER);
+    expect(msg).toContain("## Expected Behavior");
+    expect(msg).not.toContain("Out of scope");
   });
 });
 

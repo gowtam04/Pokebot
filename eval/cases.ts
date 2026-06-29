@@ -77,6 +77,14 @@ export interface GoldenCase {
      * The assertion can be run without a live Sonnet call.
      */
     deterministic?: boolean;
+    /**
+     * Judge-only expected-behavior note. Ignored by the structural assertions;
+     * surfaced to the LLM judge (buildJudgeUserMessage) as a "## Expected Behavior"
+     * line. Use it to tell the judge what a CORRECT response looks like when status
+     * alone is ambiguous — e.g. that an out-of-scope decline (status "answered" with
+     * empty citations) is the right outcome. Mirrors GoldenCase.expect in judge.ts.
+     */
+    rubricNote?: string;
   };
   /**
    * Requirement / decision IDs this case covers.
@@ -426,6 +434,8 @@ export const cases: GoldenCase[] = [
     input: "what egg moves does Dratini get?",
     expect: {
       status: "answered",
+      rubricNote:
+        "Out of scope (egg moves/breeding): must politely decline, name the boundary, and offer in-scope help; having no facts to cite is correct.",
     },
     covers: ["Out-of-Scope"],
   },
@@ -439,6 +449,8 @@ export const cases: GoldenCase[] = [
     input: "where do I catch Gible?",
     expect: {
       status: "answered",
+      rubricNote:
+        "Out of scope (catch/encounter locations): must politely decline, name the boundary, and offer in-scope help; empty citations[] is correct.",
     },
     covers: ["Out-of-Scope"],
   },
