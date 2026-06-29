@@ -6,6 +6,13 @@
 judged suite run on any registered agent model; defaults to Grok). Added alongside an
 additive Grok prompt `<output_contract>` (this run already includes that prompt).
 
+> **Update — 2026-06-29:** the numbers in this report are the **pre-fix baseline**. Three
+> follow-ups identified below have since landed (branch
+> `eval-decline-aware-judge-grok-filter-repeat`, commit `8f21dd9`): a **decline-aware
+> judge** (G20/G21), a **Grok "don't bail on answerable filters" rule** (G8), and a
+> **`--repeat=N`** variance flag. They change the eval/prompt, so the per-case verdicts
+> here will shift — re-run to regenerate. Details in [Update — 2026-06-29](#update--2026-06-29-follow-ups-actioned-in-the-harness).
+
 ---
 
 ## TL;DR
@@ -127,12 +134,19 @@ lower rubric.
    query it should have answered with `query_pokedex`. This is the failure mode the new Grok
    `<output_contract>` targets; consider adding an explicit "never return
    `insufficient_data` for an answerable filter/superlative — query first" rule.
+   — ✅ **Actioned 2026-06-29** (the explicit rule landed; see Update §B).
 
 2. **Stale out-of-scope golden cases.** G14 (wild held items / Leftovers), G20 (egg moves),
    and G21 (catch locations) expect `status: answered`, but `src/agent/prompts/domain.ts`
    explicitly lists egg moves and locations as **out of scope**. Both models (correctly, per
    the prompt) decline and both "fail" these. This is an **eval-vs-prompt drift**, not a model
    defect — decide whether these are in scope and align the prompt and the golden suite.
+   — ✅ **Partly actioned 2026-06-29.** Root cause was narrower than "stale cases": a correct
+   decline *is* `status:"answered"` (with empty `citations[]`), but the judge treated the
+   `Expected status: answered` line as "facts required" and scored G20/G21
+   answer_correctness=0 + scope_adherence=0. Resolution chosen: **keep them out of scope** and
+   make the judge reward a proper decline (see Update §A). **G14 is different** — a genuine
+   data-gap, not a decline; still open (see Update §"Still open").
 
 3. **Structural assertions are brittle relative to good answers.** Many fails are exact
    `mustCite` source prefixes (`type/ground`, `item/leftovers`, `learnset/...`) and
@@ -147,18 +161,75 @@ lower rubric.
 
 ---
 
+## Update — 2026-06-29: follow-ups actioned in the harness
+
+The headline/per-case numbers above are the **pre-fix baseline**. Three changes have since
+landed (branch `eval-decline-aware-judge-grok-filter-repeat`, commit `8f21dd9`) to make a
+re-run's numbers trustworthy. They touch the eval and the Grok prompt, so the verdicts above
+will shift — re-run the two commands (now with `--repeat=5`) to regenerate them.
+
+### A. Decline-aware judge (resolves finding #2 for G20/G21)
+
+Confirmed from the saved judge logs: G20/G21 are **correct out-of-scope declines** delivered
+as `status:"answered"` with empty `citations[]`, but the judge — handed only
+`Expected status: answered` — read that as "a factual answer is required" and scored
+**answer_correctness=0 and scope_adherence=0**. (Not the `transparency` dimension the original
+follow-up guessed — transparency was already 2 on these cases.)
+
+Fix — **no prompt-scope change** (out-of-scope *stays* out of scope; the eval now expects a
+proper decline):
+- `JUDGE_SYSTEM_PROMPT` gains an **"ABSTENTIONS AND DECLINES"** clause: a correct decline
+  scores **2** on `answer_correctness` and `scope_adherence`, empty `citations[]`/`inferences[]`
+  are *expected*, and `status:"answered"` is clarified as the enum value used for **both**
+  factual answers and polite declines (so the status line alone no longer implies "in-scope").
+- A judge-only `GoldenCase.expect.rubricNote` is threaded into the judge user message and set
+  on **G20 and G21** only, describing the expected decline.
+
+Expected effect on a re-run: a model that **correctly declines** G20/G21 now **passes**; a
+model that **answers an out-of-scope query as fact** now correctly **fails** `scope_adherence`
+— so Grok's prior G20 ✓ should flip to a fail if it keeps answering egg moves (its earlier
+pass was a false positive).
+
+### B. Grok "don't bail on answerable filters" (resolves finding #1 / G8)
+
+`src/agent/prompts/style-grok.ts` gains a `<constraints>` rule: **never return
+`insufficient_data` for a question answerable via `query_pokedex` — query first.** Targets G8
+directly. Grok-wrapper only; the shared `domain.ts`/`champions.ts` body is untouched, so
+Claude's prompt cache and behavior are unaffected.
+
+### C. `--repeat=N` for variance (addresses the "one-case gap is within noise" caveat)
+
+`tsx eval/run.ts --model=<key> --repeat=N` runs each judged case N times and reports per-case
+pass-rate (k/N), per-dimension mean score, and **stable-pass / FLAKY / stable-fail** markers
+plus mean latency. The 9-vs-10 gap above sits inside run-to-run LLM noise; `--repeat=5`
+separates stable signal from flake. Default `N=1` is byte-for-byte identical to today; the
+deterministic subset ignores it (mocked provider).
+
+### Still open
+
+- **G14 (wild held item / Leftovers) is a genuine data-gap, not a decline.**
+  `src/agent/tools/get-item.ts` exposes wild-held data keyed by **item**, but there is no
+  Pokémon→held-item path on `get_pokemon`, so "what item does Snorlax hold" has no direct
+  lookup. Left as-is (a real answer is still expected) — needs a data/tool fix, not a judge
+  tweak. **Not** given a `rubricNote`.
+- **Brittle structural assertions** (finding #3) and the **citation-format fails** (G1, G24,
+  G25) are unchanged — still worth loosening to semantic checks or codifying the exact
+  citation-source convention in the prompt.
+
+---
+
 ## How to reproduce
 
 ```bash
 # from repo root, with XAI_API_KEY + ANTHROPIC_API_KEY set and DATABASE_URL
 # pointed at a built index (e.g. the docker db: postgres://pokebot:pokebot@localhost:5432/pokebot)
-tsx eval/run.ts --model=grok-4.3
-tsx eval/run.ts --model=claude
+tsx eval/run.ts --model=grok-4.3 --repeat=5   # run A (repeated for variance)
+tsx eval/run.ts --model=claude   --repeat=5   # run B
 
 # subset / regression variants:
-tsx eval/run.ts --model=claude --case=G8,G20      # specific cases
+tsx eval/run.ts --model=claude --case=G8,G20,G21  # spot-check the fixed cases
 tsx eval/run.ts --model=grok-4.3 --rebuild        # G1/G5/G6/G7/G17/G25 regression set
-tsx eval/run.ts --model=claude --json             # machine-readable report
+tsx eval/run.ts --model=claude --json             # machine-readable report (includes `repeat`)
 ```
 
 Valid `--model` keys: `grok-4.3`, `claude`, `gpt-5.5`. An unknown key prints the valid
