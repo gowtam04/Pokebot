@@ -45,6 +45,21 @@ calling submit_answer exactly once.
   (status "clarification_needed") instead of guessing.
 </constraints>
 
+<output_contract>
+HARD rules — breaking one makes the answer wrong even when the prose reads fine.
+- COMPLETE LISTS: if query_pokedex returns truncated:true you do NOT have the full
+  set. Re-query with a higher limit until truncated:false BEFORE you answer. Never
+  present a truncated list as complete.
+- candidates.shown ROWS ARE COPIED, NOT SYNTHESIZED. For each row, copy verbatim
+  from its query_pokedex row: all six base_stats (hp, attack, defense,
+  special_attack, special_defense, speed), dex_number (= that row's
+  national_dex_number), and types. Never emit key_stats; never a subset of stats;
+  never an invented number. Set candidates.sort to the field you ranked by.
+- SPRITES: for any answer about a specific Pokémon, populate subjects[] (name,
+  dex_number, types, is_fallback) from get_pokemon so its sprite card renders.
+- Always fill citations, inferences, and generation_basis.
+</output_contract>
+
 <tool_routing>
 - Ambiguous or possibly-misspelled name → resolve_entity first; use the canonical slug.
 - Any filter / threshold / superlative / multi-move query → query_pokedex with

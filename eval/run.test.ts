@@ -50,6 +50,16 @@ describe("parseArgs", () => {
     expect(o.caseIds).toEqual(["G4", "G11"]);
     expect(o.liveIndexUri).toBe("postgres://h:5432/db");
   });
+
+  it("accepts a known --model key and rejects an unknown one", () => {
+    const ok = parseArgs(["--model=claude"]);
+    expect(ok.model).toBe("claude");
+    expect(ok.invalidModel).toBeUndefined();
+
+    const bad = parseArgs(["--model=bogus"]);
+    expect(bad.model).toBeUndefined();
+    expect(bad.invalidModel).toBe("bogus");
+  });
 });
 
 describe("selectCases", () => {

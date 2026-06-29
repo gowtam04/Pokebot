@@ -98,4 +98,12 @@ describe("Grok 4.3 style — XML-tagged scaffolding", () => {
     expect(text).toContain("<stop_condition>");
     expect(text).toContain("You are Oak");
   });
+
+  it("re-expresses the brittle output rules as a top-level <output_contract>", () => {
+    expect(text).toContain("<output_contract>");
+    // The three brittle structured-output rules a structured agent tends to drop.
+    expect(text).toContain("truncated:false"); // complete-lists rule
+    expect(text).toContain("national_dex_number"); // candidates-copied-verbatim rule
+    expect(text).toContain("subjects[]"); // sprite rule
+  });
 });

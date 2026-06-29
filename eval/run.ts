@@ -31,6 +31,8 @@
  *   --rebuild              use the G1/G5/G6/G7/G17 regression set
  *   --deterministic        run the offline deterministic subset (no live LLM)
  *   --case=G4,G11          run only these case IDs
+ *   --model=<key>          run the JUDGED agent on this model (default: Grok). Use
+ *                          it to A/B the same golden cases across agent models.
  *   --fixture              force an isolated, seeded Postgres fixture schema
  *   --live-index[=URI]     force the live Postgres index (default: $DATABASE_URL)
  *   --json                 emit a machine-readable JSON report
@@ -48,7 +50,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { env } from "@/env";
 import { createAgentContext } from "@/agent/context";
-import { DEFAULT_MODEL_KEY, modelLabel } from "@/agent/models";
+import {
+  DEFAULT_MODEL_KEY,
+  MODELS,
+  isModelKey,
+  modelLabel,
+  type ModelKey,
+} from "@/agent/models";
 import type { AgentContext } from "@/agent/types";
 import * as schema from "@/data/schema";
 
@@ -114,6 +122,17 @@ export interface EvalOptions {
   deterministic: boolean;
   /** Restrict to these case IDs (uppercased, e.g. "G4"). */
   caseIds?: string[];
+  /**
+   * Which agent model runs the JUDGED suite (defaults to the registry default,
+   * Grok, when absent). Only affects the judged path — the deterministic subset
+   * uses a mocked provider and ignores it.
+   */
+  model?: ModelKey;
+  /**
+   * A `--model=<key>` value that matched no known key. `main()` reports it and
+   * exits non-zero. (Kept type-safe: `model` only ever holds a real `ModelKey`.)
+   */
+  invalidModel?: string;
   /** Force an isolated, seeded Postgres fixture schema. */
   fixture: boolean;
   /** Force the live index; value is the Postgres URI (defaults to DATABASE_URL). */
@@ -145,6 +164,10 @@ export function parseArgs(argv: string[]): EvalOptions {
         .split(",")
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean);
+    } else if (arg.startsWith("--model=")) {
+      const key = arg.slice("--model=".length).trim();
+      if (isModelKey(key)) opts.model = key;
+      else opts.invalidModel = key;
     }
   }
 
@@ -216,7 +239,7 @@ async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
     (globalThis as { __oakDb?: { pool: Pool; db: typeof db } }).__oakDb =
       { pool, db };
     (await import("@/data/repos/resolve-index")).resetResolveIndex();
-    const ctx = await createAgentContext();
+    const ctx = await createAgentContext({ model: opts.model });
     return {
       ctx,
       label: `live index (${uri})`,
@@ -229,7 +252,7 @@ async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
   // Fixture: an isolated, migrated + seeded Postgres schema.
   const fix = await createPgSchema({ seed: "eval" });
   await installAsSingleton(fix);
-  const ctx = await createAgentContext();
+  const ctx = await createAgentContext({ model: opts.model });
   return {
     ctx,
     label: "fixture (pg schema)",
@@ -316,6 +339,15 @@ export function formatAssertReport(results: AssertResult[]): string {
  */
 export async function main(argv: string[]): Promise<number> {
   const opts = parseArgs(argv);
+
+  if (opts.invalidModel !== undefined) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[eval] unknown --model "${opts.invalidModel}". Valid keys: ${MODELS.map((m) => m.key).join(", ")}`,
+    );
+    return 1;
+  }
+
   const { cases: selected, excludedFromDeterministic } = selectCases(opts);
 
   if (selected.length === 0) {
@@ -362,9 +394,11 @@ export async function main(argv: string[]): Promise<number> {
     // Judged: the agent runs on the primary model (Grok by default); the judge
     // stays on Claude (env.ANTHROPIC_MODEL) to avoid same-family self-preference.
     const mode = opts.rebuild ? "rebuild-regression (judged)" : "judged (full)";
+    // --model selects the agent model only on the JUDGED path; the deterministic
+    // subset uses a mocked provider, so it ignores ctx.model.
     if (!opts.json)
       log(
-        `Mode: ${mode}  DB: ${built.label}  agent: ${modelLabel(DEFAULT_MODEL_KEY)}  judge: ${env.ANTHROPIC_MODEL}`,
+        `Mode: ${mode}  DB: ${built.label}  agent: ${modelLabel(opts.model ?? DEFAULT_MODEL_KEY)}  judge: ${env.ANTHROPIC_MODEL}`,
       );
     // Dynamic import: pulls the agent runtime + judge (server-only) after the shim.
     const { runJudged } = await import("./judge");
