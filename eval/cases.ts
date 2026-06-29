@@ -18,81 +18,10 @@
  *   "item/<slug>", "evolution-chain/<slug>", "learnset/<slug>".
  */
 
-import type { OakAnswer } from "@/agent/schemas";
-
-// ---------------------------------------------------------------------------
-// GoldenCase — contract (design.md § Interface Definitions, eval harness)
-// ---------------------------------------------------------------------------
-
-export interface GoldenCase {
-  /** Identifier, e.g. "G1"…"G24". */
-  id: string;
-  /**
-   * Single-turn query: a plain string.
-   * Multi-turn conversation: an array where each element is one user message,
-   * in order (e.g. G19 has two turns).
-   */
-  input: string | string[];
-  expect: {
-    /**
-     * When present, assert `OakAnswer.status === status`.
-     * Omit for cases where the status varies or is LLM-judged.
-     */
-    status?: OakAnswer["status"];
-    /**
-     * Assert `candidates.total_count >= minCandidates` for list answers.
-     * Checks the agent found at least this many matches.
-     */
-    minCandidates?: number;
-    /**
-     * Each string must appear as a substring of at least one
-     * `citations[].source` in the answer (citation-presence check, BR-4).
-     */
-    mustCite?: string[];
-    /**
-     * Each string must appear (case-insensitively) in `answer_markdown`
-     * (content-presence check — key terms, values, or mechanics).
-     */
-    mustInclude?: string[];
-    /**
-     * Tool-efficiency assertion (evaluation.md § Metrics):
-     *  - `usedTool` must appear in the tool-call trace for this turn.
-     *  - The number of `get_pokemon` detail calls must be
-     *    ≤ `maxPerPokemonFetches` × (number of candidates returned) — i.e.
-     *    the agent must not brute-force individual fetches for
-     *    filter/superlative results where `query_pokedex` already provides
-     *    the aggregate data.
-     */
-    toolEfficiency?: {
-      /** The aggregate tool that must be called (typically "query_pokedex"). */
-      usedTool: string;
-      /**
-       * Maximum `get_pokemon` calls per candidate result.
-       * 0 means zero individual fetches are allowed for this query type.
-       */
-      maxPerPokemonFetches: number;
-    };
-    /**
-     * true → included in eval/deterministic.ts (Vitest CI subset).
-     * The assertion can be run without a live Sonnet call.
-     */
-    deterministic?: boolean;
-    /**
-     * Judge-only expected-behavior note. Ignored by the structural assertions;
-     * surfaced to the LLM judge (buildJudgeUserMessage) as a "## Expected Behavior"
-     * line. Use it to tell the judge what a CORRECT response looks like when status
-     * alone is ambiguous — e.g. that an out-of-scope decline (status "answered" with
-     * empty citations) is the right outcome. Mirrors GoldenCase.expect in judge.ts.
-     */
-    rubricNote?: string;
-  };
-  /**
-   * Requirement / decision IDs this case covers.
-   * Examples: "US-1", "AC-1.3", "BR-7", "D8", "NFR-reliability",
-   *           "Out-of-Scope", "robustness".
-   */
-  covers: string[];
-}
+// GoldenCase is defined once in ./judge (the single source of truth) and
+// re-exported here so `import { GoldenCase } from "./cases"` keeps working.
+import type { GoldenCase } from "./judge";
+export type { GoldenCase };
 
 // ---------------------------------------------------------------------------
 // G1 – G24 Golden Cases
