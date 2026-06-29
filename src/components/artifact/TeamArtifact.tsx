@@ -150,7 +150,19 @@ function MemberCard({
                 key={s.key}
                 className={`team-stat team-stat--${s.nature}`}
               >
-                <span className="team-stat__label">{STAT_LABELS[s.key]}</span>
+                <span className="team-stat__label">
+                  {STAT_LABELS[s.key]}
+                  {s.nature === "boosted" && (
+                    <span className="team-stat__arrow" aria-hidden>
+                      ▲
+                    </span>
+                  )}
+                  {s.nature === "hindered" && (
+                    <span className="team-stat__arrow" aria-hidden>
+                      ▼
+                    </span>
+                  )}
+                </span>
                 <span className="team-stat__value">{s.value ?? "—"}</span>
                 <span className="team-stat__bar">
                   <span

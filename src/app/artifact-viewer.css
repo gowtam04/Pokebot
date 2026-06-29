@@ -636,7 +636,7 @@
 }
 .team-stat {
   display: grid;
-  grid-template-columns: 30px 30px 1fr 38px;
+  grid-template-columns: 42px 30px 1fr 38px;
   align-items: center;
   gap: var(--space-2);
   font-size: 0.75rem;
@@ -644,6 +644,11 @@
 .team-stat__label {
   color: var(--text-muted);
   font-weight: 600;
+}
+.team-stat__arrow {
+  margin-left: 2px;
+  font-size: 0.6rem;
+  vertical-align: 1px; /* nudge the triangle to optical-center with the label text */
 }
 .team-stat__value {
   font-family: var(--mono);
