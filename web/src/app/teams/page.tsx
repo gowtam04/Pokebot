@@ -27,7 +27,7 @@ import { resolveSprites, type SpriteRef } from "@/lib/api/sprites-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
-import { FORMATS, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, FORMATS, type Format } from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
 import TeamEditor from "@/components/teams/TeamEditor";
 import PasteImportDialog from "@/components/teams/PasteImportDialog";
@@ -56,7 +56,7 @@ export default function TeamsPage() {
   const { setFormatFilter } = teams;
 
   // Active format: scopes the list + is the format new/imported teams use.
-  const [format, setFormat] = useState<Format>("scarlet-violet");
+  const [format, setFormat] = useState<Format>(CHAMPIONS_FORMAT);
   useEffect(() => {
     setFormatFilter(format);
   }, [format, setFormatFilter]);
