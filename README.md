@@ -79,7 +79,7 @@ calls and is fully deterministic.
 
 The single exception is **encounter / catch-location data**, which `@pkmn`
 doesn't provide. It comes from a committed snapshot at
-`src/ingest/data/encounters.json`, crawled from [PokeAPI](https://pokeapi.co/)
+`web/src/ingest/data/encounters.json`, crawled from [PokeAPI](https://pokeapi.co/)
 **manually and rarely** via `npm run fetch:encounters` (the only place Oak ever
 touches the network). Ingest reads that committed file via `fs`, so the build
 stays offline. Coverage is **Gen 1 → Sword/Shield + Let's Go only** — PokeAPI has
@@ -90,9 +90,11 @@ ships none).
 ## Getting started
 
 Requires Node 20+ (`.nvmrc`) and a Docker daemon (for the local Postgres and the
-test suite).
+test suite). The app lives in **`web/`** — run every command from there. A future
+mobile client would be a sibling folder; `docs/` stays at the repo root.
 
 ```bash
+cd web
 npm install
 cp .env.example .env.local   # add XAI_API_KEY (required); other keys are optional
 npm run docker:dev           # Postgres + next dev on :3000 (the intended dev environment)
@@ -151,7 +153,8 @@ boot.
 
 ## Deploy
 
-Deployed to Fly via the production `Dockerfile` (`output: "standalone"`). The
+Deployed to Fly from `web/` (`cd web && fly deploy`) via the production
+`Dockerfile` (`output: "standalone"`). The
 release command runs `migrate.mjs` (a plain-ESM migration runner) before the new
 version takes traffic, so migrations apply atomically on each deploy. A single
 always-on machine backs the in-memory guest session store, rate limiter, and OTP

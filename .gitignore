@@ -14,8 +14,8 @@ build/
 next-env.d.ts
 
 # Runtime data artifacts (built by `npm run ingest`)
-# Anchored to the repo root so it does NOT also ignore the src/data/ source dir.
-/data/
+# Anchored so it does NOT also ignore the web/src/data/ source dir.
+web/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

@@ -16,7 +16,13 @@ The agent's internals (topology, the original T1–T11 tools, prompts, the `OakA
 
 Commit on the **current branch** — never create a new branch for a commit unless the user explicitly asks for one. This holds even when the current branch is `main`/the default branch.
 
+## Repository layout
+
+The app lives in **`web/`** — the Next.js app plus all of its config (`package.json`, `tsconfig.json`, `next.config.ts`, `vitest.config.ts`, `drizzle.config.ts`), `src/`, `test/`, `eval/`, `drizzle/`, `scripts/`, and deployment files (`Dockerfile*`, `docker-compose.dev.yml`, `fly.toml`, `migrate.mjs`). A future mobile client gets a sibling folder (e.g. `mobile/`). Only `docs/`, `README.md`, `CLAUDE.md`, and `.git/` stay at the repo root. **All `src/…`, `test/…`, `eval/…`, and `drizzle/` paths in this document are relative to `web/`**, and the `@/` alias resolves to `web/src/`.
+
 ## Commands
+
+Run every command below from **`web/`** (`cd web` first) — that's where `package.json` lives. Deploy with `cd web && fly deploy`.
 
 ```bash
 npm run dev          # next dev (local)
@@ -62,7 +68,7 @@ Node 20+ is required (`.nvmrc`). `typecheck`, `lint`, and the jsdom component te
 
 ## Architecture
 
-A single **TypeScript / Next.js (App Router) monolith**. One language across frontend, API, agent loop, and the ingest CLI. TS `strict`, ESM, path alias `@/` → `src/`. Files kebab-case; types/components PascalCase; DB columns snake_case (Drizzle maps to camelCase).
+A single **TypeScript / Next.js (App Router) monolith**, rooted at `web/` (see Repository layout). One language across frontend, API, agent loop, and the ingest CLI. TS `strict`, ESM, path alias `@/` → `src/` (i.e. `web/src/` from the repo root). Files kebab-case; types/components PascalCase; DB columns snake_case (Drizzle maps to camelCase).
 
 ### Request flow
 
