@@ -259,7 +259,9 @@ struct ChatViewModelTests {
   func standardModeSendsChampionsFalse() async throws {
     let fake = FakeChatService()
     fake.scriptedEvents = try events(fromSSE: "chat_answered_full.sse")
-    let vm = makeViewModel(fake: fake)
+    let appState = AppState()
+    appState.championsMode = false
+    let vm = makeViewModel(fake: fake, appState: appState)
 
     vm.composerText = "standard scope question"
     vm.send()

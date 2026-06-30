@@ -28,7 +28,7 @@ final class AppState {
 
   /// The Champions-mode default applied to new conversations (M-CHAT-US-3). The
   /// per-request value is server-controlled; this is just the composer's default.
-  var championsMode: Bool = false
+  var championsMode: Bool = true
 
   init() {}
 }
