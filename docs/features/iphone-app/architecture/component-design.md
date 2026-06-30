@@ -1,5 +1,12 @@
 # Component Design
 
+> **⚠️ Updated — "active team" removed (web change, 2026-06).** Saved teams are now
+> referenced **by name in chat** (`list_teams` → `get_team`). The composer has no
+> active-team chip, `ChatService.send` carries no `activeTeamId`, `HistoryService`
+> has no `setActiveTeam`, and `ConversationDetail` has no `activeTeamId`. The
+> `ComposerView` also folds the photo-library + camera triggers into one attach menu.
+> Inline mentions of those below are superseded by this note.
+
 Layered MVVM: **Views** (SwiftUI) → **ViewModels** (`@Observable`, `@MainActor`) →
 **Services** (domain operations) → **Networking** (`OakAPIClient` + `SSEClient` +
 DTOs). Lower layers never import upper layers. Services are protocol-typed so ViewModels

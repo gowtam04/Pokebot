@@ -15,9 +15,8 @@ import Foundation
 
 /// Request body for `POST /api/chat`.
 ///
-/// Reconciliation (api-design.md): there is NO `active_team_id` on this body — the
-/// active team is applied server-side and set via `PATCH /api/conversations/{id}`
-/// (`HistoryService.setActiveTeam`). Do not add `activeTeamId` here.
+/// Saved teams are referenced **by name in chat** (resolved server-side via
+/// `list_teams` / `get_team`), so there is NO team id on this body.
 struct ChatRequest: Encodable, Sendable {
     /// Client UUID for the thread; equals the conversation id on resume.
     let sessionId: String

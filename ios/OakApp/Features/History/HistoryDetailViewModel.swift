@@ -54,11 +54,6 @@ final class HistoryDetailViewModel {
   /// The rehydrated turns to render (empty until ``load()`` completes).
   var turns: [ChatTurn] { detail?.turns ?? [] }
 
-  /// The conversation's bound active team id, once loaded (M-TEAM-US-5). Exposed for
-  /// the resume hand-off to restore the composer's active-team selector (wired with
-  /// the team picker in a later phase); `nil` = none bound.
-  var activeTeamId: String? { detail?.activeTeamId }
-
   // MARK: Actions
 
   /// Loads the full conversation (`GET /api/conversations/{id}`) so its earlier

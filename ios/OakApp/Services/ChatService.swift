@@ -22,17 +22,14 @@ protocol ChatService: Sendable {
   ///   caps enforced by `ImageEncoder`. A cap/type violation finishes the returned
   ///   stream by throwing `OakError.imageRejected(...)` before any event is yielded.
   /// - `championsMode`: scopes the turn to the Champions format when `true`.
-  /// - `activeTeamId`: the composer's selected team. **Not** sent on the chat
-  ///   request body (reconciliation #1 / api-design.md) — the active team is applied
-  ///   server-side via the conversation (`HistoryService.setActiveTeam`). The
-  ///   parameter exists for the composer's call site; it is deliberately not wired
-  ///   onto the wire here.
+  ///
+  /// Saved teams are referenced **by name in chat** (resolved server-side via
+  /// `list_teams` / `get_team`), so the body carries no team id.
   func send(
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool,
-    activeTeamId: String?
+    championsMode: Bool
   ) -> AsyncThrowingStream<SSEEvent, Error>
 }
 
@@ -50,8 +47,7 @@ struct LiveChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool,
-    activeTeamId: String?
+    championsMode: Bool
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     // Encode + validate the attached images BEFORE opening the stream (M-AC-5.5).
     // `encode` is synchronous and runs in the caller's context (the main actor),
@@ -70,9 +66,6 @@ struct LiveChatService: ChatService {
       return AsyncThrowingStream { $0.finish(throwing: mapped) }
     }
 
-    // `activeTeamId` is intentionally NOT placed on `ChatRequest` (reconciliation
-    // #1): there is no `active_team_id` on the chat body. The active team is applied
-    // server-side through the conversation, so it is dropped from the wire here.
     let request = ChatRequest(
       sessionId: sessionId,
       message: message,

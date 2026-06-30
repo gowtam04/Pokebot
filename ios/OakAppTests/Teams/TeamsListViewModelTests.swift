@@ -3,11 +3,10 @@ import Testing
 
 @testable import OakApp
 
-/// `TeamsListViewModel` against `FakeTeamService` / `FakeHistoryService`
-/// (history-and-teams.md M-TEAM-US-4/5/6): loading + format filter, the library
-/// mutations (create / duplicate / delete), applying an agent-proposed team, importing a
-/// Showdown paste, and binding the active team to a conversation. The view model is
-/// `@MainActor`, so the suite is too.
+/// `TeamsListViewModel` against `FakeTeamService` (history-and-teams.md
+/// M-TEAM-US-4/6): loading + format filter, the library mutations (create / duplicate /
+/// delete), applying an agent-proposed team, and importing a Showdown paste. The view
+/// model is `@MainActor`, so the suite is too.
 @MainActor
 struct TeamsListViewModelTests {
 
@@ -40,19 +39,18 @@ struct TeamsListViewModelTests {
   }
 
   private func makeVM(
-    seed: [Team] = [],
-    history: FakeHistoryService = FakeHistoryService()
-  ) -> (TeamsListViewModel, FakeTeamService, FakeHistoryService) {
+    seed: [Team] = []
+  ) -> (TeamsListViewModel, FakeTeamService) {
     let teamService = FakeTeamService(seed: seed)
-    let vm = TeamsListViewModel(teamService: teamService, history: history)
-    return (vm, teamService, history)
+    let vm = TeamsListViewModel(teamService: teamService)
+    return (vm, teamService)
   }
 
   // MARK: Loading
 
   @Test
   func reloadPopulatesTeams() async {
-    let (vm, _, _) = makeVM(seed: [team(id: "a"), team(id: "b")])
+    let (vm, _) = makeVM(seed: [team(id: "a"), team(id: "b")])
 
     await vm.reload()
 
@@ -63,7 +61,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func reloadSurfacesErrorAndKeepsPriorList() async {
-    let (vm, fake, _) = makeVM(seed: [team(id: "a")])
+    let (vm, fake) = makeVM(seed: [team(id: "a")])
     await vm.reload()
 
     fake.listError = .transport(underlying: "URLError.-1009")
@@ -75,7 +73,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func setFormatFilterReloadsWithFormat() async {
-    let (vm, fake, _) = makeVM(seed: [
+    let (vm, fake) = makeVM(seed: [
       team(id: "sv", format: .scarletViolet),
       team(id: "ch", format: .champions),
     ])
@@ -89,7 +87,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func setFormatFilterNoOpWhenUnchanged() async {
-    let (vm, fake, _) = makeVM()
+    let (vm, fake) = makeVM()
 
     await vm.setFormatFilter(nil)  // already nil ("all")
 
@@ -100,7 +98,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func createTeamInsertsSummaryAtTop() async {
-    let (vm, fake, _) = makeVM(seed: [team(id: "old")])
+    let (vm, fake) = makeVM(seed: [team(id: "old")])
     await vm.reload()
 
     let created = await vm.createTeam(format: .champions, name: "Fresh")
@@ -114,7 +112,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func duplicateInsertsCopy() async {
-    let (vm, fake, _) = makeVM(seed: [team(id: "src", name: "Original")])
+    let (vm, fake) = makeVM(seed: [team(id: "src", name: "Original")])
     await vm.reload()
 
     let copy = await vm.duplicate(vm.teams[0])
@@ -126,7 +124,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func deleteRemovesOptimistically() async {
-    let (vm, _, _) = makeVM(seed: [team(id: "a"), team(id: "b")])
+    let (vm, _) = makeVM(seed: [team(id: "a"), team(id: "b")])
     await vm.reload()
     let target = vm.teams.first { $0.id == "a" }!
 
@@ -138,7 +136,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func deleteTreats404AsSuccess() async {
-    let (vm, fake, _) = makeVM(seed: [team(id: "a")])
+    let (vm, fake) = makeVM(seed: [team(id: "a")])
     await vm.reload()
     fake.deleteError = .http(status: 404, code: "not_found", message: "gone")
 
@@ -150,7 +148,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func deleteRevertsOnRealFailure() async {
-    let (vm, fake, _) = makeVM(seed: [team(id: "a")])
+    let (vm, fake) = makeVM(seed: [team(id: "a")])
     await vm.reload()
     fake.deleteError = .transport(underlying: "URLError.-1009")
 
@@ -164,7 +162,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func applyProposedCreatesSavedTeam() async {
-    let (vm, fake, _) = makeVM()
+    let (vm, fake) = makeVM()
     let members = [member(species: "great-tusk", moves: ["close-combat"])]
     let proposed = ProposedTeam(name: "Sun Offense", format: .champions, members: members)
 
@@ -183,7 +181,7 @@ struct TeamsListViewModelTests {
 
   @Test
   func importPasteInsertsTeamAndReturnsNotes() async {
-    let (vm, fake, _) = makeVM()
+    let (vm, fake) = makeVM()
     fake.nextNotes = [
       ImportNote(slot: 0, kind: .move, raw: "Hyperspace Fury", resolvedTo: nil, message: "Dropped.")
     ]
@@ -195,48 +193,6 @@ struct TeamsListViewModelTests {
     #expect(fake.importCount == 1)
     #expect(fake.lastImportFormat == .scarletViolet)
     #expect(vm.teams.contains { $0.id == result?.team.id })
-  }
-
-  // MARK: Active-team binding (persists on the conversation)
-
-  @Test
-  func setActivePersistsOnConversation() async {
-    let history = FakeHistoryService()
-    let (vm, _, _) = makeVM(seed: [team(id: "a")], history: history)
-    await vm.reload()
-
-    await vm.setActive(vm.teams[0], conversationId: "conv-1")
-
-    #expect(history.setActiveTeamCount == 1)
-    #expect(history.lastActiveTeamConversationId == "conv-1")
-    #expect(history.lastActiveTeamId == "a")
-    #expect(vm.activeTeamId == "a")
-  }
-
-  @Test
-  func clearActiveClearsBinding() async {
-    let history = FakeHistoryService()
-    let (vm, _, _) = makeVM(seed: [team(id: "a")], history: history)
-    await vm.reload()
-    await vm.setActive(vm.teams[0], conversationId: "conv-1")
-
-    await vm.setActive(nil, conversationId: "conv-1")
-
-    #expect(history.lastActiveTeamId == nil)
-    #expect(vm.activeTeamId == nil)
-  }
-
-  @Test
-  func setActiveRevertsOnFailure() async {
-    let history = FakeHistoryService()
-    let (vm, _, _) = makeVM(seed: [team(id: "a")], history: history)
-    await vm.reload()
-    history.setActiveTeamError = .transport(underlying: "URLError.-1009")
-
-    await vm.setActive(vm.teams[0], conversationId: "conv-1")
-
-    #expect(vm.activeTeamId == nil)  // reverted to the prior (nil) selection
-    #expect(vm.errorMessage == TeamsListViewModel.connectionMessage)
   }
 }
 

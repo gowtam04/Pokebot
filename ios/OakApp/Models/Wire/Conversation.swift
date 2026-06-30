@@ -14,8 +14,6 @@ import Foundation
 //     `updatedAt` (no `createdAt`).
 //   - The `team` envelope (GET /api/teams/{id}, etc.) emits camelCase
 //     `createdAt`/`updatedAt` (repo `Team`), not snake_case.
-// `ConversationDetail` is the one place a snake_case key survives:
-// /api/conversations/{id} hand-builds `{ …, active_team_id, turns }`.
 //
 // `Format`, `OakAnswer`, and `TeamMember` live in sibling files in this same
 // module (no import needed).
@@ -47,15 +45,12 @@ struct ConversationSummary: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// A full conversation with rehydrated turns — `GET /api/conversations/{id}`
-/// (`{ id, title, format, pinned, active_team_id, turns }`). `active_team_id`
-/// is the conversation's bound active team (or `nil`); the client restores its
-/// selector from it on open.
+/// (`{ id, title, format, pinned, turns }`).
 struct ConversationDetail: Decodable, Sendable {
   let id: String
   let title: String
   let format: Format
   let pinned: Bool
-  let activeTeamId: String?
   let turns: [ChatTurn]
 
   enum CodingKeys: String, CodingKey {
@@ -63,7 +58,6 @@ struct ConversationDetail: Decodable, Sendable {
     case title
     case format
     case pinned
-    case activeTeamId = "active_team_id"
     case turns
   }
 }

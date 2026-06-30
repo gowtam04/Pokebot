@@ -248,8 +248,7 @@ struct PreviewChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool,
-    activeTeamId: String?
+    championsMode: Bool
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       let answer = OakAnswer(

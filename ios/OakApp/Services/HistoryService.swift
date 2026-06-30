@@ -32,12 +32,6 @@ protocol HistoryService: Sendable {
   /// Pins or unpins a conversation (`PATCH …` with `{ pinned }`, M-AC-H2.4).
   func setPinned(id: String, pinned: Bool) async throws
 
-  /// Binds (or clears) the conversation's active team (`PATCH …` with
-  /// `{ active_team_id }`, M-TEAM-US-5 / reconciliation #1). `teamId == nil`
-  /// clears it; a non-nil id is validated server-side (ownership + format match)
-  /// and silently ignored if invalid — never an error (warn-but-allow).
-  func setActiveTeam(id: String, teamId: String?) async throws
-
   /// Permanently deletes a conversation (`DELETE /api/conversations/{id}`,
   /// M-AC-H2.4). The server returns `404` for an already-gone or not-owned id; the
   /// caller (the list view model) treats that as success for idempotent UX.
@@ -115,16 +109,6 @@ struct LiveHistoryService: HistoryService {
     try await apiClient.sendNoContent(endpoint)
   }
 
-  func setActiveTeam(id: String, teamId: String?) async throws {
-    let endpoint = Endpoint(
-      method: .patch,
-      path: "/api/conversations/\(id)",
-      body: ActiveTeamBody(activeTeamId: teamId),
-      requiresAuth: true
-    )
-    try await apiClient.sendNoContent(endpoint)
-  }
-
   func delete(id: String) async throws {
     let endpoint = Endpoint(
       method: .delete,
@@ -174,24 +158,6 @@ private struct RenameBody: Encodable, Sendable {
 /// `PATCH …` body for a pin toggle (`{ pinned }`). `pinned` is identical on the wire.
 private struct PinnedBody: Encodable, Sendable {
   let pinned: Bool
-}
-
-/// `PATCH …` body for setting/clearing the active team. `active_team_id` must be
-/// PRESENT on the wire as either a string (select) or explicit `null` (clear) — the
-/// route distinguishes "clear" (null) from "no change" (key absent). Swift's
-/// synthesized `encode` would `encodeIfPresent` (omitting nil), which would send an
-/// empty body and 400, so `encode(to:)` is hand-written to emit null when nil.
-private struct ActiveTeamBody: Encodable, Sendable {
-  let activeTeamId: String?
-
-  enum CodingKeys: String, CodingKey {
-    case activeTeamId = "active_team_id"
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(activeTeamId, forKey: .activeTeamId)
-  }
 }
 
 /// `POST /api/conversations/import` body (`{ session_id, champions_mode, turns }`).

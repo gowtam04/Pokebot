@@ -159,13 +159,12 @@ struct FixtureDecodingTests {
     #expect(answer.candidates == nil)
   }
 
-  /// `ConversationDetail` rehydrates a snake_case `active_team_id` and a mixed
-  /// user/assistant turn list; the assistant turn carries a full `OakAnswer`.
+  /// `ConversationDetail` rehydrates a mixed user/assistant turn list; the assistant
+  /// turn carries a full `OakAnswer`.
   @Test
   func conversationDetailDecodesTurns() throws {
     let detail = try Fixtures.decode(ConversationDetail.self, from: "conversation_detail.json")
     #expect(detail.format == .scarletViolet)
-    #expect(detail.activeTeamId == "team_abc123")
     #expect(detail.turns.count == 2)
 
     guard case let .user(id, content) = detail.turns[0] else {

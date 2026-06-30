@@ -18,7 +18,6 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
   var getResult: Result<ConversationDetail, OakError>?
   var renameError: OakError?
   var setPinnedError: OakError?
-  var setActiveTeamError: OakError?
   var deleteError: OakError?
   var importResult: Result<String?, OakError> = .success("imported_conv_id")
 
@@ -38,10 +37,6 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
   private(set) var setPinnedCount = 0
   private(set) var lastPinnedId: String?
   private(set) var lastPinnedValue: Bool?
-
-  private(set) var setActiveTeamCount = 0
-  private(set) var lastActiveTeamConversationId: String?
-  private(set) var lastActiveTeamId: String?
 
   private(set) var deleteCount = 0
   private(set) var lastDeletedId: String?
@@ -81,13 +76,6 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
     lastPinnedId = id
     lastPinnedValue = pinned
     if let setPinnedError { throw setPinnedError }
-  }
-
-  func setActiveTeam(id: String, teamId: String?) async throws {
-    setActiveTeamCount += 1
-    lastActiveTeamConversationId = id
-    lastActiveTeamId = teamId
-    if let setActiveTeamError { throw setActiveTeamError }
   }
 
   func delete(id: String) async throws {

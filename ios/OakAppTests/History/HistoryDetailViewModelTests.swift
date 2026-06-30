@@ -33,7 +33,6 @@ struct HistoryDetailViewModelTests {
     #expect(fake.lastGetId == "conv_1")
     #expect(vm.title == detail.title)
     #expect(vm.turns.count == 2)
-    #expect(vm.activeTeamId == "team_abc123")
 
     guard case .user = vm.turns[0] else {
       Issue.record("first turn should be a user turn")
@@ -68,7 +67,6 @@ struct HistoryDetailViewModelTests {
       title: "Resumed",
       format: .scarletViolet,
       pinned: false,
-      activeTeamId: nil,
       turns: []
     )
     let fake = FakeHistoryService()

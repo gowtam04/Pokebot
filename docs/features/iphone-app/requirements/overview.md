@@ -1,5 +1,12 @@
 # Oak for iPhone — Business Requirements: Overview
 
+> **⚠️ Updated — the "active team" feature was removed (web change, 2026-06).** The
+> web app dropped the server-bound active-team seam; saved teams are now referenced
+> **by name in chat** (the agent calls `list_teams` then `get_team`). The iOS client
+> matches: there is no active-team chip/selector, no `setActiveTeam`, and no
+> `active_team_id` on any request. Inline mentions of "active team" below are
+> superseded by this note.
+
 > A native **iPhone** client for Oak, the existing deployed Pokémon chat agent
 > (`README.md`, `CLAUDE.md`). This document set defines **what** the iPhone app
 > must do and **why**, for handoff to a solution architect. It does not make

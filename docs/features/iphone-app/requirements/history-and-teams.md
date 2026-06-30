@@ -5,6 +5,12 @@
 > (`docs/features/team-builder/requirements/`). This file specifies their native
 > iPhone expression. IDs scoped `M-`. Append; never renumber.
 
+> **⚠️ Updated — "active team" removed (web change, 2026-06).** The web app dropped
+> the active-team seam; saved teams are now referenced **by name in chat** (the agent
+> calls `list_teams` then `get_team`). **M-TEAM-US-5 and its M-AC-T5.x criteria are
+> retired**, and the iOS client carries no active-team selector, `setActiveTeam`, or
+> `active_team_id`. Other "active team" mentions below are superseded by this note.
+
 ## A. Durable chat history (signed-in)
 
 ### Overview

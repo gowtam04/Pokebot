@@ -117,7 +117,6 @@ struct PreviewStubHistoryService: HistoryService {
       title: "Preview conversation",
       format: .scarletViolet,
       pinned: false,
-      activeTeamId: nil,
       turns: []
     )
   }
@@ -125,8 +124,6 @@ struct PreviewStubHistoryService: HistoryService {
   func rename(id: String, title: String) async throws {}
 
   func setPinned(id: String, pinned: Bool) async throws {}
-
-  func setActiveTeam(id: String, teamId: String?) async throws {}
 
   func delete(id: String) async throws {}
 
@@ -145,8 +142,7 @@ struct PreviewStubChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool,
-    activeTeamId: String?
+    championsMode: Bool
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       continuation.yield(.answerStart)

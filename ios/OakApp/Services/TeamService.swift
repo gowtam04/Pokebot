@@ -48,9 +48,8 @@ protocol TeamService: Sendable {
     members: [TeamMember]?
   ) async throws -> (team: Team, validation: TeamValidationResult)
 
-  /// Permanently deletes a team (`DELETE /api/teams/{id}`, M-TEAM-US-6). The server
-  /// nulls any conversation `active_team_id` that referenced it. A `404` (already gone /
-  /// not owned) is treated as success by the caller for idempotent UX.
+  /// Permanently deletes a team (`DELETE /api/teams/{id}`, M-TEAM-US-6). A `404`
+  /// (already gone / not owned) is treated as success by the caller for idempotent UX.
   func delete(id: String) async throws
 
   /// Clones a team into a fresh, independent copy named "<name> copy"

@@ -1,5 +1,11 @@
 # Implementation Plan
 
+> **⚠️ Updated — "active team" removed (web change, 2026-06).** Saved teams are now
+> referenced **by name in chat** (`list_teams` → `get_team`). Drop the active-team
+> chip, `setActiveTeam`, and any `active_team_id`/active-team scoping from the phases
+> below (M-TEAM-US-5 is retired); team CRUD + agent-assisted apply remain. Inline
+> "active team" mentions below are superseded by this note.
+
 Build-order phases for the native iOS client plus the two additive backend changes.
 The backend phase (P2) is in a **different codebase** (`web/`, TypeScript) and runs in
 parallel with early iOS work. Requirement IDs are the `M-`-prefixed IDs from

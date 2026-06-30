@@ -2,9 +2,9 @@ import SwiftUI
 
 /// The team-library screen (history-and-teams.md M-TEAM-US-6; M-UI-US-5): a
 /// format-filterable list of saved teams with native list patterns — swipe to delete,
-/// a context menu (edit / duplicate / set-active / delete), and pull-to-refresh. New
-/// teams are created via the "+" menu (per format) and Showdown pastes via the import
-/// sheet (M-TEAM-US-2).
+/// a context menu (edit / duplicate / delete), and pull-to-refresh. New teams are
+/// created via the "+" menu (per format) and Showdown pastes via the import sheet
+/// (M-TEAM-US-2).
 ///
 /// Teams are signed-in only (M-BR-T1): a guest sees a sign-in prompt, not an empty list.
 /// The view owns its ``TeamsListViewModel`` (`@State`) and drives it; all logic lives in
@@ -27,9 +27,6 @@ struct TeamsListView: View {
     if case .signedIn = appState.authState { return true }
     return false
   }
-
-  /// The conversation an active-team selection would bind to (`nil` ⇒ no live thread).
-  private var activeConversationId: String? { appState.activeConversationId }
 
   var body: some View {
     NavigationStack {
@@ -79,7 +76,7 @@ struct TeamsListView: View {
           Button {
             editorTarget = .existing(team)
           } label: {
-            TeamRow(team: team, isActive: team.id == model.activeTeamId)
+            TeamRow(team: team)
           }
           .buttonStyle(.plain)
           .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -119,21 +116,6 @@ struct TeamsListView: View {
       }
     } label: {
       Label("Duplicate", systemImage: "plus.square.on.square")
-    }
-    if let conversationId = activeConversationId {
-      if model.activeTeamId == team.id {
-        Button {
-          Task { await model.setActive(nil, conversationId: conversationId) }
-        } label: {
-          Label("Clear active team", systemImage: "person.crop.circle.badge.xmark")
-        }
-      } else {
-        Button {
-          Task { await model.setActive(team, conversationId: conversationId) }
-        } label: {
-          Label("Use in current conversation", systemImage: "person.crop.circle.badge.checkmark")
-        }
-      }
     }
     Button(role: .destructive) {
       Task { await model.delete(team) }
@@ -262,12 +244,10 @@ private enum EditorTarget: Identifiable, Hashable {
 
 // MARK: - Row
 
-/// One team row: name, a format tag, a glanceable composition summary, and an "Active"
-/// marker when bound to the current conversation. Color is never the sole signal — the
-/// format and active state are shown as text/icon (M-AC-UI9.3).
+/// One team row: name, a format tag, and a glanceable composition summary. Color is
+/// never the sole signal — the format is shown as text (M-AC-UI9.3).
 private struct TeamRow: View {
   let team: TeamSummary
-  let isActive: Bool
 
   var body: some View {
     HStack(spacing: 12) {
@@ -276,13 +256,6 @@ private struct TeamRow: View {
           Text(team.name)
             .font(.body)
             .lineLimit(1)
-          if isActive {
-            Label("Active", systemImage: "checkmark.circle.fill")
-              .labelStyle(.iconOnly)
-              .font(.caption)
-              .foregroundStyle(Theme.success)
-              .accessibilityLabel("Active team")
-          }
         }
         HStack(spacing: 6) {
           Text(formatLabel)
@@ -318,7 +291,6 @@ private struct TeamRow: View {
 
   private var accessibilityLabel: String {
     var parts = [team.name, formatLabel, compositionLabel]
-    if isActive { parts.append("active team") }
     if team.incomplete { parts.append("incomplete") }
     return parts.joined(separator: ", ")
   }

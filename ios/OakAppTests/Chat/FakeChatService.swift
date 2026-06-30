@@ -5,9 +5,9 @@ import UIKit
 
 /// In-memory ``ChatService`` test double (testing-strategy.md "Mocking policy":
 /// service protocols are faked for view-model unit tests). It records the call
-/// parameters — crucially the `championsMode` flag and `activeTeamId` — and replays
-/// a scripted sequence of ``SSEEvent``s, optionally finishing with a thrown error to
-/// exercise the reducer's transport-fault path.
+/// parameters — crucially the `championsMode` flag — and replays a scripted sequence
+/// of ``SSEEvent``s, optionally finishing with a thrown error to exercise the
+/// reducer's transport-fault path.
 ///
 /// `@unchecked Sendable`: the recording/config state is mutable, but every test
 /// drives it serially from the main actor and awaits the stream, so there is no
@@ -30,21 +30,18 @@ final class FakeChatService: ChatService, @unchecked Sendable {
   private(set) var lastSessionId: String?
   private(set) var lastMessage: String?
   private(set) var lastChampionsMode: Bool?
-  private(set) var lastActiveTeamId: String?
   private(set) var lastImageCount: Int?
 
   func send(
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool,
-    activeTeamId: String?
+    championsMode: Bool
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     sendCount += 1
     lastSessionId = sessionId
     lastMessage = message
     lastChampionsMode = championsMode
-    lastActiveTeamId = activeTeamId
     lastImageCount = images.count
 
     let events = scriptedEvents

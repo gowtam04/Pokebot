@@ -3,14 +3,12 @@ import Observation
 
 /// The team-library view model (history-and-teams.md M-TEAM-US-6; component-design.md
 /// "TeamsListViewModel"). Holds the team list and the format-filter state, drives the
-/// library mutations (create / duplicate / delete), folds in agent-applied and imported
-/// teams, and binds a saved team as the **active team** for the current conversation
-/// (M-TEAM-US-5).
+/// library mutations (create / duplicate / delete), and folds in agent-applied and
+/// imported teams.
 ///
 /// `@MainActor @Observable` — all state mutates on the main actor and views observe it
-/// directly. It depends on the ``TeamService`` and ``HistoryService`` **protocols**
-/// (never the `Live…` concretes) so it unit-tests against `FakeTeamService` /
-/// `FakeHistoryService`.
+/// directly. It depends on the ``TeamService`` **protocol** (never the `Live…`
+/// concrete) so it unit-tests against `FakeTeamService`.
 ///
 /// Teams are signed-in only (M-BR-T1): a guest gets `401` from the routes, so the view
 /// shows a sign-in prompt rather than this list. The format filter (`?format=`) is
@@ -30,11 +28,6 @@ final class TeamsListViewModel {
   /// A user-facing error message for the last failed operation, or `nil` when clear.
   private(set) var errorMessage: String?
 
-  /// The id of the team bound active for the current conversation (M-AC-T5.3), or `nil`.
-  /// Reflects the conversation's `active_team_id`; set via ``setActive(_:conversationId:)``
-  /// and primed on open with ``primeActiveTeam(_:)``.
-  private(set) var activeTeamId: String?
-
   // MARK: Filter state
 
   /// The active format filter (M-TEAM-US-6); `nil` = all formats. Applied server-side.
@@ -43,11 +36,9 @@ final class TeamsListViewModel {
   // MARK: Dependencies
 
   private let teamService: any TeamService
-  private let history: any HistoryService
 
-  init(teamService: any TeamService, history: any HistoryService) {
+  init(teamService: any TeamService) {
     self.teamService = teamService
-    self.history = history
   }
 
   // MARK: Loading
@@ -113,12 +104,10 @@ final class TeamsListViewModel {
 
   /// Deletes a team (M-TEAM-US-6). Optimistically removes the row, then persists. A
   /// `404` is treated as success (already gone — idempotent UX); any other failure
-  /// restores the row and surfaces an error. Clears the active binding if it pointed
-  /// at the deleted team (the server nulls the conversation reference too).
+  /// restores the row and surfaces an error.
   func delete(_ summary: TeamSummary) async {
     let snapshot = teams
     teams.removeAll { $0.id == summary.id }
-    if activeTeamId == summary.id { activeTeamId = nil }
     do {
       try await teamService.delete(id: summary.id)
     } catch OakError.http(let status, _, _) where status == 404 {
@@ -173,34 +162,6 @@ final class TeamsListViewModel {
     } catch {
       errorMessage = Self.genericMessage
       return nil
-    }
-  }
-
-  // MARK: Active-team binding (M-TEAM-US-5)
-
-  /// Primes the active-team selection from a conversation's `active_team_id` on open
-  /// (M-AC-T5.3) — a local set, no network.
-  func primeActiveTeam(_ teamId: String?) {
-    activeTeamId = teamId
-  }
-
-  /// Sets (or clears, `team == nil`) the active team for the given conversation
-  /// (M-AC-T5.1 / reconciliation #1: active team is persisted on the conversation via
-  /// `PATCH /api/conversations/{id}`, NOT carried on the chat request body). Optimistic:
-  /// reflects the selection immediately, then persists; a failure reverts and surfaces
-  /// an error. The server validates ownership + format match and silently ignores an
-  /// invalid id (warn-but-allow), so this never throws in-domain.
-  func setActive(_ team: TeamSummary?, conversationId: String) async {
-    let previous = activeTeamId
-    activeTeamId = team?.id
-    do {
-      try await history.setActiveTeam(id: conversationId, teamId: team?.id)
-    } catch let error as OakError {
-      activeTeamId = previous
-      errorMessage = Self.message(for: error)
-    } catch {
-      activeTeamId = previous
-      errorMessage = Self.genericMessage
     }
   }
 

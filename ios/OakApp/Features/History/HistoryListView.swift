@@ -257,11 +257,10 @@ private struct PreviewHistoryService: HistoryService {
     ]
   }
   func get(id: String) async throws -> ConversationDetail {
-    ConversationDetail(id: id, title: "Conversation", format: .scarletViolet, pinned: false, activeTeamId: nil, turns: [])
+    ConversationDetail(id: id, title: "Conversation", format: .scarletViolet, pinned: false, turns: [])
   }
   func rename(id: String, title: String) async throws {}
   func setPinned(id: String, pinned: Bool) async throws {}
-  func setActiveTeam(id: String, teamId: String?) async throws {}
   func delete(id: String) async throws {}
   func importGuestThread(sessionId: String, championsMode: Bool, turns: [ChatTurn]) async throws -> String? { nil }
 }

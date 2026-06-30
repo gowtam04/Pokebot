@@ -6,7 +6,7 @@ import UIKit
 /// experience (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md "Streaming
 /// reducer"). It holds the visible turns, the in-progress streaming state
 /// (tool-activity items + a streamed-text buffer), and the composer state (text +
-/// images + Champions mode + active team), and folds the `SSEEvent` stream into UI
+/// images + Champions mode), and folds the `SSEEvent` stream into UI
 /// state one event at a time.
 ///
 /// `@MainActor @Observable` — all state mutates on the main actor and views observe
@@ -66,10 +66,6 @@ final class ChatViewModel {
   /// default; flipping it also updates the default for new conversations.
   private(set) var championsMode: Bool
 
-  /// The composer's selected active team id, or `nil`. Surfaced as a chip; the team
-  /// picker is **P10**. Applied server-side via the conversation, not the chat body.
-  private(set) var activeTeamId: String?
-
   // MARK: Dependencies + identity
 
   private let chat: any ChatService
@@ -92,7 +88,6 @@ final class ChatViewModel {
     self.appState = appState
     self.sessionId = appState.activeConversationId ?? UUID().uuidString
     self.championsMode = appState.championsMode
-    self.activeTeamId = nil
   }
 
   // MARK: Derived state
@@ -134,8 +129,7 @@ final class ChatViewModel {
     let request = PendingRequest(
       message: text,
       images: images,
-      championsMode: championsMode,
-      activeTeamId: activeTeamId
+      championsMode: championsMode
     )
     lastRequest = request
     beginStreaming(request)
@@ -154,12 +148,6 @@ final class ChatViewModel {
     guard !isStreaming else { return }
     championsMode = on
     appState.championsMode = on
-  }
-
-  /// Selects (or clears) the composer's active team. The picker is P10; this is the
-  /// setter the chip / a future picker drives.
-  func setActiveTeam(_ id: String?) {
-    activeTeamId = id
   }
 
   /// Stages images for the next turn, capped at ``maxAttachedImages`` (the backend's
@@ -281,8 +269,7 @@ final class ChatViewModel {
       sessionId: sessionId,
       message: request.message,
       images: request.images,
-      championsMode: request.championsMode,
-      activeTeamId: request.activeTeamId
+      championsMode: request.championsMode
     )
     streamTask = Task { [weak self] in
       await self?.consume(stream)
@@ -436,6 +423,5 @@ extension ChatViewModel {
     let message: String
     let images: [UIImage]
     let championsMode: Bool
-    let activeTeamId: String?
   }
 }

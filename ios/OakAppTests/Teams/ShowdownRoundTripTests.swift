@@ -65,7 +65,7 @@ struct ShowdownRoundTripTests {
     #expect(paste != nil)
 
     // …then import through the list.
-    let listVM = TeamsListViewModel(teamService: fake, history: FakeHistoryService())
+    let listVM = TeamsListViewModel(teamService: fake)
     let result = await listVM.importPaste(paste!, format: .scarletViolet)
 
     #expect(result != nil)
@@ -88,7 +88,7 @@ struct ShowdownRoundTripTests {
 
     let editor = TeamEditorViewModel(teamService: fake, team: source)
     let paste = await editor.exportPaste()
-    let listVM = TeamsListViewModel(teamService: fake, history: FakeHistoryService())
+    let listVM = TeamsListViewModel(teamService: fake)
     let result = await listVM.importPaste(paste ?? "", format: .champions)
 
     #expect(result?.team.members.isEmpty == true)

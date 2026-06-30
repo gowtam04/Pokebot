@@ -4,9 +4,9 @@ import SwiftUI
 import UIKit
 
 /// The chat composer (chat-experience.md M-CHAT-US-1/5/6): a growing text field, a
-/// send button, the Champions-mode toggle, the active-team chip, and (P8) image
-/// attach via the photo library (`PhotosPicker`) or the camera (``CameraPicker``)
-/// with thumbnail/remove UI and permission handling.
+/// send button, the Champions-mode toggle, and (P8) image attach — the photo library
+/// (`PhotosPicker`) or the camera (``CameraPicker``) behind one attach menu — with
+/// thumbnail/remove UI and permission handling.
 ///
 /// It reads and writes the feature's ``ChatViewModel`` directly (a sibling view in
 /// the same feature). All chat/turn logic lives in the view model; this view is
@@ -24,6 +24,8 @@ struct ComposerView: View {
   /// Selections from the SwiftUI photo-library picker, loaded into `UIImage`s and
   /// staged onto the view model, then cleared.
   @State private var photoSelections: [PhotosPickerItem] = []
+  /// Drives the photo-library picker, opened from the attach menu's "Photo Library".
+  @State private var isPhotosPickerPresented = false
   /// Presents the camera (``CameraPicker``) over the composer.
   @State private var isCameraPresented = false
   /// Receives the camera's captured photo, then staged onto the view model.
@@ -74,6 +76,13 @@ struct ComposerView: View {
       attachNote = added == 0 ? Self.capReachedNote : nil
       cameraImage = nil
     }
+    .photosPicker(
+      isPresented: $isPhotosPickerPresented,
+      selection: $photoSelections,
+      maxSelectionCount: max(1, remainingSlots),
+      matching: .images,
+      photoLibrary: .shared()
+    )
     .fullScreenCover(isPresented: $isCameraPresented) {
       CameraPicker(image: $cameraImage)
         .ignoresSafeArea()
@@ -99,7 +108,7 @@ struct ComposerView: View {
     remainingSlots > 0 && !model.isStreaming
   }
 
-  // MARK: Controls row — mode toggle + active-team chip + image attach
+  // MARK: Controls row — mode toggle + image attach
 
   @ViewBuilder
   private func controlsRow(model: ChatViewModel) -> some View {
@@ -118,72 +127,43 @@ struct ComposerView: View {
       .accessibilityLabel("Champions mode")
       .accessibilityValue(model.championsMode ? "On" : "Off")
 
-      activeTeamChip(model: model)
-
       Spacer(minLength: 0)
 
       attachControls(model: model)
     }
   }
 
-  /// The active-team chip. The team picker is **P10**; for now the chip displays the
-  /// selection (or "No team") and offers a clear action when a team is set.
-  @ViewBuilder
-  private func activeTeamChip(model: ChatViewModel) -> some View {
-    if let teamId = model.activeTeamId {
-      Button {
-        model.setActiveTeam(nil)
-      } label: {
-        Label("Team \(teamId.prefix(6))", systemImage: "person.3.fill")
-          .font(Theme.body(.footnote))
-          .labelStyle(.titleAndIcon)
-      }
-      .buttonStyle(.bordered)
-      .tint(Theme.azure)
-      .accessibilityLabel("Active team selected. Tap to clear.")
-    } else {
-      Label("No team", systemImage: "person.3")
-        .font(Theme.body(.footnote))
-        .labelStyle(.titleAndIcon)
-        .foregroundStyle(Theme.textMuted)
-        .accessibilityLabel("No active team")
-    }
-  }
+  // MARK: Image attach control (one menu → photo library / camera)
 
-  // MARK: Image attach controls (photo library + camera)
-
+  /// A single attach affordance: a paperclip that fans out a menu with "Photo Library"
+  /// and (on devices with a camera) "Take Photo". The library item opens the
+  /// `.photosPicker(isPresented:)` modifier on the composer; the camera item runs the
+  /// permission-gated ``presentCamera()``. Disabled at the 4-image cap / mid-stream.
   @ViewBuilder
   private func attachControls(model: ChatViewModel) -> some View {
-    // Photo library — the native SwiftUI picker. `maxSelectionCount` is bounded by
-    // the remaining slots so the user can't pick past the 4-image cap (M-AC-5.2).
-    PhotosPicker(
-      selection: $photoSelections,
-      maxSelectionCount: max(1, remainingSlots),
-      matching: .images,
-      photoLibrary: .shared()
-    ) {
-      Image(systemName: "photo.on.rectangle")
+    Menu {
+      Button {
+        isPhotosPickerPresented = true
+      } label: {
+        Label("Photo Library", systemImage: "photo.on.rectangle")
+      }
+
+      // Camera — only when the device has one (hidden on the Simulator).
+      if UIImagePickerController.isSourceTypeAvailable(.camera) {
+        Button {
+          presentCamera()
+        } label: {
+          Label("Take Photo", systemImage: "camera")
+        }
+      }
+    } label: {
+      Image(systemName: "paperclip")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
     }
     .tint(Theme.accent)
     .disabled(!canAttachMore)
-    .accessibilityLabel("Attach photos from library")
-
-    // Camera — only when the device has one (hidden on the Simulator).
-    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-      Button {
-        presentCamera()
-      } label: {
-        Image(systemName: "camera")
-          .font(Theme.body(.title3))
-          .symbolRenderingMode(.hierarchical)
-      }
-      .buttonStyle(.plain)
-      .tint(Theme.accent)
-      .disabled(!canAttachMore)
-      .accessibilityLabel("Take a photo")
-    }
+    .accessibilityLabel("Attach image")
   }
 
   // MARK: Attached-image thumbnails (with per-image remove)

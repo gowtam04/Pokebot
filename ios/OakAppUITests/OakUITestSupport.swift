@@ -80,7 +80,7 @@ enum OakUITest {
     static let championsToggle = "Champions mode"
     static let newConversation = "New conversation"
     static let emptyState = "Ask Oak"
-    static let attachFromLibrary = "Attach photos from library"
+    static let attachImage = "Attach image"
     static let retry = "Retry"
   }
 
