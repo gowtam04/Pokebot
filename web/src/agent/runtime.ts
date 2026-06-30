@@ -169,6 +169,9 @@ const PROGRESS_LABELS: Record<string, string> = {
   estimate_damage: "💥 Estimating damage…",
   submit_answer: "✍️ Composing the answer…",
   get_active_team: "📋 Reading your active team…",
+  save_team: "💾 Saving your team…",
+  get_encounters: "🗺️ Checking where to find it…",
+  get_usage_stats: "📈 Checking live usage…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
@@ -293,6 +296,22 @@ export function describeToolCall(tool: string, input: unknown): string {
     }
     case "estimate_damage":
       return "💥 Running the damage calc…";
+    case "get_encounters": {
+      const name = titleizeSlug(obj.name);
+      return name ? `🗺️ Checking where to find ${name}…` : base;
+    }
+    case "get_usage_stats": {
+      const name = titleizeSlug(obj.name);
+      const fmt =
+        obj.format === "singles"
+          ? "Singles"
+          : obj.format === "doubles"
+            ? "Doubles"
+            : "";
+      if (name && fmt) return `📈 Checking ${name}’s live ${fmt} usage…`;
+      if (name) return `📈 Checking ${name}’s live usage…`;
+      return base;
+    }
     case "submit_answer":
       return "✍️ Composing the answer…";
     default:

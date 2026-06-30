@@ -753,6 +753,28 @@ describe("describeToolCall — context-rich progress labels", () => {
     );
   });
 
+  it("gives the live-usage and encounters tools friendly labels (never the raw name)", () => {
+    const usage = describeToolCall("get_usage_stats", {
+      name: "garchomp",
+      format: "doubles",
+    });
+    expect(usage).toContain("Garchomp");
+    expect(usage).toContain("Doubles");
+    expect(usage).not.toContain("get_usage_stats");
+
+    // Champions usage with no format still names the subject, no raw slug.
+    const usageNoFmt = describeToolCall("get_usage_stats", { name: "garchomp" });
+    expect(usageNoFmt).toContain("Garchomp");
+    expect(usageNoFmt).not.toContain("get_usage_stats");
+
+    // Generic fallbacks for the recently-added tools never leak the slug either.
+    expect(describeToolCall("get_usage_stats", {})).not.toContain("get_usage_stats");
+    expect(describeToolCall("get_encounters", { name: "togepi" })).toContain(
+      "Togepi",
+    );
+    expect(describeToolCall("save_team", {})).not.toContain("save_team");
+  });
+
   it("summarizes the query_pokedex filters", () => {
     const label = describeToolCall("query_pokedex", {
       types: ["fire"],
