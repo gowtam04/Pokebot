@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("EntityPicker", () => {
-  it("commits raw typed text via onChange (preserves free-text contract)", () => {
+  it("never commits free-typed text and reverts invalid text on blur", () => {
     const onChange = vi.fn();
     search.searchEntities.mockResolvedValue([]);
     render(
@@ -31,10 +31,52 @@ describe("EntityPicker", () => {
         testid="member-0-species"
       />,
     );
-    fireEvent.change(screen.getByTestId("member-0-species"), {
-      target: { value: "dragapult" },
-    });
-    expect(onChange).toHaveBeenLastCalledWith("dragapult");
+    const input = screen.getByTestId("member-0-species") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "dragapult" } });
+    // Typing alone must not commit (require-selection).
+    expect(onChange).not.toHaveBeenCalled();
+    // Blurring invalid free text reverts the field, still without committing.
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
+  it("commits an exact name/slug match on blur without clicking", async () => {
+    const onChange = vi.fn();
+    search.searchEntities.mockResolvedValue([
+      { slug: "garchomp", display_name: "Garchomp", kind: "pokemon" },
+    ]);
+    render(
+      <EntityPicker
+        kind="pokemon"
+        format="scarlet-violet"
+        value=""
+        onChange={onChange}
+        testid="member-0-species"
+      />,
+    );
+    const input = screen.getByTestId("member-0-species");
+    fireEvent.change(input, { target: { value: "garchomp" } });
+    await screen.findByText("Garchomp"); // wait for the debounced results
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith("garchomp");
+  });
+
+  it("commits the empty string when a committed field is cleared", () => {
+    const onChange = vi.fn();
+    render(
+      <EntityPicker
+        options={NATURE_OPTIONS}
+        format="scarlet-violet"
+        value="jolly"
+        onChange={onChange}
+        testid="member-0-nature"
+      />,
+    );
+    const input = screen.getByTestId("member-0-nature");
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith("");
   });
 
   it("shows network suggestions and selects a slug on click", async () => {

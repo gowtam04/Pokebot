@@ -59,6 +59,11 @@ export interface PokemonRow {
   base_stat_total: number;
   sprite_url: string;
   artwork_url: string;
+  /**
+   * Canonical slug of the item this form must hold — a Mega's stone
+   * ("swampertite"); null for ordinary forms (from @pkmn `requiredItem`).
+   */
+  required_item: string | null;
   /** "gen-9" (standard) / "champions". */
   generation: string;
   /** 1 if native to the format's game; 0 if an earlier-gen fallback (BR-1). */
@@ -161,6 +166,9 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     base_stat_total,
     sprite_url: formeUrl ?? pokeApiSprite(s.num),
     artwork_url: formeUrl ?? pokeApiArtwork(s.num),
+    // A Mega's stone (e.g. "Swampertite" → "swampertite"); slugify matches the
+    // item index slugs ("Charizardite X" → "charizardite-x"). null otherwise.
+    required_item: s.requiredItem ? slugify(s.requiredItem) : null,
     generation: champions ? "champions" : "gen-9",
     is_gen9_native: native ? 1 : 0,
     source_generation: native ? null : `gen-${s.gen}`,

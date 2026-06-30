@@ -289,7 +289,7 @@ describe("Drizzle migration — table creation", () => {
     }
   });
 
-  it("pokemon table has the correct 23 columns (incl. format)", async () => {
+  it("pokemon table has the correct 24 columns (incl. format)", async () => {
     const cols = await columnNames(db, "pokemon");
     expect(cols).toEqual(
       expect.arrayContaining([
@@ -313,12 +313,13 @@ describe("Drizzle migration — table creation", () => {
         "base_stat_total",
         "sprite_url",
         "artwork_url",
+        "required_item",
         "generation",
         "is_gen9_native",
         "source_generation",
       ]),
     );
-    expect(cols).toHaveLength(23);
+    expect(cols).toHaveLength(24);
   });
 
   it("pokemon table has composite PK on (format, id)", async () => {

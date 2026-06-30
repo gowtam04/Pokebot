@@ -1,18 +1,21 @@
 /**
  * EntityPicker — the team builder's reusable autocomplete field.
  *
- * Replaces the old free-text "type a slug" inputs: it keeps a plain text
- * `<input>` (so the field stays fully editable and every existing `data-testid`
- * / onChange contract is preserved — a typed value is committed verbatim as the
- * slug on each keystroke) and layers a suggestion dropdown on top.
+ * A combobox that REQUIRES a valid selection: it keeps a plain text `<input>`
+ * for typing/filtering, but the typed text is held in LOCAL state and only the
+ * chosen suggestion's canonical **slug** is committed via `onChange`. Free text
+ * is never committed — on blur, text that doesn't match a listed option (or an
+ * exact slug/name in the current results) is reverted to the last committed
+ * value; clearing the field commits "". This is what stops invalid Pokémon /
+ * moves / abilities / items from being saved.
  *
  * Two suggestion sources:
  *   - `kind` set     → debounced `searchEntities(kind, q, format)` over the
  *                      format index (species / move / ability / item).
- *   - `options` set  → a static, locally-filtered list (natures / tera types).
+ *   - `options` set  → a static, locally-filtered list (natures / tera types /
+ *                      a species' legal movepool).
  *
- * Selecting a suggestion commits its canonical **slug** via `onChange` (the
- * dropdown shows the friendly display name + optional hint/sprite). Keyboard:
+ * The dropdown shows the friendly display name + optional hint/sprite. Keyboard:
  * ↑/↓ move the active row, Enter selects it, Escape closes. Rows use
  * `onMouseDown(preventDefault)` so a click selects before the input blurs.
  */
@@ -82,9 +85,19 @@ export default function EntityPicker({
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<PickerOption[]>([]);
   const [active, setActive] = useState(-1);
+  // The text shown in the input. Held LOCALLY so typing filters without
+  // committing — only a real selection (or a cleared field) reaches `onChange`.
+  const [text, setText] = useState(value);
   const reqId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listboxId = useId();
+
+  // Re-seed the input when the committed value changes externally (team load,
+  // mega-stone auto-fill, clear). Typing never changes `value`, so this won't
+  // fight the user mid-edit.
+  useEffect(() => {
+    setText(value);
+  }, [value]);
 
   // Tear down any pending debounce on unmount.
   useEffect(() => {
@@ -92,6 +105,14 @@ export default function EntityPicker({
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
+
+  // Re-filter the open dropdown when a STATIC option list arrives or changes
+  // (e.g. a member's movepool finishes loading while the picker is focused), so
+  // the suggestions reflect the latest list without needing another keystroke.
+  useEffect(() => {
+    if (open && options) runSearch(text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runSearch/text are read fresh each render; we only want to react to the option list changing.
+  }, [options]);
 
   function runSearch(q: string) {
     const query = q.trim();
@@ -131,19 +152,53 @@ export default function EntityPicker({
 
   function select(option: PickerOption) {
     onChange(option.slug);
+    setText(option.slug);
     setOpen(false);
     setActive(-1);
   }
 
   function onInputChange(next: string) {
-    onChange(next);
+    // Typing only filters — it does NOT commit (require-selection).
+    setText(next);
     setOpen(true);
     runSearch(next);
   }
 
   function onFocus() {
     setOpen(true);
-    runSearch(value);
+    runSearch(text);
+  }
+
+  /**
+   * On blur, reconcile the typed text against a real selection:
+   *   - empty            → commit "" (clearing is allowed).
+   *   - already `value`  → nothing to do (a prior selection stands).
+   *   - exact match in the current results (slug or display name) → commit it.
+   *   - otherwise        → reject the free text; revert to the committed value.
+   */
+  function commitOrRevert() {
+    setOpen(false);
+    setActive(-1);
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      if (value !== "") onChange("");
+      setText("");
+      return;
+    }
+    if (trimmed === value) return;
+    const lower = trimmed.toLowerCase();
+    const match = results.find(
+      (o) =>
+        o.slug === trimmed ||
+        o.slug.toLowerCase() === lower ||
+        o.display_name.toLowerCase() === lower,
+    );
+    if (match) {
+      onChange(match.slug);
+      setText(match.slug);
+      return;
+    }
+    setText(value);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -151,7 +206,7 @@ export default function EntityPicker({
       e.preventDefault();
       if (!open) {
         setOpen(true);
-        runSearch(value);
+        runSearch(text);
       }
       setActive((a) => Math.min(a + 1, results.length - 1));
     } else if (e.key === "ArrowUp") {
@@ -186,11 +241,11 @@ export default function EntityPicker({
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}
-        value={value}
+        value={text}
         placeholder={placeholder}
         onChange={(e) => onInputChange(e.target.value)}
         onFocus={onFocus}
-        onBlur={() => setOpen(false)}
+        onBlur={commitOrRevert}
         onKeyDown={onKeyDown}
       />
       {showDropdown && (

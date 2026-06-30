@@ -75,6 +75,12 @@ export const pokemon = pgTable(
     base_stat_total: integer("base_stat_total").notNull(),
     sprite_url: text("sprite_url").notNull(),
     artwork_url: text("artwork_url").notNull(),
+    /**
+     * Held item this form is REQUIRED to carry, as a canonical item slug — i.e. a
+     * Mega's stone ("swampertite", "charizardite-x"); null for ordinary forms.
+     * Lets the team builder auto-select + lock a Mega's stone (@pkmn requiredItem).
+     */
+    required_item: text("required_item"),
     /** e.g. "gen-9" (standard) / "champions". */
     generation: text("generation").notNull(),
     /**

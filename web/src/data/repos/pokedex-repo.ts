@@ -496,6 +496,12 @@ export interface SpriteRef {
   dex_number: number;
   types: string[];
   /**
+   * Item this form must hold (a Mega's stone slug, e.g. "swampertite"); null for
+   * ordinary forms. The team builder auto-selects + locks it for Megas. Optional
+   * so older callers/fixtures that predate the column stay valid.
+   */
+  required_item?: string | null;
+  /**
    * Base stats, so the team artifact can compute final stats client-side. The
    * answer-enrichment caller ignores this; the team-sprite lookup uses it.
    */
@@ -553,6 +559,7 @@ export async function spriteRefsByNames(
     type1: string;
     type2: string | null;
     sprite_url: string;
+    required_item: string | null;
     stat_hp: number;
     stat_attack: number;
     stat_defense: number;
@@ -569,6 +576,7 @@ export async function spriteRefsByNames(
         type1: pokemon.type1,
         type2: pokemon.type2,
         sprite_url: pokemon.sprite_url,
+        required_item: pokemon.required_item,
         stat_hp: pokemon.stat_hp,
         stat_attack: pokemon.stat_attack,
         stat_defense: pokemon.stat_defense,
@@ -600,6 +608,7 @@ export async function spriteRefsByNames(
       sprite_url: r.sprite_url,
       dex_number: r.national_dex_number,
       types: r.type2 ? [r.type1, r.type2] : [r.type1],
+      required_item: r.required_item,
       base_stats: {
         hp: r.stat_hp,
         attack: r.stat_attack,

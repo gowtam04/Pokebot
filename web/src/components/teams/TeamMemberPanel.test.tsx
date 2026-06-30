@@ -1,5 +1,9 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+
+// The Move pickers load a species' legal movepool via this client.
+const learnset = vi.hoisted(() => ({ fetchLearnset: vi.fn() }));
+vi.mock("@/lib/api/learnset-client", () => learnset);
 
 import TeamMemberPanel, {
   type MemberBaseStats,
@@ -7,7 +11,13 @@ import TeamMemberPanel, {
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/lib/api/teams-client";
 
-afterEach(() => cleanup());
+beforeEach(() => {
+  learnset.fetchLearnset.mockResolvedValue([]);
+});
+afterEach(() => {
+  cleanup();
+  learnset.fetchLearnset.mockReset();
+});
 
 function member(overrides: Partial<TeamMember> = {}): TeamMember {
   return {
@@ -60,7 +70,7 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-iv-hp")).toHaveValue(31);
   });
 
-  it("emits an updated member when a text field changes (null on empty)", () => {
+  it("commits a selected option and clears a field to null", () => {
     const onChange = vi.fn();
     render(
       <TeamMemberPanel
@@ -71,21 +81,27 @@ describe("TeamMemberPanel", () => {
         onRemove={noop}
       />,
     );
-    fireEvent.change(screen.getByTestId("member-0-species"), {
-      target: { value: "dragapult" },
-    });
+    // Selecting from a static dropdown (require-selection) commits the slug.
+    const nature = screen.getByTestId("member-0-nature");
+    fireEvent.change(nature, { target: { value: "mod" } });
+    fireEvent.keyDown(nature, { key: "ArrowDown" });
+    fireEvent.keyDown(nature, { key: "Enter" });
     expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ species: "dragapult" }),
+      expect.objectContaining({ nature: "modest" }),
     );
-    fireEvent.change(screen.getByTestId("member-0-item"), {
-      target: { value: "" },
-    });
+    // Clearing a committed field and blurring commits null.
+    const item = screen.getByTestId("member-0-item");
+    fireEvent.change(item, { target: { value: "" } });
+    fireEvent.blur(item);
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ item: null }),
     );
   });
 
-  it("emits non-empty move slugs in order when a move changes", () => {
+  it("offers only the species' learnset and emits move slugs in order", async () => {
+    learnset.fetchLearnset.mockResolvedValue([
+      { slug: "stealth-rock", display_name: "Stealth Rock" },
+    ]);
     const onChange = vi.fn();
     render(
       <TeamMemberPanel
@@ -96,12 +112,45 @@ describe("TeamMemberPanel", () => {
         onRemove={noop}
       />,
     );
-    fireEvent.change(screen.getByTestId("member-0-move-0"), {
-      target: { value: "stealth-rock" },
-    });
+    const move0 = screen.getByTestId("member-0-move-0");
+    fireEvent.focus(move0);
+    // The learnset arrives asynchronously and surfaces in the dropdown.
+    const option = await screen.findByText("Stealth Rock");
+    fireEvent.mouseDown(option);
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ moves: ["stealth-rock"] }),
     );
+  });
+
+  it("disables the Move pickers until a species is chosen", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({ species: null })}
+        warnings={[]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(screen.getByTestId("member-0-move-0")).toBeDisabled();
+  });
+
+  it("hides Tera and tightens the EV budget in Champions", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member()}
+        format="champions"
+        warnings={[]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    // No Terastallization in Champions.
+    expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
+    // Stat-Point budget reads "/ 66" and each EV input caps at 32.
+    expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("/ 66");
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
   });
 
   it("clamps an EV edit into 0..255", () => {

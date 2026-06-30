@@ -27,7 +27,7 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/api/teams-client";
-import type { SpriteRef } from "@/lib/api/sprites-client";
+import { resolveSprites, type SpriteRef } from "@/lib/api/sprites-client";
 import { type Format } from "@/data/formats";
 import TeamMemberPanel from "./TeamMemberPanel";
 import RosterStrip from "./RosterStrip";
@@ -58,7 +58,11 @@ function formatLabel(format: string): string {
 
 export interface TeamEditorProps {
   team: TeamDetail;
-  /** Species slug → sprite/types/base-stats, for the roster + live-stat bars. */
+  /**
+   * Optional seed of species slug → sprite/types/base-stats. The editor also
+   * resolves sprites itself for its LIVE (possibly unsaved) members, so this is
+   * a pre-warm/override (e.g. tests), not the only source.
+   */
   spriteBySpecies?: Record<string, SpriteRef | undefined>;
   /** True while a save is in flight (disables Save). */
   saving?: boolean;
@@ -78,6 +82,11 @@ export default function TeamEditor({
   const [name, setName] = useState(team.name);
   const [members, setMembers] = useState<TeamMember[]>(team.members);
   const [selectedSlot, setSelectedSlot] = useState(0);
+  // Sprites/types/base-stats resolved for the LIVE members (slug → ref;
+  // `undefined` = a resolved miss, so we don't refetch). Reset per opened team.
+  const [resolved, setResolved] = useState<
+    Record<string, SpriteRef | undefined>
+  >({});
 
   // Re-seed the draft whenever a different team is opened. Keyed on id so typing
   // in the same team doesn't clobber the draft on an unrelated re-render.
@@ -85,7 +94,61 @@ export default function TeamEditor({
     setName(team.name);
     setMembers(team.members);
     setSelectedSlot(0);
+    setResolved({});
   }, [team.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The effective sprite map: locally-resolved refs, with the optional prop seed
+  // layered on top (the prop wins, e.g. for a test-injected ref).
+  const sprites: Record<string, SpriteRef | undefined> = {
+    ...resolved,
+    ...spriteBySpecies,
+  };
+
+  // Resolve sprites for any LIVE member species we don't have yet — this is what
+  // makes a just-added/edited Mega or alternate form show its sprite immediately
+  // (the saved-only page lookup never saw it). Never-throwing; misses are cached.
+  useEffect(() => {
+    const wanted = [
+      ...new Set(
+        members
+          .map((m) => m.species)
+          .filter(
+            (s): s is string =>
+              !!s && !(s in resolved) && !(s in spriteBySpecies),
+          ),
+      ),
+    ];
+    if (wanted.length === 0) return;
+    let active = true;
+    void resolveSprites(team.format, wanted).then((refs) => {
+      if (!active) return;
+      setResolved((prev) => {
+        const next = { ...prev };
+        for (const s of wanted) next[s] = refs[s];
+        return next;
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [members, team.format, resolved, spriteBySpecies]);
+
+  // A Mega must hold its stone: once a member's species resolves to a form with a
+  // `required_item`, force its item to that stone (idempotent — stops once set).
+  useEffect(() => {
+    let changed = false;
+    const next = members.map((m) => {
+      if (!m.species) return m;
+      const stone = (resolved[m.species] ?? spriteBySpecies[m.species])
+        ?.required_item;
+      if (stone && m.item !== stone) {
+        changed = true;
+        return { ...m, item: stone };
+      }
+      return m;
+    });
+    if (changed) setMembers(next);
+  }, [resolved, spriteBySpecies, members]);
 
   const updateMember = (index: number, next: TeamMember) =>
     setMembers((prev) => prev.map((m, i) => (i === index ? next : m)));
@@ -174,7 +237,7 @@ export default function TeamEditor({
       <RosterStrip
         members={members}
         selectedSlot={slot}
-        spriteBySpecies={spriteBySpecies}
+        spriteBySpecies={sprites}
         onSelect={(i) => setSelectedSlot(i)}
         onAdd={addMember}
       />
@@ -187,13 +250,9 @@ export default function TeamEditor({
           format={team.format as Format}
           warnings={team.validation.filter((w) => w.slot === slot)}
           baseStats={
-            focused.species
-              ? spriteBySpecies[focused.species]?.base_stats
-              : undefined
+            focused.species ? sprites[focused.species]?.base_stats : undefined
           }
-          spriteRef={
-            focused.species ? spriteBySpecies[focused.species] : undefined
-          }
+          spriteRef={focused.species ? sprites[focused.species] : undefined}
           onChange={(next) => updateMember(slot, next)}
           onRemove={() => removeMember(slot)}
           onMoveUp={() => moveMember(slot, -1)}

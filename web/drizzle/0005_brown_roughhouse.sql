@@ -1,0 +1,1 @@
+ALTER TABLE "pokemon" ADD COLUMN "required_item" text;

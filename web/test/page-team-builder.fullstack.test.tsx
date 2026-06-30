@@ -142,6 +142,10 @@ beforeEach(() => {
       // --- entity index (live-stat lookups): a benign miss → no live column ---
       if (path === "/api/entity") return jsonResponse(404, {});
 
+      // --- sprites + learnset (team builder progressive enhancement): empty ---
+      if (path === "/api/sprites") return jsonResponse(200, { refs: {} });
+      if (path === "/api/learnset") return jsonResponse(200, { moves: [] });
+
       // --- chat ---
       if (path === "/api/chat") {
         chatBodies.push(JSON.parse(init!.body!) as Record<string, unknown>);

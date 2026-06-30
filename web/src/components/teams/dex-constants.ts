@@ -9,8 +9,35 @@
  */
 
 import type { StatSpread } from "@/data/teams/team-schema";
+import type { Format } from "@/data/formats";
 
 export type SpreadKey = keyof StatSpread; // hp | atk | def | spa | spd | spe
+
+/** The effort/stat-point budget the editor enforces for a format. */
+export interface EvBudget {
+  /** Total budget shown as "X / total" and used for the over-cap warning. */
+  total: number;
+  /** Per-stat cap: the slider's `max` and the per-stat over-cap warning. */
+  perStat: number;
+  /** Slider granularity (Champions stat points move by 1; EVs by 4). */
+  step: number;
+  /** Hard ceiling for the number input + clamp (SV warn-but-allows up to 255). */
+  clampMax: number;
+  /** Section heading — "EVs" (SV) vs "Stat Points" (Champions). */
+  label: string;
+}
+
+/**
+ * EV / stat-point budget for the active format. Champions uses a much tighter
+ * "Stat Point" budget (66 total, 32 per stat, no 4-EV granularity); Scarlet /
+ * Violet uses classic EVs (508 total, 252 per stat, step 4, 255 warn ceiling).
+ */
+export function evBudgetFor(format: Format): EvBudget {
+  if (format === "champions") {
+    return { total: 66, perStat: 32, step: 1, clampMax: 32, label: "Stat Points" };
+  }
+  return { total: 508, perStat: 252, step: 4, clampMax: 255, label: "EVs" };
+}
 
 /** One option in a static (non-network) picker. */
 export interface PickerOption {

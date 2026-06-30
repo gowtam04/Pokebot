@@ -1,6 +1,12 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
+// TeamEditor resolves sprites for its live members; stub it out so tests stay
+// hermetic (the prop seed still drives the live-stat assertions).
+vi.mock("@/lib/api/sprites-client", () => ({
+  resolveSprites: vi.fn(async () => ({})),
+}));
+
 import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";

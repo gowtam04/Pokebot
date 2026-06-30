@@ -43,9 +43,16 @@ import { movesForPokemon } from "@/data/repos/learnset-repo";
 export type { WarningCode, TeamWarning } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/data/teams/team-schema";
 
-/** Legal EV ceilings (Gen 3+ rules). */
-const EV_TOTAL_MAX = 508;
-const EV_STAT_MAX = 252;
+/**
+ * Legal EV / stat-point ceilings per format. Scarlet/Violet uses classic EVs
+ * (508 total, 252 per stat); Champions uses the much tighter Stat-Point budget
+ * (66 total, 32 per stat) — mirrors `evBudgetFor` in the team-builder UI.
+ */
+function evCaps(format: Format): { total: number; perStat: number } {
+  return format === "champions"
+    ? { total: 66, perStat: 32 }
+    : { total: 508, perStat: 252 };
+}
 /** Legal IV range. */
 const IV_MIN = 0;
 const IV_MAX = 31;
@@ -68,6 +75,7 @@ export async function validateTeam(
   db: OakDb,
 ): Promise<TeamWarning[]> {
   const warnings: TeamWarning[] = [];
+  const { total: EV_TOTAL_MAX, perStat: EV_STAT_MAX } = evCaps(format);
 
   // ---- Master lists / per-species index reads (gathered once) ----
 

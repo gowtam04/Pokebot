@@ -23,16 +23,21 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { computeStat } from "@/agent/formulas/compute-stat";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";
 import { type Format } from "@/data/formats";
+import { fetchLearnset } from "@/lib/api/learnset-client";
 import EntityPicker from "./EntityPicker";
 import {
+  evBudgetFor,
   NATURE_EFFECTS,
   NATURE_OPTIONS,
   TYPE_OPTIONS,
+  type PickerOption,
   type SpreadKey,
 } from "./dex-constants";
 import TeamWarnings from "./TeamWarnings";
@@ -62,9 +67,6 @@ const STAT_ROWS: StatRow[] = [
   { spread: "spd", base: "special_defense", label: "SpD", isHp: false },
   { spread: "spe", base: "speed", label: "Spe", isHp: false },
 ];
-
-/** Competitive EV budget: 508 total, 252 per stat. */
-const EV_TOTAL_CAP = 508;
 
 function natureEffectFor(
   nature: string | null,
@@ -149,12 +151,36 @@ export default function TeamMemberPanel({
 }: TeamMemberPanelProps) {
   const id = (suffix: string) => `member-${slot}-${suffix}`;
 
+  // EV / stat-point budget for this format (Champions caps far tighter, no Tera).
+  const budget = evBudgetFor(format);
+
+  // Legal movepool for the focused species — the Move pickers offer ONLY these
+  // (a species' learnset), not the whole move index. Refetched per species.
+  const [movepool, setMovepool] = useState<PickerOption[]>([]);
+  useEffect(() => {
+    const species = member.species;
+    if (!species) {
+      setMovepool([]);
+      return;
+    }
+    let active = true;
+    void fetchLearnset(format, species).then((moves) => {
+      if (active) setMovepool(moves);
+    });
+    return () => {
+      active = false;
+    };
+  }, [member.species, format]);
+
   const set = (patch: Partial<TeamMember>) => onChange({ ...member, ...patch });
 
   const setSpread = (kind: "evs" | "ivs", key: SpreadKey, raw: string) => {
+    // EVs clamp to the format ceiling (32 in Champions, 255 warn-but-allow in SV);
+    // IVs to the legal 0..31 superset (the input itself caps at 31).
+    const max = kind === "evs" ? budget.clampMax : 255;
     onChange({
       ...member,
-      [kind]: { ...member[kind], [key]: clampInt(raw, 0, 255) },
+      [kind]: { ...member[kind], [key]: clampInt(raw, 0, max) },
     });
   };
 
@@ -173,9 +199,12 @@ export default function TeamMemberPanel({
   const maxLive = Math.max(1, ...lives.map((v) => v ?? 0));
 
   const evTotal = STAT_ROWS.reduce((sum, r) => sum + member.evs[r.spread], 0);
-  const evOver = evTotal > EV_TOTAL_CAP;
+  const evOver = evTotal > budget.total;
   const spriteUrl = spriteRef?.sprite_url ?? null;
   const types = spriteRef?.types ?? [];
+  // A Mega must hold its stone — auto-filled by the editor and locked here.
+  const requiredItem = spriteRef?.required_item ?? null;
+  const itemLocked = Boolean(requiredItem);
 
   return (
     <div className="team-member-panel" data-testid={id("panel")}>
@@ -276,7 +305,10 @@ export default function TeamMemberPanel({
               placeholder="Search abilities…"
             />
           </PickerField>
-          <PickerField label="Item" htmlFor={id("item")}>
+          <PickerField
+            label={itemLocked ? "Item (Mega stone)" : "Item"}
+            htmlFor={id("item")}
+          >
             <EntityPicker
               kind="item"
               format={format}
@@ -286,6 +318,7 @@ export default function TeamMemberPanel({
               inputId={id("item")}
               ariaLabel="Item"
               placeholder="Search items…"
+              disabled={itemLocked}
             />
           </PickerField>
         </div>
@@ -297,13 +330,16 @@ export default function TeamMemberPanel({
           {[0, 1, 2, 3].map((i) => (
             <EntityPicker
               key={i}
-              kind="move"
+              options={movepool}
               format={format}
               value={moveInputs[i]!}
               onChange={(v) => setMove(i, v)}
               testid={id(`move-${i}`)}
               ariaLabel={`Move ${i + 1}`}
-              placeholder={`Move ${i + 1}`}
+              placeholder={
+                member.species ? `Move ${i + 1}` : "Select a species first"
+              }
+              disabled={!member.species}
             />
           ))}
         </div>
@@ -322,18 +358,21 @@ export default function TeamMemberPanel({
             placeholder="Nature"
           />
         </PickerField>
-        <PickerField label="Tera type" htmlFor={id("tera")}>
-          <EntityPicker
-            options={TYPE_OPTIONS}
-            format={format}
-            value={member.tera_type ?? ""}
-            onChange={(v) => set({ tera_type: v || null })}
-            testid={id("tera")}
-            inputId={id("tera")}
-            ariaLabel="Tera type"
-            placeholder="Tera type"
-          />
-        </PickerField>
+        {/* Champions has no Terastallization — hide the Tera picker there. */}
+        {format !== "champions" && (
+          <PickerField label="Tera type" htmlFor={id("tera")}>
+            <EntityPicker
+              options={TYPE_OPTIONS}
+              format={format}
+              value={member.tera_type ?? ""}
+              onChange={(v) => set({ tera_type: v || null })}
+              testid={id("tera")}
+              inputId={id("tera")}
+              ariaLabel="Tera type"
+              placeholder="Tera type"
+            />
+          </PickerField>
+        )}
         <label className="team-member-panel__field" htmlFor={id("level")}>
           Level
           <input
@@ -351,7 +390,7 @@ export default function TeamMemberPanel({
 
       <div className="team-member-panel__stats" data-testid={id("stats")}>
         <div className="team-member-panel__stats-head">
-          <span className="team-member-panel__stats-title">EVs</span>
+          <span className="team-member-panel__stats-title">{budget.label}</span>
           <span
             className={
               "team-member-panel__ev-total" +
@@ -359,7 +398,7 @@ export default function TeamMemberPanel({
             }
             data-testid={id("ev-total")}
           >
-            {evTotal} / {EV_TOTAL_CAP}
+            {evTotal} / {budget.total}
           </span>
         </div>
 
@@ -374,9 +413,9 @@ export default function TeamMemberPanel({
                 className="tm-stat__slider"
                 type="range"
                 min={0}
-                max={252}
-                step={4}
-                value={Math.min(ev, 252)}
+                max={budget.perStat}
+                step={budget.step}
+                value={Math.min(ev, budget.perStat)}
                 aria-label={`${row.label} EV slider`}
                 onChange={(e) => setSpread("evs", row.spread, e.target.value)}
               />
@@ -386,7 +425,7 @@ export default function TeamMemberPanel({
                 aria-label={`${row.label} EV`}
                 type="number"
                 min={0}
-                max={255}
+                max={budget.clampMax}
                 value={ev}
                 onChange={(e) => setSpread("evs", row.spread, e.target.value)}
               />

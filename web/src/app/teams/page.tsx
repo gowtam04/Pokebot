@@ -23,7 +23,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
-import { resolveSprites, type SpriteRef } from "@/lib/api/sprites-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
@@ -90,38 +89,9 @@ export default function TeamsPage() {
     }
   }, [teams.teams, selected, openTeam]);
 
-  // Sprite/type/base-stat cache for the roster + live stats: species slug → ref
-  // (undefined = a resolved miss, so we don't refetch).
-  const [spriteBySpecies, setSpriteBySpecies] = useState<
-    Record<string, SpriteRef | undefined>
-  >({});
-  useEffect(() => {
-    // Reset the cache when the format changes (data is per-format).
-    setSpriteBySpecies({});
-  }, [format]);
-  useEffect(() => {
-    if (!selected) return;
-    const wanted = [
-      ...new Set(
-        selected.members
-          .map((m) => m.species)
-          .filter((s): s is string => !!s && !(s in spriteBySpecies)),
-      ),
-    ];
-    if (wanted.length === 0) return;
-    let active = true;
-    void resolveSprites(format, wanted).then((refs) => {
-      if (!active) return;
-      setSpriteBySpecies((prev) => {
-        const next = { ...prev };
-        for (const s of wanted) next[s] = refs[s];
-        return next;
-      });
-    });
-    return () => {
-      active = false;
-    };
-  }, [selected, format, spriteBySpecies]);
+  // Sprites/types/base-stats are resolved inside TeamEditor for its LIVE members
+  // (so a just-added/edited Mega or alternate form shows immediately) — the page
+  // no longer pre-resolves the saved roster.
 
   const [saving, setSaving] = useState(false);
   const handleSave = useCallback(
@@ -252,7 +222,6 @@ export default function TeamsPage() {
             {selected ? (
               <TeamEditor
                 team={selected}
-                spriteBySpecies={spriteBySpecies}
                 saving={saving}
                 onSave={(input) => void handleSave(input)}
                 onExport={() => void handleExport()}
