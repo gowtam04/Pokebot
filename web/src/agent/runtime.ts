@@ -138,8 +138,8 @@ const SUBMIT_NUDGE =
   "Either way, submit_answer on your next turn.";
 
 // ---------------------------------------------------------------------------
-// Provider-neutral tool definitions (T1..T11 plus the inlined T12
-// get_active_team). `name` / `parameters` come straight from the tool layer
+// Provider-neutral tool definitions (T1..T16, including the team tools get_team
+// and list_teams). `name` / `parameters` come straight from the tool layer
 // (schemas.ts is the single source); built once and never reordered between
 // turns (reordering would invalidate the prompt cache). Each provider adapter
 // maps these to its own tool shape (Anthropic input_schema / OpenAI function).
@@ -168,10 +168,11 @@ const PROGRESS_LABELS: Record<string, string> = {
   compute_stat: "🧮 Computing stat…",
   estimate_damage: "💥 Estimating damage…",
   submit_answer: "✍️ Composing the answer…",
-  get_active_team: "📋 Reading your active team…",
+  get_team: "📋 Reading your team…",
   save_team: "💾 Saving your team…",
   get_encounters: "🗺️ Checking where to find it…",
   get_usage_stats: "📈 Checking live usage…",
+  list_teams: "📋 Finding your teams…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */

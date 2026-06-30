@@ -215,27 +215,6 @@ export interface SavedTeamCardProps {
 }
 
 /**
- * Chat-side active-team selector (TEAM-US-8 / AC-8.1). Lists the signed-in
- * account's teams for the CURRENT format only, defaults to none, and on select
- * both lifts the choice via `onChange` (so the next chat turn carries
- * `active_team_id`) and PATCHes the conversation row (a 404 for a not-yet-created
- * conversation is harmless — the next turn persists it). Cleared by the host on a
- * format toggle / different-format conversation (AC-8.3).
- */
-export interface ActiveTeamSelectorProps {
-  /** The active format (`"scarlet-violet"` | `"champions"`) to scope the list. */
-  format: string;
-  /** The live conversation id (== session id) to PATCH on select. */
-  conversationId: string;
-  /** The currently-selected team id, or null for "no active team". */
-  value: string | null;
-  /** Lift the selection so the host can send it in the chat body + hold it. */
-  onChange: (teamId: string | null) => void;
-  /** False for guests → empty, no fetch, no selector (BR-T2). */
-  enabled: boolean;
-}
-
-/**
  * `suggestions[]` (with `status`) — clickable closest-match chips shown for
  * `clarification_needed` / `resolution_failed`. Clicking a chip sends it as a
  * follow-up user message.

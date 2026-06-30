@@ -112,7 +112,7 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
 }
 
 // ---------------------------------------------------------------------------
-// DELETE — permanent + null active_team_id references (BR-T10)
+// DELETE — permanent (TEAM-US-4)
 // ---------------------------------------------------------------------------
 
 export async function DELETE(_req: Request, ctx: Ctx): Promise<Response> {

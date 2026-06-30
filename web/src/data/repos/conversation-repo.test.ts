@@ -384,81 +384,20 @@ describe("deleteConversation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// active team — round-trips on append/import + setActiveTeam (BR-T9, TEAM-US-8)
+// no active-team column: appendTurnPair / importConversation create + restore a
+// conversation without any team binding (teams are referenced by name in chat).
 // ---------------------------------------------------------------------------
 
-describe("active team", () => {
-  it("defaults activeTeamId to null when no team is supplied", async () => {
-    const id = randomUUID();
-    await append(ACCT_A, id, SV, "no team", "x", 1000);
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBeNull();
-  });
-
-  it("appendTurnPair persists active_team_id on creation; getConversation returns it", async () => {
-    const id = randomUUID();
-    await repo.appendTurnPair({
-      accountId: ACCT_A,
-      conversationId: id,
-      format: SV,
-      userTurnId: repo.newTurnId(),
-      userMessage: "with team",
-      assistantTurnId: repo.newTurnId(),
-      answer: makeAnswer("ok"),
-      now: 1000,
-      activeTeamId: "team-1",
-    });
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-1");
-  });
-
-  it("a continuation updates active_team_id last-selected-wins, and leaves it when omitted", async () => {
-    const id = randomUUID();
-    await repo.appendTurnPair({
-      accountId: ACCT_A,
-      conversationId: id,
-      format: SV,
-      userTurnId: repo.newTurnId(),
-      userMessage: "q1",
-      assistantTurnId: repo.newTurnId(),
-      answer: makeAnswer("a1"),
-      now: 1000,
-      activeTeamId: "team-1",
-    });
-    // Next turn selects a different team.
-    await repo.appendTurnPair({
-      accountId: ACCT_A,
-      conversationId: id,
-      format: SV,
-      userTurnId: repo.newTurnId(),
-      userMessage: "q2",
-      assistantTurnId: repo.newTurnId(),
-      answer: makeAnswer("a2"),
-      now: 2000,
-      activeTeamId: "team-2",
-    });
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-2");
-
-    // A turn that omits activeTeamId leaves the stored value untouched.
-    await append(ACCT_A, id, SV, "q3", "a3", 3000);
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-2");
-  });
-
-  it("setActiveTeam sets and clears, account-scoped", async () => {
+describe("no active-team column", () => {
+  it("getConversation never exposes an activeTeamId field", async () => {
     const id = randomUUID();
     await append(ACCT_A, id, SV, "thread", "x", 1000);
-
-    await repo.setActiveTeam(ACCT_A, id, "team-9");
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-9");
-
-    // Another account cannot change it (no-op).
-    await repo.setActiveTeam(ACCT_B, id, "hijack");
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-9");
-
-    // Clear with null.
-    await repo.setActiveTeam(ACCT_A, id, null);
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBeNull();
+    const conv = await repo.getConversation(ACCT_A, id);
+    expect(conv).not.toBeNull();
+    expect(conv).not.toHaveProperty("activeTeamId");
   });
 
-  it("importConversation carries active_team_id", async () => {
+  it("importConversation restores a conversation without a team binding", async () => {
     const id = randomUUID();
     const result = await repo.importConversation({
       accountId: ACCT_A,
@@ -466,9 +405,10 @@ describe("active team", () => {
       format: SV,
       turns: [userTurn("hi"), assistantTurn("hello")],
       now: 1000,
-      activeTeamId: "team-imported",
     });
     expect(result).toBe(id);
-    expect((await repo.getConversation(ACCT_A, id))?.activeTeamId).toBe("team-imported");
+    const conv = await repo.getConversation(ACCT_A, id);
+    expect(conv?.format).toBe(SV);
+    expect(conv).not.toHaveProperty("activeTeamId");
   });
 });

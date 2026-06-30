@@ -21,7 +21,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import {
   account,
   auth_session,
-  conversation,
   ingest_meta,
   learnset,
   otp_code,
@@ -189,12 +188,12 @@ describe("Drizzle migration — table creation", () => {
         "pinned",
         "created_at",
         "updated_at",
-        // Added by the 0003 (team-builder) migration — the conversation's
-        // active team (BR-T9); logical FK → team.id, nullable (AC-8.1).
-        "active_team_id",
       ]),
     );
-    expect(await columnNames(db, "conversation")).toHaveLength(8);
+    // The 0003 team-builder `active_team_id` column was dropped in 0004 (saved
+    // teams are now referenced by name in chat, not bound to a conversation).
+    expect(await columnNames(db, "conversation")).not.toContain("active_team_id");
+    expect(await columnNames(db, "conversation")).toHaveLength(7);
     expect(await pkColumns(db, "conversation")).toEqual(["id"]);
 
     expect(await columnNames(db, "conversation_message")).toEqual(
@@ -698,28 +697,6 @@ describe("Schema constraints", () => {
         updated_at: 1_700_000_000_000,
       }),
     ).resolves.toBeDefined();
-  });
-
-  it("conversation.active_team_id defaults to NULL and accepts a team id (logical FK)", async () => {
-    await cdb.insert(conversation).values({
-      id: "conv-1",
-      account_id: "acct-1",
-      title: "Hello",
-      format: "scarlet-violet",
-      created_at: 1_700_000_000_000,
-      updated_at: 1_700_000_000_000,
-    });
-    const before = await cdb.select().from(conversation);
-    expect(before[0]!.active_team_id).toBeNull();
-
-    // No physical FK — setting it to an arbitrary team id is allowed (the repo
-    // enforces ownership + format match; BR-T9/BR-T10).
-    await cdb
-      .update(conversation)
-      .set({ active_team_id: "team-1" })
-      .where(sql`id = 'conv-1'`);
-    const after = await cdb.select().from(conversation);
-    expect(after[0]!.active_team_id).toBe("team-1");
   });
 
   it("ingest_meta per-format row can be UPSERTED without error", async () => {

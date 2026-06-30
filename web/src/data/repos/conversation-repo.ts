@@ -46,12 +46,6 @@ export interface Conversation {
   pinned: boolean;
   createdAt: number;
   updatedAt: number;
-  /**
-   * The conversation's active team (BR-T9); `null` = none (AC-8.1). Server-bound
-   * onto the agent context like `mode`, never an LLM tool input. Round-trips on
-   * append/import and via {@link setActiveTeam}.
-   */
-  activeTeamId: string | null;
 }
 
 /** List-view projection — no turns. */
@@ -153,7 +147,6 @@ export async function getConversation(
       pinned: conversation.pinned,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
-      activeTeamId: conversation.active_team_id,
     })
     .from(conversation)
     .where(and(eq(conversation.account_id, accountId), eq(conversation.id, id)))
@@ -214,13 +207,6 @@ export async function appendTurnPair(args: {
   assistantTurnId: string;
   answer: OakAnswer;
   now: number;
-  /**
-   * The active team selected for this turn (BR-T9). `null` = none. When omitted
-   * (`undefined`) the stored value is left untouched on a continuation (and
-   * defaults to `null` on first-turn creation); when provided it is persisted
-   * last-selected-wins (TEAM-US-8).
-   */
-  activeTeamId?: string | null;
 }): Promise<void> {
   await db.transaction(async (tx) => {
     // Lock this account's conversation row if it exists (serializes appends).
@@ -248,18 +234,12 @@ export async function appendTurnPair(args: {
         pinned: 0,
         created_at: args.now,
         updated_at: args.now,
-        active_team_id: args.activeTeamId ?? null,
       });
     } else {
-      // Continuation → bump last activity (drives list ordering) and, when the
-      // turn carried an active-team selection, persist it last-selected-wins.
-      const set: { updated_at: number; active_team_id?: string | null } = {
-        updated_at: args.now,
-      };
-      if (args.activeTeamId !== undefined) set.active_team_id = args.activeTeamId;
+      // Continuation → bump last activity (drives list ordering).
       await tx
         .update(conversation)
-        .set(set)
+        .set({ updated_at: args.now })
         .where(
           and(
             eq(conversation.account_id, args.accountId),
@@ -322,8 +302,6 @@ export async function importConversation(args: {
   format: string;
   turns: ChatTurn[];
   now: number;
-  /** The active team selected on-screen at sign-in (BR-T9); `null`/omitted = none. */
-  activeTeamId?: string | null;
 }): Promise<string | null> {
   if (args.turns.length === 0) return null;
 
@@ -355,7 +333,6 @@ export async function importConversation(args: {
         pinned: 0,
         created_at: args.now,
         updated_at: args.now,
-        active_team_id: args.activeTeamId ?? null,
       })
       .onConflictDoNothing({ target: conversation.id });
 
@@ -389,29 +366,6 @@ export async function renameConversation(
     .update(conversation)
     .set({ title })
     .where(and(eq(conversation.account_id, accountId), eq(conversation.id, id)));
-}
-
-/**
- * Set (or clear, with `null`) a conversation's active team (TEAM-US-8, AC-8.2) —
- * the PATCH path that sets an active team on an existing conversation without
- * chatting. Account-scoped: a no-op if the conversation is missing / not owned.
- * The caller is responsible for verifying the team is account-owned and
- * format-matching before passing a non-null id (route-side, AC-8.3).
- */
-export async function setActiveTeam(
-  accountId: string,
-  conversationId: string,
-  teamId: string | null,
-): Promise<void> {
-  await db
-    .update(conversation)
-    .set({ active_team_id: teamId })
-    .where(
-      and(
-        eq(conversation.account_id, accountId),
-        eq(conversation.id, conversationId),
-      ),
-    );
 }
 
 /** Pin / unpin a conversation (HIST-US-9). No-op if not this account's. */

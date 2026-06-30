@@ -9,6 +9,18 @@ Base URL: the production Fly.io origin (config per build scheme — see `deploym
 All requests are HTTPS. Auth is carried as **`Authorization: Bearer <token>`** (new;
 see Change 2) for signed-in calls; absence of the header = guest.
 
+> **⚠️ Updated — the "active team" seam was removed (web change, 2026-06).** The
+> header active-team selector is gone; saved teams are now referenced **by name in
+> chat** (the agent calls `list_teams` then `get_team`, and asks for clarification
+> on 0 / >1 match). Consequently: the chat request no longer carries
+> `active_team_id`; `PATCH /api/conversations/{id}` no longer accepts
+> `active_team_id`; `GET /api/conversations/{id}` (`ConversationDetail`) no longer
+> returns it; `DELETE /api/teams/{id}` no longer nulls any reference; and the
+> `conversation.active_team_id` column was dropped. The tables below still show the
+> old fields — they are struck through inline and the iOS client must NOT send or
+> read `active_team_id`. The web tool contract is `docs/agent-design/tools.md`
+> (T12 `get_team`, T16 `list_teams`).
+
 ## Endpoints consumed (existing — unchanged)
 
 ### Auth
@@ -41,12 +53,13 @@ cooldown 60s, 5/email/hr, 20/IP/hr; verify 20/IP/10min.
 |---|---|---|---|
 | GET | `/api/conversations` | `?q=&format=` | `{ conversations: ConversationSummary[] }` (guest → `[]`, 200) |
 | GET | `/api/conversations/{id}` | — | `ConversationDetail` (401 guest / 404 not-owned) |
-| PATCH | `/api/conversations/{id}` | `{ title?, pinned?, active_team_id? }` (≥1) | `{ ok:true }` |
+| PATCH | `/api/conversations/{id}` | `{ title?, pinned? }` (≥1) ~~`active_team_id?`~~ removed | `{ ok:true }` |
 | DELETE | `/api/conversations/{id}` | — | `{ ok:true }` |
 | POST | `/api/conversations/import` | `{ session_id, champions_mode?, turns[] }` | `{ id: string\|null }` |
 
-Notes: `active_team_id` is validated server-side (ownership + format match; invalid is
-silently ignored). `import` is the guest→account save; idempotent on turn ids.
+Notes: ~~`active_team_id` is validated server-side~~ — **removed**; `active_team_id` is
+no longer a recognized PATCH field (a body with only `active_team_id` now 400s).
+`import` is the guest→account save; idempotent on turn ids.
 
 ### Teams (signed-in; 401 for guests)
 | Method | Path | Body / Query | Returns |
@@ -55,7 +68,7 @@ silently ignored). `import` is the guest→account save; idempotent on turn ids.
 | POST | `/api/teams` | `{ format, name?, members? }` | `{ team, validation }` |
 | GET | `/api/teams/{id}` | — | `{ team, validation }` |
 | PUT | `/api/teams/{id}` | `{ name?, members? }` (≥1) | `{ team, validation }` |
-| DELETE | `/api/teams/{id}` | — | `{ ok:true }` (nulls referencing `active_team_id`) |
+| DELETE | `/api/teams/{id}` | — | `{ ok:true }` ~~(nulls referencing `active_team_id`)~~ — no refs to null |
 | POST | `/api/teams/import` | `{ format, paste }` | `{ team, validation, notes }` |
 | GET | `/api/teams/{id}/export` | — | `{ paste }` (Showdown text) |
 | POST | `/api/teams/{id}/duplicate` | — | `{ team, validation }` |

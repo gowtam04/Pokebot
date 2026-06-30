@@ -11,9 +11,7 @@
  * account-scoped and a different account sees null/[] / a no-op (never a 403).
  */
 
-import { randomUUID } from "node:crypto";
-
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -24,7 +22,6 @@ import {
   type PgFixture,
 } from "../../../test/support/pg";
 
-import { conversation } from "@/data/schema";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 type Repo = typeof import("./team-repo");
@@ -176,6 +173,8 @@ describe("listTeams", () => {
     expect(newerSummary).toMatchObject({
       memberCount: 2,
       incomplete: true, // <6 members
+      // species slugs of the filled slots only (the empty slot is omitted).
+      species: ["garchomp"],
       updatedAt: 2000,
     });
     const olderSummary = list.find((t) => t.id === older.id)!;
@@ -319,7 +318,7 @@ describe("duplicateTeam", () => {
 });
 
 // ---------------------------------------------------------------------------
-// deleteTeam — permanent, scoped, nulls active refs (TEAM-US-4, BR-T10)
+// deleteTeam — permanent, account-scoped (TEAM-US-4)
 // ---------------------------------------------------------------------------
 
 describe("deleteTeam", () => {
@@ -333,36 +332,6 @@ describe("deleteTeam", () => {
     });
     await repo.deleteTeam(ACCT_A, created.id);
     expect(await repo.getTeam(ACCT_A, created.id)).toBeNull();
-  });
-
-  it("nulls conversation.active_team_id references in the same tx (BR-T10)", async () => {
-    const created = await repo.createTeam({
-      accountId: ACCT_A,
-      format: SV,
-      name: "active",
-      members: [],
-      now: 1000,
-    });
-    // Conversation referencing the team (this account) + one referencing nothing.
-    const convId = randomUUID();
-    await fix.db.insert(conversation).values({
-      id: convId,
-      account_id: ACCT_A,
-      title: "t",
-      format: SV,
-      pinned: 0,
-      created_at: 1000,
-      updated_at: 1000,
-      active_team_id: created.id,
-    });
-
-    await repo.deleteTeam(ACCT_A, created.id);
-
-    const rows = await fix.db
-      .select({ activeTeamId: conversation.active_team_id })
-      .from(conversation)
-      .where(eq(conversation.id, convId));
-    expect(rows[0].activeTeamId).toBeNull();
   });
 
   it("is idempotent (deleting an absent id is a no-op)", async () => {

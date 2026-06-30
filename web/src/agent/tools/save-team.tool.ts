@@ -1,12 +1,13 @@
 /**
  * T13 — `save_team` (conversational save; TEAM-AD-7).
  *
- * Persists a team to the user's saved Teams on EXPLICIT user approval, and makes
- * it the conversation's active team. Unlike the other tools, this one WRITES —
- * the single deliberate relaxation of "the agent never writes a team" (BR-T8),
- * gated on a user gesture the prompt describes ("looks good", "save it", "build
- * this team"). It is the analogue of the manual `ProposedTeamCard` save, driven
- * from chat instead of a button.
+ * Persists a team to the user's saved Teams on EXPLICIT user approval. Unlike the
+ * other tools, this one WRITES — the single deliberate relaxation of "the agent
+ * never writes a team" (BR-T8), gated on a user gesture the prompt describes
+ * ("looks good", "save it", "build this team"). It is the analogue of the manual
+ * `ProposedTeamCard` save, driven from chat instead of a button. The saved team
+ * is found later by name via `list_teams`/`get_team` — there is no active-team
+ * selection to set.
  *
  * What it saves: the SERVER-BOUND proposed team for the turn (`ctx.proposedTeam`,
  * extracted by the route from the most recent stored `proposed_team`), so the
@@ -27,7 +28,6 @@ import {
 import type { OakDb } from "@/data/db";
 import { formatForMode } from "@/data/formats";
 import { createTeam } from "@/data/repos/team-repo";
-import { setActiveTeam } from "@/data/repos/conversation-repo";
 import { validateTeam } from "@/server/teams/validate-team";
 
 const description =
@@ -91,18 +91,6 @@ export const saveTeamTool: ToolDef = {
         members: team.members,
         now: Date.now(),
       });
-
-      // Make the freshly-saved team the conversation's active team. Best-effort:
-      // a brand-new conversation row doesn't exist until appendTurnPair runs
-      // (after this turn), so this is a no-op on a first turn — the route also
-      // persists the active team via appendTurnPair when ctx.savedTeam is set.
-      if (ctx.sessionId) {
-        try {
-          await setActiveTeam(ctx.accountId, ctx.sessionId, saved.id);
-        } catch {
-          /* no-op — route persists active team on appendTurnPair */
-        }
-      }
 
       // Surface the saved team to the route (mutable result slot), which stamps
       // answer.saved_team authoritatively (no UUID round-trip through the model).

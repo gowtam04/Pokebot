@@ -41,6 +41,21 @@ The central ideas:
 > `docs/agent-design/{tools.md,prompts.md,output-formats.md}` so that source of
 > truth does not drift. See Technical Decision **TEAM-AD-3**.
 
+> **⚠️ SUPERSEDED — the "active team" seam was removed.** The header **active-team
+> selector**, the server-bound **`AgentContext.activeTeam`**, the **`get_active_team`**
+> tool, the **`active_team_id`** request/PATCH field, and the
+> **`conversation.active_team_id`** column (TEAM-US-8, AC-8.x, BR-T9/BR-T10,
+> TEAM-AD-1) **no longer exist.** They were replaced with **by-name lookup in
+> chat**: the model calls **`list_teams`** (T16 — the account's saved teams for the
+> turn's format, names + Pokémon) to match the user's words ("my rain team"), then
+> loads the chosen one with **`get_team({ team_id })`** (T12, the renamed read tool;
+> account-scoped + format-gated). Disambiguation (0 or >1 match) is ordinary
+> `clarification_needed` reasoning. `save_team` (T13) still persists a proposed team
+> on approval but no longer sets an "active team". The sections below that describe
+> the selector / `active_team_id` / `get_active_team` are **historical**; the
+> current tool contract lives in `docs/agent-design/tools.md` (T12 `get_team`, T16
+> `list_teams`).
+
 ## Requirements Reference
 
 - Business requirements: `docs/features/team-builder/requirements/requirements.md`

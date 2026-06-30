@@ -1,15 +1,15 @@
 /**
- * Focused tests for the team-builder wiring added to `GET/PATCH
- * /api/conversations/[id]` (Phase 7; design.md § `GET/PATCH
- * /api/conversations/[id]` (modified); TEAM-US-8, AC-8.1, AC-8.2, BR-T3).
+ * Tests for `GET/PATCH /api/conversations/[id]` after the active-team seam was
+ * removed (saved teams are referenced by NAME in chat, not bound to a
+ * conversation). Asserts the surviving contract:
  *
- *   - GET returns `active_team_id` (null when none, the bound id otherwise),
- *   - PATCH may set it WITHOUT chatting — but only an account-owned,
- *     format-matching team binds; a mismatch / not-owned id is silently IGNORED
- *     (warn-but-allow, never an error), and `null` always clears (AC-8.2).
+ *   - GET no longer returns an `active_team_id` field,
+ *   - PATCH accepts `title` / `pinned` only; an empty body OR a legacy
+ *     `active_team_id`-only body is a 400 (the field is no longer recognized),
+ *   - isolation is preserved (guest → 401, other account → 404).
  *
- * Real migrated Postgres (Testcontainers) so the route's repo + team-repo run for
- * real against the `@/data/db` singleton; only `getCurrentAccount` is mocked.
+ * Real migrated Postgres (Testcontainers) so the route's repo runs for real
+ * against the `@/data/db` singleton; only `getCurrentAccount` is mocked.
  */
 
 import { sql } from "drizzle-orm";
@@ -29,12 +29,10 @@ import { createPgSchema, installAsSingleton, type PgFixture } from "../../../../
 const ACCT_A = "acct-a";
 const ACCT_B = "acct-b";
 const SV = "scarlet-violet";
-const CHAMP = "champions";
 
 let fix: PgFixture;
 let route: typeof import("./route");
 let convRepo: typeof import("@/data/repos/conversation-repo");
-let teamRepo: typeof import("@/data/repos/team-repo");
 
 const ANSWER: OakAnswer = {
   status: "answered",
@@ -50,7 +48,6 @@ beforeAll(async () => {
   await installAsSingleton(fix);
   route = await import("./route");
   convRepo = await import("@/data/repos/conversation-repo");
-  teamRepo = await import("@/data/repos/team-repo");
 }, 60_000);
 
 afterAll(async () => {
@@ -82,12 +79,7 @@ function patch(id: string, body: unknown): Promise<Response> {
   );
 }
 
-async function seedConv(
-  accountId: string,
-  id: string,
-  format: string,
-  activeTeamId: string | null = null,
-): Promise<void> {
+async function seedConv(accountId: string, id: string, format: string): Promise<void> {
   await convRepo.appendTurnPair({
     accountId,
     conversationId: id,
@@ -97,99 +89,53 @@ async function seedConv(
     assistantTurnId: convRepo.newTurnId(),
     answer: ANSWER,
     now: Date.now(),
-    activeTeamId,
   });
 }
 
-async function mkTeam(accountId: string, format: string) {
-  return teamRepo.createTeam({ accountId, format, name: "T", members: [], now: Date.now() });
-}
+// --- GET --------------------------------------------------------------------
 
-const activeOf = (id: string) =>
-  convRepo.getConversation(ACCT_A, id).then((c) => c?.activeTeamId);
-
-// --- GET returns active_team_id --------------------------------------------
-
-describe("GET /api/conversations/[id] — active_team_id", () => {
-  it("returns null when none is bound and the id when one is", async () => {
+describe("GET /api/conversations/[id] — no active_team_id field", () => {
+  it("returns the conversation without an active_team_id field", async () => {
     signedIn(ACCT_A);
-    const team = await mkTeam(ACCT_A, SV);
-    await seedConv(ACCT_A, "none", SV, null);
-    await seedConv(ACCT_A, "set", SV, team.id);
+    await seedConv(ACCT_A, "c", SV);
 
-    const none = await (await route.GET(new Request("http://t"), idCtx("none"))).json();
-    expect((none as { active_team_id: string | null }).active_team_id).toBeNull();
-
-    const set = await (await route.GET(new Request("http://t"), idCtx("set"))).json();
-    expect((set as { active_team_id: string | null }).active_team_id).toBe(team.id);
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body).toMatchObject({ id: "c", format: SV });
+    expect(body).not.toHaveProperty("active_team_id");
   });
 });
 
-// --- PATCH set / clear -----------------------------------------------------
+// --- PATCH ------------------------------------------------------------------
 
-describe("PATCH /api/conversations/[id] — set/clear active_team_id", () => {
-  it("binds an account-owned, format-matching team (AC-8.2)", async () => {
-    signedIn(ACCT_A);
-    const team = await mkTeam(ACCT_A, SV);
-    await seedConv(ACCT_A, "c", SV);
-
-    const res = await patch("c", { active_team_id: team.id });
-    expect(res.status).toBe(200);
-    expect(await activeOf("c")).toBe(team.id);
-  });
-
-  it("clears with null", async () => {
-    signedIn(ACCT_A);
-    const team = await mkTeam(ACCT_A, SV);
-    await seedConv(ACCT_A, "c", SV, team.id);
-
-    expect((await patch("c", { active_team_id: null })).status).toBe(200);
-    expect(await activeOf("c")).toBeNull();
-  });
-
-  it("IGNORES a format-mismatching team (BR-T3) — 200, selection untouched", async () => {
-    signedIn(ACCT_A);
-    const champTeam = await mkTeam(ACCT_A, CHAMP);
-    await seedConv(ACCT_A, "c", SV); // conversation is SV
-
-    const res = await patch("c", { active_team_id: champTeam.id });
-    expect(res.status).toBe(200);
-    expect(await activeOf("c")).toBeNull();
-  });
-
-  it("IGNORES a not-owned team — 200, selection untouched", async () => {
-    const otherTeam = await mkTeam(ACCT_B, SV);
+describe("PATCH /api/conversations/[id] — title/pinned only", () => {
+  it("renames and pins", async () => {
     signedIn(ACCT_A);
     await seedConv(ACCT_A, "c", SV);
 
-    const res = await patch("c", { active_team_id: otherTeam.id });
-    expect(res.status).toBe(200);
-    expect(await activeOf("c")).toBeNull();
-  });
-
-  it("400s a non-string, non-null active_team_id", async () => {
-    signedIn(ACCT_A);
-    await seedConv(ACCT_A, "c", SV);
-    expect((await patch("c", { active_team_id: 42 })).status).toBe(400);
-    expect((await patch("c", { active_team_id: "" })).status).toBe(400);
-  });
-
-  it("still accepts a title/pinned-only PATCH (unchanged contract)", async () => {
-    signedIn(ACCT_A);
-    await seedConv(ACCT_A, "c", SV);
+    expect((await patch("c", { title: "New name" })).status).toBe(200);
     expect((await patch("c", { pinned: true })).status).toBe(200);
-    // empty body still rejected
+
+    const conv = await convRepo.getConversation(ACCT_A, "c");
+    expect(conv?.title).toBe("New name");
+    expect(conv?.pinned).toBe(true);
+  });
+
+  it("400s an empty body and a legacy active_team_id-only body", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    // No recognized field → 400.
     expect((await patch("c", {})).status).toBe(400);
+    // active_team_id is no longer a recognized PATCH field.
+    expect((await patch("c", { active_team_id: "anything" })).status).toBe(400);
   });
 
   it("guest → 401, other account → 404 (isolation preserved)", async () => {
-    const team = await mkTeam(ACCT_A, SV);
     await seedConv(ACCT_A, "c", SV);
 
     guest();
-    expect((await patch("c", { active_team_id: team.id })).status).toBe(401);
+    expect((await patch("c", { pinned: true })).status).toBe(401);
 
     signedIn(ACCT_B);
-    expect((await patch("c", { active_team_id: team.id })).status).toBe(404);
+    expect((await patch("c", { pinned: true })).status).toBe(404);
   });
 });

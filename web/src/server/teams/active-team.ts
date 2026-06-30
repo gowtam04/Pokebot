@@ -4,27 +4,27 @@
  * Two concerns, both pure compositions of Wave-2 modules:
  *
  *   - `resolveActiveTeam(accountId, teamId, mode, db)` — loads the saved team
- *     (account-scoped, via `team-repo.getTeam`) and binds it ONLY when its
+ *     (account-scoped, via `team-repo.getTeam`) and returns it ONLY when its
  *     `format` matches the turn's mode (`team.format === formatForMode(mode)`,
  *     BR-T3 / AC-8.3). Guests, a missing id, a not-owned team, or a format
- *     mismatch all yield `null`. The raw `ActiveTeam` it returns is what the
- *     route binds onto `AgentContext.activeTeam` — the exact analogue of `mode`:
- *     server-controlled, never an LLM input.
+ *     mismatch all yield `null`. The `get_team` tool calls this with a `team_id`
+ *     the model got from `list_teams`, so the model can only read a team in the
+ *     signed-in account and the turn's format.
  *
- *   - `enrichActiveTeam(team, db)` — the agent-facing VIEW used by the
- *     `get_active_team` tool. Adds display names (slug → display via the
- *     `searchable_names` master list, the same source `resolve_entity` uses) and
- *     computed `validateTeam` warnings (warn-but-allow, on demand — never stored
- *     so they can't go stale, TEAM-AD-1).
+ *   - `enrichActiveTeam(team, db)` — the agent-facing VIEW used by the `get_team`
+ *     tool. Adds display names (slug → display via the `searchable_names` master
+ *     list, the same source `resolve_entity` uses) and computed `validateTeam`
+ *     warnings (warn-but-allow, on demand — never stored so they can't go stale,
+ *     TEAM-AD-1).
  *
  * Never throws in-domain: a clean miss is `null` (resolve) and a read fault while
  * enriching degrades to "no display name / no warnings" rather than propagating
  * (the tool wraps this and falls back to `{ active: false }` on any fault).
  *
  * Module boundary: this is a server SERVICE (composes server-only repos). Its
- * TYPES (`ActiveTeam`, `EnrichedActiveTeam`) are referenced by `@/agent/types`
- * and `@/agent/schemas` via type-only imports, so importing those shared modules
- * never pulls this (or `server-only`) into a client bundle.
+ * `EnrichedActiveTeam` type is referenced by `@/agent/schemas` via a type-only
+ * import, so importing that shared module never pulls this (or `server-only`)
+ * into a client bundle.
  */
 
 import { and, eq, inArray } from "drizzle-orm";
@@ -53,22 +53,22 @@ export interface ActiveTeam {
 }
 
 /**
- * Resolve + authorize the request's `active_team_id` into the team to bind onto
- * `AgentContext.activeTeam`, or `null`.
+ * Resolve + authorize a `teamId` (the `team_id` the model passes `get_team`,
+ * obtained from `list_teams`) into the loadable team, or `null`.
  *
  * Returns `null` unless ALL hold:
- *   - `teamId` is provided (a guest / no selection → `null`),
+ *   - `teamId` is provided (none → `null`),
  *   - the team exists AND belongs to `accountId` (BR-T2 — not-owned is `null`,
  *     indistinguishable from missing), and
  *   - `team.format === formatForMode(mode)` (BR-T3, AC-8.3 — a team built for the
- *     other scope is NOT bound when the toggle disagrees).
+ *     other scope is NOT loadable when the toggle disagrees).
  */
 export async function resolveActiveTeam(
   accountId: string,
   teamId: string | null | undefined,
   mode: AgentMode,
-  // Part of the contract (symmetry with the route + enrichActiveTeam), but the
-  // read goes through team-repo's @/data/db singleton, so it isn't used here.
+  // Part of the contract (symmetry with enrichActiveTeam), but the read goes
+  // through team-repo's @/data/db singleton, so it isn't used here.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   db: OakDb,
 ): Promise<ActiveTeam | null> {
@@ -91,9 +91,9 @@ export async function resolveActiveTeam(
 // ---------------------------------------------------------------------------
 
 /**
- * The agent-facing active team (what `get_active_team` returns). Each slug keeps
- * its raw value AND gains a `*_display` human label; team validity warnings are
- * computed on demand.
+ * The agent-facing team view (what `get_team` returns). Each slug keeps its raw
+ * value AND gains a `*_display` human label; team validity warnings are computed
+ * on demand.
  */
 export interface EnrichedActiveTeam {
   name: string;
@@ -120,9 +120,46 @@ export interface EnrichedActiveTeam {
 type NameKind = "pokemon" | "ability" | "item" | "move" | "type";
 
 /**
+ * Build a `${kind}:${slug}` → display_name map for the given slugs, read once
+ * from `searchable_names` (format-scoped). A read fault leaves the map empty →
+ * callers fall back to the raw slug (never throws). Shared by `enrichActiveTeam`
+ * (one team's member slugs) and the `list_teams` tool (every team's species).
+ */
+export async function displayNamesFor(
+  slugs: Iterable<string>,
+  format: string,
+  db: OakDb,
+): Promise<Map<string, string>> {
+  const set = new Set<string>();
+  for (const s of slugs) if (s) set.add(s);
+
+  const map = new Map<string, string>();
+  if (set.size === 0) return map;
+
+  try {
+    const rows = await db
+      .select({
+        kind: searchable_names.kind,
+        slug: searchable_names.slug,
+        display_name: searchable_names.display_name,
+      })
+      .from(searchable_names)
+      .where(
+        and(
+          eq(searchable_names.format, format),
+          inArray(searchable_names.slug, [...set]),
+        ),
+      );
+    for (const r of rows) map.set(`${r.kind}:${r.slug}`, r.display_name);
+  } catch {
+    // Index unavailable — fall back to raw slugs as their own display.
+  }
+  return map;
+}
+
+/**
  * Build a `${kind}:${slug}` → display_name map for every slug referenced by the
- * team, read once from `searchable_names` (format-scoped). A read fault leaves
- * the map empty → display names fall back to the raw slug (never throws).
+ * team (format-scoped). Thin wrapper over {@link displayNamesFor}.
  */
 async function loadDisplayNames(
   team: ActiveTeam,
@@ -136,29 +173,7 @@ async function loadDisplayNames(
     if (m.tera_type) slugs.add(m.tera_type);
     for (const move of m.moves) if (move) slugs.add(move);
   }
-
-  const map = new Map<string, string>();
-  if (slugs.size === 0) return map;
-
-  try {
-    const rows = await db
-      .select({
-        kind: searchable_names.kind,
-        slug: searchable_names.slug,
-        display_name: searchable_names.display_name,
-      })
-      .from(searchable_names)
-      .where(
-        and(
-          eq(searchable_names.format, team.format),
-          inArray(searchable_names.slug, [...slugs]),
-        ),
-      );
-    for (const r of rows) map.set(`${r.kind}:${r.slug}`, r.display_name);
-  } catch {
-    // Index unavailable — fall back to raw slugs as their own display.
-  }
-  return map;
+  return displayNamesFor(slugs, team.format, db);
 }
 
 /** Display label for a slug; falls back to the slug, or `null` for an empty field. */
@@ -172,10 +187,10 @@ function display(
 }
 
 /**
- * Enrich the context-bound team for the `get_active_team` tool: add display
- * names (from `searchable_names`) and computed `validateTeam` warnings. Never
- * throws — a validation read fault yields `[]` warnings (validateTeam's own
- * contract), and a names read fault falls back to raw slugs.
+ * Enrich a loaded team for the `get_team` tool: add display names (from
+ * `searchable_names`) and computed `validateTeam` warnings. Never throws — a
+ * validation read fault yields `[]` warnings (validateTeam's own contract), and
+ * a names read fault falls back to raw slugs.
  */
 export async function enrichActiveTeam(
   team: ActiveTeam,

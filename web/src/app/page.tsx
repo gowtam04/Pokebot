@@ -11,7 +11,6 @@ import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
 import SidebarToggle from "@/components/controls/SidebarToggle";
-import ActiveTeamSelector from "@/components/teams/ActiveTeamSelector";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
@@ -93,14 +92,6 @@ export default function Home() {
   // A fresh object pushed into the Composer to reload its input after a quick
   // stop (identity change is what triggers the reload).
   const [prefill, setPrefill] = useState<{ text: string } | null>(null);
-
-  // Active team bound to THIS on-screen conversation (TEAM-US-8 / AC-8.1).
-  // Server-controlled scope, default none: sent as `active_team_id` on every
-  // chat turn (the route resolves + binds it onto ctx.activeTeam, format-gated),
-  // restored from GET /api/conversations/[id] on open, and cleared on a format
-  // toggle / different-format conversation (AC-8.3). It is conversation-scoped,
-  // never auth-scoped — a guest simply has no teams to select.
-  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
 
   // Champions mode: server-controlled scope sent on every request as
   // `champions_mode`. Defaults to ON — resolve from localStorage only AFTER
@@ -264,15 +255,10 @@ export default function Home() {
         }));
       }
       committedAnswerRef.current = null;
-      // Build the body as a variable (not a fresh literal) so the additive
-      // team-builder field `active_team_id` rides along without tripping
-      // excess-property checks on the `ChatRequestBody` param. The server
-      // resolves + format-gates it and persists it last-selected-wins.
       const body = {
         session_id: sessionId,
         message,
         champions_mode: championsMode,
-        active_team_id: activeTeamId,
         // Wire-only image fields (mimeType + raw base64); the preview URLs stay
         // client-side. Omitted entirely for a text-only turn.
         ...(images.length > 0
@@ -281,7 +267,7 @@ export default function Home() {
       };
       send(body);
     },
-    [send, sessionId, championsMode, activeTeamId],
+    [send, sessionId, championsMode],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
@@ -293,7 +279,6 @@ export default function Home() {
     setSessionId(makeId());
     setTurns([]);
     setImagePreviews({});
-    setActiveTeamId(null);
   }, [reset]);
 
   // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
@@ -309,13 +294,6 @@ export default function Home() {
         setTurns(detail.turns);
         setImagePreviews({}); // session-only thumbnails don't survive a reload
         setChampionsModePersisted(detail.format === "champions");
-        // Restore the conversation's bound active team (AC-8.1). The server only
-        // ever persists a format-matched team, so the restored id is already
-        // valid for this conversation's format; `active_team_id` is present on
-        // the GET body even though `ConversationDetail` doesn't type it.
-        setActiveTeamId(
-          (detail as { active_team_id?: string | null }).active_team_id ?? null,
-        );
       });
     },
     [reset, setChampionsModePersisted],
@@ -344,20 +322,15 @@ export default function Home() {
       setTurns([]);
       setImagePreviews({});
       setSessionId(makeId());
-      setActiveTeamId(null);
       setPrefill({ text: inFlightMessageRef.current });
     }
   }, [reset]);
 
-  // Champions toggle from the header (AC-8.3). Switching format changes the data
-  // scope, so any team bound for the previous format no longer applies — clear
-  // the active selection. (Opening a saved conversation also flips the format,
-  // but goes through `setChampionsModePersisted` directly so its just-restored
-  // active team is preserved — only an EXPLICIT user toggle clears.)
+  // Champions toggle from the header. Switching format changes the data scope for
+  // every subsequent turn (including which saved teams `list_teams` can see).
   const handleChampionsToggle = useCallback(
     (next: boolean) => {
       setChampionsModePersisted(next);
-      setActiveTeamId(null);
     },
     [setChampionsModePersisted],
   );
@@ -455,13 +428,6 @@ export default function Home() {
           >
             {auth.signedIn && (
               <>
-                <ActiveTeamSelector
-                  format={artifactFormat}
-                  conversationId={sessionId}
-                  value={activeTeamId}
-                  onChange={setActiveTeamId}
-                  enabled={auth.signedIn}
-                />
                 <a className="chat-page__teams-link" href="/teams">
                   Teams
                 </a>

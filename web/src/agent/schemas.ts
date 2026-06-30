@@ -746,24 +746,56 @@ export const oakAnswerSchema = z
   .strict();
 
 // ===========================================================================
-// T12 — get_active_team (inlined team-builder internal; reconciled in Phase 11)
+// T12 — get_team (load ONE saved team by id; the model picks the id from a
+// prior list_teams call). Replaces the former server-bound get_active_team.
 // ===========================================================================
 
-// Input takes NO team-selecting argument: the active team is server-bound onto
-// AgentContext (the exact analogue of `mode`), so the model has no parameter to
-// widen scope. `.strict()` rejects any stray key the model might invent.
-export const getActiveTeamInputSchema = z.object({}).strict();
+// The model supplies a `team_id` it obtained from `list_teams` — it cannot
+// invent one, and an unknown / not-owned / wrong-format id yields
+// `{ found: false }`. `.strict()` rejects any stray key the model might invent.
+export const getTeamInputSchema = z
+  .object({ team_id: z.string().min(1) })
+  .strict();
 
 /**
- * Output of `get_active_team`: `{ active: false }` when no team is bound for the
- * turn, else the enriched team view (display names + computed warnings). Hand-
- * authored as a discriminated union — the enriched shape is owned by the
- * active-team service, not re-derived here.
+ * Output of `get_team`: `{ found: false }` when the id is unknown, not the
+ * user's, or not in the turn's format; else the enriched team view (display
+ * names + computed warnings). Hand-authored as a discriminated union — the
+ * enriched shape is owned by the active-team service, not re-derived here.
  */
-export type GetActiveTeamInput = z.infer<typeof getActiveTeamInputSchema>;
-export type GetActiveTeamOutput =
-  | { active: false }
-  | { active: true; team: EnrichedActiveTeam };
+export type GetTeamInput = z.infer<typeof getTeamInputSchema>;
+export type GetTeamOutput =
+  | { found: false }
+  | { found: true; team: EnrichedActiveTeam };
+
+// ===========================================================================
+// T16 — list_teams (the user's saved teams for the turn's format; the model
+// matches the user's words against name + species, then calls get_team).
+// ===========================================================================
+
+// Takes NO arguments: scope is the turn's format (server-controlled like
+// `mode`), so the model has no parameter to widen it. `.strict()` rejects strays.
+export const listTeamsInputSchema = z.object({}).strict();
+
+/** One saved team in the `list_teams` result — a cheap pick-list row (no full members). */
+export interface TeamListEntry {
+  team_id: string;
+  name: string;
+  member_count: number;
+  /** `< 6` members, or any member missing a species / its 4th move. */
+  incomplete: boolean;
+  /** Display names of the team's Pokémon — lets the model match "the one with Garchomp". */
+  species: string[];
+}
+
+/**
+ * Output of `list_teams`: `{ signed_in: false }` for a guest (no saved teams to
+ * read), else the account's teams for the turn's format (possibly an empty array).
+ */
+export type ListTeamsInput = z.infer<typeof listTeamsInputSchema>;
+export type ListTeamsOutput =
+  | { signed_in: false }
+  | { signed_in: true; teams: TeamListEntry[] };
 
 // ===========================================================================
 // T13 — save_team (conversational save; TEAM-AD-7)
@@ -915,21 +947,23 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   estimate_damage: toJsonSchema(estimateDamageInputSchema),
   // submit_answer's input IS the OakAnswer object.
   submit_answer: toJsonSchema(oakAnswerSchema),
-  // T12 — no team-selecting argument (server-bound active team).
-  get_active_team: toJsonSchema(getActiveTeamInputSchema),
+  // T12 — load one of the user's saved teams by id (from list_teams).
+  get_team: toJsonSchema(getTeamInputSchema),
   // T13 — save a proposed team to the user's Teams on approval.
   save_team: toJsonSchema(saveTeamInputSchema),
   // T14 — catch-location / obtain-method data (standard mode only).
   get_encounters: toJsonSchema(getEncountersInputSchema),
   // T15 — live Champions competitive usage (championsbattledata.com; champions mode only).
   get_usage_stats: toJsonSchema(getUsageStatsInputSchema),
+  // T16 — the user's saved teams for the turn's format (the by-name pick-list).
+  list_teams: toJsonSchema(listTeamsInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
 export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T15), in order. */
+/** Canonical tool name list (T1..T16), in order. */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -942,10 +976,11 @@ export const TOOL_NAMES = [
   "compute_stat",
   "estimate_damage",
   "submit_answer",
-  "get_active_team",
+  "get_team",
   "save_team",
   "get_encounters",
   "get_usage_stats",
+  "list_teams",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

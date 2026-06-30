@@ -9,6 +9,11 @@
  * Champions) and avoids out-of-scope topics (egg moves, catch locations) so a
  * chip never leads to a dead-end decline. Drawn from the eval golden cases and
  * few-shot examples. Categories below are for authoring only — the array is flat.
+ *
+ * The "Teams" chips double as discoverability for referring to a saved team by
+ * name in chat ("how's my rain team?"): a build chip always produces a team, and
+ * "how does my team look?" leads Oak to read the user's saved teams (or, with
+ * none / for a guest, offer to build one) — an on-scope reply, never a decline.
  */
 export const STARTER_PROMPTS: string[] = [
   // Lookups / profiles
@@ -60,6 +65,10 @@ export const STARTER_PROMPTS: string[] = [
   // Conditional inference
   "Can Levitate dodge Earthquake?",
   "Which Pokémon are immune to Ground?",
+  // Teams (build, or ask Oak about a saved team by name)
+  "Build me a rain team",
+  "Build me a Trick Room team",
+  "How does my team look?",
 ];
 
 /**

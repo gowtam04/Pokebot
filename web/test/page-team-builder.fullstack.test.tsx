@@ -5,7 +5,6 @@
  * § Phase 11 test focus):
  *
  *   - manual build + Showdown import on `/teams`,
- *   - set an active team in chat (sent as `active_team_id` on the next turn),
  *   - apply a `proposed_team` from a chat answer — both Apply paths (save-new
  *     via createTeam, apply-existing via updateTeam).
  *
@@ -321,36 +320,6 @@ describe("chat — active team + proposed_team apply", () => {
     return t;
   }
 
-  async function sendMessage(text: string) {
-    fireEvent.change(screen.getByTestId("composer-input"), {
-      target: { value: text },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("composer-send"));
-    });
-  }
-
-  it("selects an active team and sends it as active_team_id on the next turn (AC-8.1)", async () => {
-    const team = seedTeam("My SV Team");
-    render(<Home />);
-
-    // Signed in → the active-team selector appears and lists the SV team.
-    const select = (await screen.findByTestId("active-team-select")) as HTMLSelectElement;
-    await waitFor(() =>
-      expect(within(select).getByText(/My SV Team/)).toBeInTheDocument(),
-    );
-
-    // Pick it → the host lifts the choice (and best-effort PATCHes the convo).
-    await act(async () => {
-      fireEvent.change(select, { target: { value: team.id } });
-    });
-
-    // The next chat turn carries the selected team id as active_team_id.
-    await sendMessage("how's my team look?");
-    await waitFor(() => expect(chatBodies).toHaveLength(1));
-    expect(chatBodies[0].active_team_id).toBe(team.id);
-  });
-
   it("applies a proposed_team — save-new (createTeam) and apply-existing (updateTeam)", async () => {
     const existing = seedTeam("Overwrite Me");
     const proposedMembers = [garchompMember()];
@@ -365,7 +334,9 @@ describe("chat — active team + proposed_team apply", () => {
     };
 
     render(<Home />);
-    await screen.findByTestId("active-team-select");
+    // Wait until the signed-in chat shell has rendered (the Teams link is
+    // signed-in-only) before driving the composer.
+    await screen.findByRole("link", { name: "Teams" });
 
     // Ask for a build → the answer carries a proposed_team rendered as a card.
     fireEvent.change(screen.getByTestId("composer-input"), {

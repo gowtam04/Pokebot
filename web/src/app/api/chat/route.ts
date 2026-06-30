@@ -136,22 +136,12 @@ function clientIp(req: Request): string {
 // Body validation
 // ---------------------------------------------------------------------------
 
-/**
- * The parsed body, widened with the team-builder's optional `active_team_id`
- * (kept LOCAL — `ChatRequestBody` lives in `@/lib/sse/sse-types`, outside this
- * phase's edit scope). Always present after parsing: a non-empty string id or
- * `null` (guests / old clients / explicit deselect).
- */
-type ParsedChatBody = ChatRequestBody & {
-  active_team_id: string | null;
-};
-
 function parseBody(
   value: unknown,
   hasImages: boolean,
-): ParsedChatBody | null {
+): ChatRequestBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode, active_team_id } =
+  const { session_id, message, champions_mode } =
     value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   // The message must be a string, but may be EMPTY when one or more images are
@@ -161,22 +151,14 @@ function parseBody(
   if (message.length === 0 && !hasImages) return null;
   // Coerce defensively: anything that is not strictly boolean `true` is
   // standard mode (old clients omit the field entirely).
-  // `active_team_id` is optional; anything that is not a non-empty string means
-  // "no active team" (null) — guests/old clients omit it, the toggle deselects
-  // by sending null. Authorization + format gating happens later via
-  // resolveActiveTeam (server-controlled, never trusted from the body alone).
-  const teamId =
-    typeof active_team_id === "string" && active_team_id.length > 0
-      ? active_team_id
-      : null;
   // The answering model is NOT taken from the body — it is operator-controlled
   // via the ACTIVE_MODEL secret (resolved server-side below). Any `model` field a
-  // client happens to send is ignored.
+  // client happens to send is ignored. Saved teams are referenced by name in
+  // chat (resolved live via list_teams/get_team), so the body carries no team id.
   return {
     session_id,
     message,
     champions_mode: champions_mode === true,
-    active_team_id: teamId,
   };
 }
 
@@ -357,47 +339,6 @@ export async function POST(req: Request): Promise<Response> {
     history = [...getHistory(session_id)];
   }
 
-  // 3b. Resolve + authorize the conversation's ACTIVE TEAM before opening the
-  //    stream — the exact analogue of `mode`: server-controlled, never an
-  //    LLM-visible tool input (BR-T9 / TEAM-AD-1). Gated on a signed-in account
-  //    (guests have no saved teams). Gated on a non-empty `active_team_id` too:
-  //    with no id there is nothing to resolve, so we skip the import entirely and
-  //    leave `activeTeam` null (a not-owned team or a format mismatch still yield
-  //    `null` — BR-T3, AC-8.3). `resolveActiveTeam` binds the team ONLY when it is
-  //    account-owned AND `team.format === formatForMode(mode)`. It runs AFTER the
-  //    history block so `mode` is already finalized from the stored conversation
-  //    format on a resume. The resolved team is bound onto `ctx.activeTeam` (below)
-  //    and persisted last-selected-wins. A DB blip degrades to no active team
-  //    rather than a 500 (guest-first stance).
-  let activeTeam:
-    | import("@/server/teams/active-team").ActiveTeam
-    | null = null;
-  if (account && body.active_team_id) {
-    try {
-      const [{ resolveActiveTeam }, { db }] = await Promise.all([
-        import("@/server/teams/active-team"),
-        import("@/data/db"),
-      ]);
-      activeTeam = await resolveActiveTeam(
-        account.id,
-        body.active_team_id,
-        mode,
-        db,
-      );
-    } catch (err) {
-      logger.warn(
-        {
-          event: "chat_active_team_resolve_failed",
-          request_id: requestId,
-          account_id: account.id,
-          session_id,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "oak_chat_active_team_resolve_failed",
-      );
-    }
-  }
-
   // 3c. Resolve the operator-selected active model (the ACTIVE_MODEL secret) and
   //     fail fast if its provider isn't configured on this server (its API key is
   //     absent) — a clean 503 BEFORE the stream opens, so the client sees a real
@@ -498,13 +439,11 @@ export async function POST(req: Request): Promise<Response> {
             // taken from the body. History is plain text, so the model in effect
             // can change between turns without correctness risk.
             model: activeModel,
-            // Server-bound active team (already resolved + authorized above).
-            // `undefined` ⇒ no team is bound; the model only ever sees it via the
-            // arg-less `get_active_team` tool, never as an input it can widen.
-            activeTeam: activeTeam ?? undefined,
             // Signed-in account id + the conversation's pending proposed team —
-            // both server-bound, read only by `save_team` (T13) so an approval
-            // ("save it") persists the EXACT set the user saw.
+            // both server-bound. The account id lets the team tools
+            // (list_teams/get_team/save_team) read+write account-scoped teams;
+            // the proposed team lets an approval ("save it") persist the EXACT
+            // set the user saw.
             accountId: account?.id,
             proposedTeam,
             // Images attached to THIS turn (validated + mime-sniffed above).
@@ -587,13 +526,6 @@ export async function POST(req: Request): Promise<Response> {
                 assistantTurnId: repo.newTurnId(),
                 answer,
                 now: Date.now(),
-                // Persist the conversation's active team last-selected-wins
-                // (TEAM-US-8): a team just SAVED this turn (T13) wins, else the
-                // RESOLVED bound id, else `null` (no selection / not-owned /
-                // format mismatch) so resume restores exactly what was in effect
-                // this turn (BR-T9). The save-then-set also covers a brand-new
-                // conversation whose row didn't exist when `save_team` ran.
-                activeTeamId: ctx.savedTeam?.id ?? activeTeam?.id ?? null,
               });
             } catch (err) {
               logger.error(

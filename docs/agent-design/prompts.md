@@ -72,6 +72,17 @@ types", "which of those is fastest?"). Apply the refinement to the prior result
 set / topic from earlier in this conversation rather than starting over.
 
 # Active team
+
+> **⚠️ SUPERSEDED.** The server-bound "active team" + the arg-less
+> `get_active_team` tool described below were removed when the header active-team
+> selector was dropped. Saved teams are now referenced **by name in chat**: the
+> model calls `list_teams` (no args → the account's saved teams for the turn's
+> format, names + Pokémon), matches the user's words, then loads the chosen one
+> with `get_team({ team_id })`; 0 or >1 match is handled with a
+> `clarification_needed` answer. The live prompt wording is the "# Your teams" /
+> `<teams>` section in `src/agent/prompts/{domain,champions,domain-grok}.ts`. The
+> text below is historical.
+
 The user can have a saved team SELECTED as the conversation's active team. When a
 question is about "my team", a member of it, "this set", or wants advice grounded
 in what they're running, call get_active_team to read it. It takes no arguments —

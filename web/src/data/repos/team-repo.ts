@@ -29,7 +29,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/data/db";
-import { conversation, team } from "@/data/schema";
+import { team } from "@/data/schema";
 import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,12 @@ export interface TeamSummary {
    * detail path).
    */
   incomplete: boolean;
+  /**
+   * Species slugs of the team's filled slots (empty slots omitted). Lets a
+   * caller match a team by its Pokémon without loading full members — the
+   * `list_teams` tool maps these to display names. Order follows the slots.
+   */
+  species: string[];
   updatedAt: number;
 }
 
@@ -117,6 +123,9 @@ export async function listTeams(
       format: r.format,
       memberCount: members.length,
       incomplete: isIncomplete(members),
+      species: members
+        .map((m) => m.species)
+        .filter((s): s is string => s !== null),
       updatedAt: r.updatedAt,
     };
   });
@@ -241,24 +250,13 @@ export async function duplicateTeam(
 }
 
 /**
- * Permanently delete a team (TEAM-US-4). In ONE transaction: delete the row
- * (account-scoped) AND null `conversation.active_team_id` on any of this
- * account's conversations that referenced it (BR-T10) — there is no physical FK
- * cascade. Idempotent: deleting an absent / not-owned id is a no-op.
+ * Permanently delete a team (TEAM-US-4), account-scoped. Idempotent: deleting an
+ * absent / not-owned id is a no-op. Teams are referenced only by name in chat
+ * (looked up live via `list_teams`/`get_team`), so there are no stored FKs to
+ * clear on delete.
  */
 export async function deleteTeam(accountId: string, id: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(team)
-      .where(and(eq(team.account_id, accountId), eq(team.id, id)));
-    await tx
-      .update(conversation)
-      .set({ active_team_id: null })
-      .where(
-        and(
-          eq(conversation.account_id, accountId),
-          eq(conversation.active_team_id, id),
-        ),
-      );
-  });
+  await db
+    .delete(team)
+    .where(and(eq(team.account_id, accountId), eq(team.id, id)));
 }

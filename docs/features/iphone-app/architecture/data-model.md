@@ -23,7 +23,9 @@ struct ChatRequest: Encodable, Sendable {
   let message: String            // 0–2000 chars; may be "" iff images present
   let images: [ChatImage]?       // ≤4
   let championsMode: Bool?        // champions_mode
-  let activeTeamId: String?       // active_team_id
+  // ⚠️ REMOVED (web change, 2026-06): no `active_team_id`. Saved teams are
+  // referenced by NAME in chat (the agent calls list_teams → get_team), so the
+  // client sends no team id. Do NOT add this field back.
 }
 struct ChatImage: Encodable, Sendable {
   let mimeType: String           // best-effort; server re-sniffs by magic bytes
@@ -139,7 +141,8 @@ struct ConversationSummary: Decodable, Sendable, Identifiable {
 }
 struct ConversationDetail: Decodable, Sendable {
   let id: String; let title: String; let format: Format; let pinned: Bool
-  let activeTeamId: String?; let turns: [ChatTurn]
+  let turns: [ChatTurn]
+  // ⚠️ REMOVED (web change, 2026-06): GET no longer returns `active_team_id`.
 }
 enum ChatTurn: Decodable, Sendable, Identifiable {     // discriminated on "role"
   case user(id: String, content: String)
@@ -188,9 +191,12 @@ No new tables. Two touchpoints:
 ## ERD
 
 The client holds no relational data; see `web/`'s existing schema for the server ERD.
-Client-side, the only "relationships" are reference-by-id over the wire:
-`Conversation.activeTeamId → Team.id`, and `ChatRequest.sessionId == Conversation.id`
-(on resume). Both are resolved by the backend, not the client.
+Client-side, the only "relationship" is reference-by-id over the wire:
+`ChatRequest.sessionId == Conversation.id` (on resume), resolved by the backend.
+
+> ⚠️ The former `Conversation.activeTeamId → Team.id` link was **removed** (web
+> change, 2026-06): the `conversation.active_team_id` column is dropped and saved
+> teams are referenced by name in chat. No client-held team id remains.
 
 ## Migrations / Schema Notes
 

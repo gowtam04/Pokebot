@@ -42,7 +42,6 @@ import type {
   ImageAttachment,
 } from "@/agent/types";
 import type { OakDb } from "@/data/db";
-import type { ActiveTeam } from "@/server/teams/active-team";
 import { logger as defaultLogger } from "@/server/logger";
 
 /** Overrides for {@link createAgentContext}; every field defaults sensibly. */
@@ -72,13 +71,9 @@ export interface CreateAgentContextOptions {
    */
   signal?: AbortSignal;
   /**
-   * The turn's active team (already resolved + authorized by the route via
-   * `resolveActiveTeam`). Bound straight onto `AgentContext.activeTeam`;
-   * `undefined` (the default) means no team is bound. Server-controlled like
-   * `mode` — never set by the model.
+   * Signed-in account id (server-controlled). Used by the team tools
+   * (`list_teams`/`get_team`/`save_team`) to read/write account-scoped teams.
    */
-  activeTeam?: ActiveTeam;
-  /** Signed-in account id (server-controlled). Used only by `save_team` (T13). */
   accountId?: string;
   /**
    * The most recent team the agent proposed earlier in this conversation (raw
@@ -147,7 +142,6 @@ export async function createAgentContext(
     mode,
     model,
     signal: opts.signal,
-    activeTeam: opts.activeTeam,
     accountId: opts.accountId,
     sessionId: opts.sessionId,
     proposedTeam: opts.proposedTeam,

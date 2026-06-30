@@ -29,7 +29,7 @@ const STANDARD_SECTIONS = [
   "type_effectiveness",
   "doubles",
   "conversation",
-  "active_team",
+  "teams",
   "image_input",
   "clarify",
   "scope",

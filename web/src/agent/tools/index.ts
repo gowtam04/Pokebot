@@ -53,20 +53,23 @@ import { getItemTool } from "./get-item";
 import { computeStatTool } from "./compute-stat.tool";
 import { estimateDamageTool } from "./estimate-damage.tool";
 import { submitAnswerTool } from "./submit-answer";
-import { getActiveTeamTool } from "./get-active-team.tool";
+import { getTeamTool } from "./get-team.tool";
 import { saveTeamTool } from "./save-team.tool";
 import { getEncountersTool } from "./get-encounters";
 import { getUsageStatsTool } from "./get-usage-stats.tool";
+import { listTeamsTool } from "./list-teams.tool";
 
 /**
- * The 15 tools, in T1..T15 order. T1..T11 are the fixed agent-design contract;
- * T12 (`get_active_team`) and T13 (`save_team`) are the inlined team-builder
- * additions (TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
+ * The 16 tools, in T1..T16 order. T1..T11 are the fixed agent-design contract;
+ * T12 (`get_team`) loads a saved team by id and T13 (`save_team`) persists one
+ * (team-builder, TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
  * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
  * (`get_usage_stats`) adds live championsbattledata.com competitive usage
- * (champions mode only). All appended last so the existing T1..T11 order — and
- * thus most of the cached prefix — is unchanged. The list is sent byte-identical
- * for both modes; each mode-gated tool self-gates on `ctx.mode`.
+ * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
+ * model can resolve a by-name reference. All appended after T11 so the existing
+ * T1..T11 order — and thus most of the cached prefix — is unchanged. The list is
+ * sent byte-identical for both modes; each mode-gated tool self-gates on
+ * `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -80,10 +83,11 @@ export const tools: ToolDef[] = [
   computeStatTool,
   estimateDamageTool,
   submitAnswerTool,
-  getActiveTeamTool,
+  getTeamTool,
   saveTeamTool,
   getEncountersTool,
   getUsageStatsTool,
+  listTeamsTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

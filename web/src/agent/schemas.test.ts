@@ -1,7 +1,7 @@
 /**
  * Unit tests for the team-builder additions to the agent schema contract
  * (src/agent/schemas.ts): the additive `proposed_team` field on the `.strict()`
- * OakAnswer (TEAM-AD-6) and the T12 `get_active_team` I/O.
+ * OakAnswer (TEAM-AD-6) and the team-lookup tool I/O (`get_team` / `list_teams`).
  *
  * Pure schema tests — no DB / server-only (schemas.ts pulls only the shared
  * team-schema and a type-only EnrichedActiveTeam import).
@@ -9,14 +9,16 @@
  * Focus:
  *   - backward-compat: a stored answer_json WITHOUT proposed_team still parses;
  *   - a valid proposed_team parses; an unknown key / bad format is rejected;
- *   - get_active_team is in TOOL_NAMES with an empty, strict input schema.
+ *   - get_team takes a `team_id` and list_teams takes no args; both are in
+ *     TOOL_NAMES with strict input schemas.
  */
 
 import { describe, expect, it } from "vitest";
 
 import {
   oakAnswerSchema,
-  getActiveTeamInputSchema,
+  getTeamInputSchema,
+  listTeamsInputSchema,
   TOOL_NAMES,
   toolInputJsonSchemas,
   TYPE_DISPLAY_ORDER,
@@ -145,17 +147,30 @@ describe("oakAnswerSchema — proposed_team_warnings (server-stamped, BR-T5)", (
   });
 });
 
-describe("get_active_team I/O (T12)", () => {
-  it("registers get_active_team in TOOL_NAMES and toolInputJsonSchemas", () => {
-    expect(TOOL_NAMES).toContain("get_active_team");
-    expect(toolInputJsonSchemas.get_active_team).toBeDefined();
+describe("team-lookup I/O (get_team T12, list_teams T16)", () => {
+  it("registers get_team and list_teams in TOOL_NAMES and toolInputJsonSchemas", () => {
+    expect(TOOL_NAMES).toContain("get_team");
+    expect(TOOL_NAMES).toContain("list_teams");
+    expect(toolInputJsonSchemas.get_team).toBeDefined();
+    expect(toolInputJsonSchemas.list_teams).toBeDefined();
+    // The retired server-bound tool is gone from the contract.
+    expect(TOOL_NAMES).not.toContain("get_active_team");
   });
 
-  it("input schema accepts {} and rejects any team-selecting argument", () => {
-    expect(getActiveTeamInputSchema.safeParse({}).success).toBe(true);
+  it("get_team requires a non-empty team_id and rejects strays", () => {
+    expect(getTeamInputSchema.safeParse({ team_id: "t_rain" }).success).toBe(
+      true,
+    );
+    expect(getTeamInputSchema.safeParse({}).success).toBe(false);
+    expect(getTeamInputSchema.safeParse({ team_id: "" }).success).toBe(false);
     expect(
-      getActiveTeamInputSchema.safeParse({ team_id: "abc" }).success,
+      getTeamInputSchema.safeParse({ team_id: "t_rain", extra: 1 }).success,
     ).toBe(false);
+  });
+
+  it("list_teams accepts {} and rejects any argument", () => {
+    expect(listTeamsInputSchema.safeParse({}).success).toBe(true);
+    expect(listTeamsInputSchema.safeParse({ name: "rain" }).success).toBe(false);
   });
 });
 

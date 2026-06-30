@@ -325,14 +325,6 @@ export const conversation = pgTable(
     created_at: bigint("created_at", { mode: "number" }).notNull(),
     /** Epoch ms of last activity — drives most-recently-active list ordering. */
     updated_at: bigint("updated_at", { mode: "number" }).notNull(),
-    /**
-     * Logical FK → team.id (NOT a physical constraint, schema convention). The
-     * conversation's active team (BR-T9); NULL = none (AC-8.1). Bound onto the
-     * agent context like `mode` (server-controlled, never an LLM tool input).
-     * On team delete the repo clears this in the same transaction (BR-T10) —
-     * there is no ON DELETE CASCADE.
-     */
-    active_team_id: text("active_team_id"),
   },
   (t) => [
     // Per-account list query: ORDER BY pinned DESC, updated_at DESC, scoped to
@@ -398,9 +390,9 @@ export const conversation_message = pgTable(
 // array is stored whole as JSON TEXT (the reference_cache.payload /
 // conversation_message.answer_json convention) since teams are always read and
 // written as a unit. FKs are logical indexed columns, NOT physical constraints
-// (cf. conversation.account_id), so deletes are explicit in the repo: deleteTeam
-// removes the row AND nulls conversation.active_team_id references in one tx
-// (BR-T10) — there is no ON DELETE CASCADE.
+// (cf. conversation.account_id), so deletes are explicit in the repo. Saved
+// teams are referenced by name in chat (resolved live via list_teams/get_team),
+// so no other table stores a team id to clear on delete.
 // ===========================================================================
 
 // ---------------------------------------------------------------------------

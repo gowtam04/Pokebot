@@ -1,16 +1,14 @@
 /**
- * ACTIVE-TEAM-AGENT-E2E — the server-controlled "active team" seam exercised
- * end-to-end through the REAL active-team service, the REAL agent runtime +
- * tool layer (only the Anthropic client is mocked, via a recorded transcript),
- * and a REAL migrated + seeded Postgres schema (Testcontainers). This is the
- * integration checkpoint the design mandates after Phase 7 and folds into
- * Phase 11 (docs/features/team-builder § Integration checkpoints —
- * `active-team-agent-e2e`, § Phase 11 test focus):
+ * TEAM-LOOKUP-AGENT-E2E — the by-name saved-team seam exercised end-to-end
+ * through the REAL active-team service, the REAL agent runtime + tool layer (only
+ * the Anthropic client is mocked, via a recorded transcript), and a REAL migrated
+ * + seeded Postgres schema (Testcontainers):
  *
- *   a signed-in turn binds `ctx.activeTeam` ONLY when format-matched →
- *   `get_active_team` returns the enriched team + validity warnings (AC-9.3) →
- *   the selection persists + restores on resume → a mismatched-format team is
- *   not bound.
+ *   a signed-in turn calls `list_teams` to see the account's saved teams (scoped
+ *   to the turn's format) → `get_team({ team_id })` reads the matched team
+ *   enriched with display names + validity warnings → a guest / unknown id yields
+ *   `{ found: false }`. `resolveActiveTeam` (which `get_team` wraps) still binds a
+ *   team ONLY when account-owned AND format-matched (BR-T3 / AC-8.3).
  *
  * Wiring mirrors the runtime-g4 oracle: neutralize `server-only`, install a
  * seeded schema as the `@/data/db` singleton BEFORE the first dynamic import of
@@ -38,14 +36,12 @@ vi.mock("server-only", () => ({}));
 // --- Module handles (imported AFTER the singleton is installed) --------------
 
 type TeamRepo = typeof import("@/data/repos/team-repo");
-type ConvRepo = typeof import("@/data/repos/conversation-repo");
 type ActiveTeamSvc = typeof import("@/server/teams/active-team");
 type Runtime = typeof import("@/agent/runtime");
 type ContextMod = typeof import("@/agent/context");
 
 let fix: PgFixture;
 let teamRepo: TeamRepo;
-let convRepo: ConvRepo;
 let activeTeamSvc: ActiveTeamSvc;
 let runtime: Runtime;
 let contextMod: ContextMod;
@@ -80,7 +76,6 @@ beforeAll(async () => {
   await installAsSingleton(fix);
 
   teamRepo = await import("@/data/repos/team-repo");
-  convRepo = await import("@/data/repos/conversation-repo");
   activeTeamSvc = await import("@/server/teams/active-team");
   runtime = await import("@/agent/runtime");
   contextMod = await import("@/agent/context");
@@ -173,7 +168,7 @@ const TEAM_ANSWER: OakAnswer = {
   answer_markdown:
     "Your Garchomp slot is solid, but the team is incomplete — you only have one Pokémon.",
   reasoning_markdown:
-    "Read the active team (get_active_team): one Garchomp, flagged incomplete (<6 members).",
+    "Listed the saved teams (list_teams), read the matching one (get_team): one Garchomp, flagged incomplete (<6 members).",
   citations: [],
   inferences: [],
   generation_basis: { generation: "gen-9", fallback: false },
@@ -181,12 +176,12 @@ const TEAM_ANSWER: OakAnswer = {
 
 async function buildCtx(
   mode: AgentMode,
-  activeTeam: import("@/server/teams/active-team").ActiveTeam | undefined,
+  accountId?: string,
 ): Promise<AgentContext> {
   return contextMod.createAgentContext({
-    requestId: "active-team-it",
+    requestId: "team-lookup-it",
     mode,
-    activeTeam,
+    accountId,
     db: fix.db as unknown as import("@/data/db").OakDb,
   });
 }
@@ -244,12 +239,13 @@ describe("active-team-agent-e2e — format-matched binding (resolveActiveTeam)",
 });
 
 // ---------------------------------------------------------------------------
-// get_active_team — through the real runtime, returns the enriched team +
-// validity warnings on demand, and {active:false} when none is bound (AC-9.3).
+// list_teams + get_team — through the real runtime: list the account's saved
+// teams (format-scoped), then read the matched one enriched with display names +
+// validity warnings on demand. A guest / unknown id yields { found: false }.
 // ---------------------------------------------------------------------------
 
-describe("active-team-agent-e2e — get_active_team via the real runtime", () => {
-  it("returns the enriched team (display names) + an incomplete warning when bound", async () => {
+describe("team-lookup-agent-e2e — list_teams + get_team via the real runtime", () => {
+  it("lists the saved teams then reads the matched one (display names + incomplete warning)", async () => {
     const now = Date.now();
     const team = await teamRepo.createTeam({
       accountId: ACCT_A,
@@ -258,123 +254,83 @@ describe("active-team-agent-e2e — get_active_team via the real runtime", () =>
       members: [garchompMember()],
       now,
     });
-    const db = fix.db as unknown as import("@/data/db").OakDb;
-    const activeTeam = await activeTeamSvc.resolveActiveTeam(
-      ACCT_A,
-      team.id,
-      "standard",
-      db,
-    );
-    expect(activeTeam).not.toBeNull();
 
-    const ctx = await buildCtx("standard", activeTeam!);
+    const ctx = await buildCtx("standard", ACCT_A);
     const { client, snapshots, stream } = scriptedClient([
-      message([toolUse("get_active_team", {}, "t1")]),
-      message([toolUse("submit_answer", TEAM_ANSWER, "t2")]),
+      message([toolUse("list_teams", {}, "t1")]),
+      message([toolUse("get_team", { team_id: team.id }, "t2")]),
+      message([toolUse("submit_answer", TEAM_ANSWER, "t3")]),
     ]);
 
     const progress: string[] = [];
     const result = await runtime.runOakWith(
       client,
-      "how's my team look?",
+      "how's my SV Squad look?",
       [] as ChatMessage[],
       ctx,
       (e) => progress.push(e.tool),
     );
 
-    // The tool fired, and its tool_result (fed back on the 2nd turn) carries the
-    // enriched team: active:true, the Garchomp display name, and the COMPUTED
-    // incomplete warning (validity surfaced on demand, AC-9.3).
-    expect(progress).toContain("get_active_team");
-    expect(stream).toHaveBeenCalledTimes(2);
-    const toolResult = lastToolResultText(snapshots[1]);
-    expect(toolResult).toMatch(/"active":\s*true/);
-    expect(toolResult).toContain("Garchomp"); // species_display from searchable_names
-    expect(toolResult).toContain("incomplete"); // validateTeam warning
+    expect(progress).toContain("list_teams");
+    expect(progress).toContain("get_team");
+    expect(stream).toHaveBeenCalledTimes(3);
+
+    // list_teams result (fed back on turn 2) carries the team name + species
+    // DISPLAY name, scoped to the signed-in account.
+    const listResult = lastToolResultText(snapshots[1]);
+    expect(listResult).toMatch(/"signed_in":\s*true/);
+    expect(listResult).toContain("SV Squad");
+    expect(listResult).toContain("Garchomp");
+
+    // get_team result (fed back on turn 3) carries the enriched team: found:true,
+    // the Garchomp display name, and the COMPUTED incomplete warning.
+    const teamResult = lastToolResultText(snapshots[2]);
+    expect(teamResult).toMatch(/"found":\s*true/);
+    expect(teamResult).toContain("Garchomp");
+    expect(teamResult).toContain("incomplete");
 
     expect(oakAnswerSchema.safeParse(result).success).toBe(true);
     expect(result.status).toBe("answered");
   });
 
-  it("returns {active:false} when no team is bound (the model can still answer)", async () => {
-    const ctx = await buildCtx("standard", undefined);
-    const { client, snapshots } = scriptedClient([
-      message([toolUse("get_active_team", {}, "t1")]),
-      message([toolUse("submit_answer", TEAM_ANSWER, "t2")]),
-    ]);
-
-    await runtime.runOakWith(client, "how's my team?", [] as ChatMessage[], ctx);
-
-    expect(lastToolResultText(snapshots[1])).toMatch(/"active":\s*false/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Persist + restore on resume — the selection rides the conversation
-// (TEAM-US-8 / BR-T9, last-selected-wins) and a format-mismatched team is not
-// bound on a later turn.
-// ---------------------------------------------------------------------------
-
-describe("active-team-agent-e2e — persist + restore on resume", () => {
-  it("persists the bound team on the turn and restores it on resume", async () => {
+  it("scopes list_teams to the turn's format (a Champions team is hidden in standard mode)", async () => {
     const now = Date.now();
-    const team = await teamRepo.createTeam({
+    await teamRepo.createTeam({
       accountId: ACCT_A,
       format: SV,
       name: "SV Squad",
       members: [garchompMember()],
       now,
     });
-    const convId = "conv-active-1";
-
-    // A turn that bound this team persists active_team_id last-selected-wins.
-    await convRepo.appendTurnPair({
-      accountId: ACCT_A,
-      conversationId: convId,
-      format: SV,
-      userTurnId: convRepo.newTurnId(),
-      userMessage: "rate my team",
-      assistantTurnId: convRepo.newTurnId(),
-      answer: TEAM_ANSWER,
-      now,
-      activeTeamId: team.id,
-    });
-
-    // Resume: the conversation restores its active team (AC-8.1).
-    const resumed = await convRepo.getConversation(ACCT_A, convId);
-    expect(resumed?.activeTeamId).toBe(team.id);
-
-    // Re-resolving on resume still binds it (format still matches).
-    const db = fix.db as unknown as import("@/data/db").OakDb;
-    const rebound = await activeTeamSvc.resolveActiveTeam(
-      ACCT_A,
-      resumed!.activeTeamId,
-      "standard",
-      db,
-    );
-    expect(rebound?.id).toBe(team.id);
-
-    // Set + clear the active team without chatting (the PATCH path, AC-8.2).
-    await convRepo.setActiveTeam(ACCT_A, convId, null);
-    expect((await convRepo.getConversation(ACCT_A, convId))?.activeTeamId).toBeNull();
-    await convRepo.setActiveTeam(ACCT_A, convId, team.id);
-    expect((await convRepo.getConversation(ACCT_A, convId))?.activeTeamId).toBe(team.id);
-  });
-
-  it("does not bind a persisted team when the resumed turn's format disagrees (BR-T3)", async () => {
-    const now = Date.now();
-    // The team is Champions-format; a standard-mode resume must not bind it.
-    const chTeam = await teamRepo.createTeam({
+    await teamRepo.createTeam({
       accountId: ACCT_A,
       format: CH,
       name: "Champ Squad",
       members: [garchompMember()],
       now,
     });
-    const db = fix.db as unknown as import("@/data/db").OakDb;
-    expect(
-      await activeTeamSvc.resolveActiveTeam(ACCT_A, chTeam.id, "standard", db),
-    ).toBeNull();
+
+    const ctx = await buildCtx("standard", ACCT_A);
+    const { client, snapshots } = scriptedClient([
+      message([toolUse("list_teams", {}, "t1")]),
+      message([toolUse("submit_answer", TEAM_ANSWER, "t2")]),
+    ]);
+    await runtime.runOakWith(client, "what teams do I have?", [] as ChatMessage[], ctx);
+
+    const listResult = lastToolResultText(snapshots[1]);
+    expect(listResult).toContain("SV Squad");
+    expect(listResult).not.toContain("Champ Squad");
+  });
+
+  it("get_team for a guest / unknown id returns { found: false }", async () => {
+    const ctx = await buildCtx("standard", undefined); // guest — no accountId
+    const { client, snapshots } = scriptedClient([
+      message([toolUse("get_team", { team_id: "nope" }, "t1")]),
+      message([toolUse("submit_answer", TEAM_ANSWER, "t2")]),
+    ]);
+    await runtime.runOakWith(client, "how's my team?", [] as ChatMessage[], ctx);
+
+    expect(lastToolResultText(snapshots[1])).toMatch(/"found":\s*false/);
   });
 });
 

@@ -3,13 +3,9 @@
  * (docs/features/chat-history § API Design; HIST-US-4, HIST-US-7, HIST-US-8,
  * HIST-US-9, AC-4.1, AC-4.2, AC-8.1, BR-H1, BR-H8).
  *
- *   GET    → 200 { id, title, format, pinned, active_team_id, turns: ChatTurn[] }
- *   PATCH  → 200 { ok: true }   body { title?, pinned?, active_team_id? }
+ *   GET    → 200 { id, title, format, pinned, turns: ChatTurn[] }
+ *   PATCH  → 200 { ok: true }   body { title?, pinned? }
  *   DELETE → 200 { ok: true }   permanent
- *
- * `active_team_id` (team-builder, BR-T9 / AC-8.2): GET returns the conversation's
- * bound active team (or null); PATCH may set/clear it without chatting — a select
- * binds only an account-owned, format-matching team, else it is ignored.
  *
  * Isolation (BR-H1): a conversation that belongs to another account is
  * indistinguishable from a missing one — all three return **404** (never 403,
@@ -68,10 +64,6 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     title: conv.title,
     format: conv.format,
     pinned: conv.pinned,
-    // The conversation's bound active team (BR-T9 / AC-8.1); `null` = none. The
-    // client restores its selector from this on open (clearing it later if the
-    // selected team's format no longer matches, AC-8.3).
-    active_team_id: conv.activeTeamId,
     turns,
   });
 }
@@ -92,12 +84,11 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
 
   const hasTitle = body.title !== undefined;
   const hasPinned = body.pinned !== undefined;
-  const hasActiveTeam = body.active_team_id !== undefined;
-  if (!hasTitle && !hasPinned && !hasActiveTeam) {
+  if (!hasTitle && !hasPinned) {
     return jsonError(
       400,
       "invalid_request",
-      "Provide at least one of { title, pinned, active_team_id }.",
+      "Provide at least one of { title, pinned }.",
     );
   }
 
@@ -124,28 +115,6 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
     pinned = body.pinned;
   }
 
-  // `active_team_id`: a non-empty string (select) or null (clear). Authorization
-  // + format gating happen below against the loaded conversation (AC-8.2).
-  let activeTeamId: string | null | undefined;
-  if (hasActiveTeam) {
-    const raw = body.active_team_id;
-    if (raw !== null && typeof raw !== "string") {
-      return jsonError(
-        400,
-        "invalid_request",
-        "active_team_id must be a string or null.",
-      );
-    }
-    if (typeof raw === "string" && raw.length === 0) {
-      return jsonError(
-        400,
-        "invalid_request",
-        "active_team_id must be a non-empty string or null.",
-      );
-    }
-    activeTeamId = raw;
-  }
-
   const repo = await conversationRepo();
   // Ownership check up front so a not-owned id is a 404 (BR-H1), not a silent
   // no-op masquerading as success.
@@ -154,22 +123,6 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
 
   if (title !== undefined) await repo.renameConversation(account.id, id, title);
   if (pinned !== undefined) await repo.setPinned(account.id, id, pinned);
-
-  // Set / clear the active team WITHOUT chatting (AC-8.2). Clearing (null) always
-  // applies; selecting binds only an account-owned team whose format matches this
-  // conversation (BR-T3) — anything else is silently IGNORED (warn-but-allow,
-  // never an error), so a stale/foreign id leaves the selection untouched.
-  if (activeTeamId !== undefined) {
-    if (activeTeamId === null) {
-      await repo.setActiveTeam(account.id, id, null);
-    } else {
-      const teamRepo = await import("@/data/repos/team-repo");
-      const team = await teamRepo.getTeam(account.id, activeTeamId);
-      if (team !== null && team.format === conv.format) {
-        await repo.setActiveTeam(account.id, id, activeTeamId);
-      }
-    }
-  }
 
   return json(200, { ok: true });
 }

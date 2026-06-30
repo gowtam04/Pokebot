@@ -1,0 +1,1 @@
+ALTER TABLE "conversation" DROP COLUMN "active_team_id";

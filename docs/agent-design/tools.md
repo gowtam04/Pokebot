@@ -1,11 +1,11 @@
 # Tools
 
-Fourteen tools. Ten read data (one queries the local index, seven fetch reference
-details, one resolves names, one reads the conversation's active team), two
-compute battle math, one emits the final answer, and one writes (saves a team on
-approval). All read/compute tools are **read-only and idempotent** — safe to
-retry in the loop. Tools return **structured errors the model can reason about**,
-never raw exceptions.
+Read-data tools (one queries the local index, seven fetch reference details, one
+resolves names, two read the user's saved teams — `list_teams` lists them and
+`get_team` loads one by id), two compute battle math, one emits the final answer,
+and one writes (saves a team on approval). All read/compute tools are **read-only
+and idempotent** — safe to retry in the loop. Tools return **structured errors the
+model can reason about**, never raw exceptions.
 
 > `get_encounters` (T14) was added later for catch-location / obtain-method data
 > sourced from a committed PokeAPI snapshot. It is **standard-mode only**
@@ -14,13 +14,21 @@ never raw exceptions.
 > Sword/Shield + Let's Go — PokeAPI has no encounter data for Scarlet/Violet,
 > Legends: Arceus, or BDSP, which the tool/prompt surface transparently.
 
-> Two tools beyond the original eleven were added by the **team-builder** feature
-> (see `docs/features/team-builder/architecture/design.md`): `get_active_team`
-> (T12, decisions TEAM-AD-1 / TEAM-AD-3) and `save_team` (T13, TEAM-AD-7). The
-> "11-tool contract" is now a **13-tool contract**. `save_team` is the single
-> deliberate exception to "the agent never writes a team" (BR-T8): it writes ONLY
-> on an explicit user approval the prompt describes, mirroring the manual Apply
-> button — see T13.
+> Tools beyond the original eleven were added by the **team-builder** feature
+> (see `docs/features/team-builder/architecture/design.md`): `get_team` (T12) +
+> `list_teams` (T16) read the user's saved teams, and `save_team` (T13, TEAM-AD-7)
+> writes one. `save_team` is the single deliberate exception to "the agent never
+> writes a team" (BR-T8): it writes ONLY on an explicit user approval the prompt
+> describes, mirroring the manual Apply button — see T13.
+>
+> **Superseded:** the original T12 `get_active_team` (a server-bound, arg-less
+> read of a conversation-selected "active team", TEAM-AD-1 / TEAM-AD-3) was
+> replaced once the header active-team selector was removed. Saved teams are now
+> referenced **by name in chat**: the model calls `list_teams` (T16) to see the
+> account's teams for the turn's format, matches the user's words against the team
+> names + Pokémon, then loads the chosen one with `get_team({ team_id })` (T12).
+> The `conversation.active_team_id` column and the `active_team_id` request/PATCH
+> field were dropped with it.
 
 Conventions:
 
@@ -641,36 +649,40 @@ validation error to the model and asks it to re-emit (see `integration.md`).
 
 ---
 
-## T12 — `get_active_team`
+## T12 — `get_team`
 
-_(Added by the team-builder feature — TEAM-AD-1 / TEAM-AD-3.)_
+_(Team-builder feature. Loads ONE saved team by id; the id comes from
+`list_teams`, T16. Replaced the original server-bound `get_active_team`.)_
 
-**Description (for the model):** Get the user's currently-selected (active) team
-for this conversation — its members (species, ability, item, moves, nature,
-EVs/IVs, Tera type, level), their display names, and any validity/legality
-warnings. **Takes no arguments:** the active team is whatever the user has
-selected (you cannot pick or change it). Returns `{ "active": false }` when no
-team is selected. Call this when the user asks about "my team", a specific
-member, or wants advice grounded in the team they're building (BR-T9).
+**Description (for the model):** Load one of the user's saved teams by id — its
+members (species, ability, item, moves, nature, EVs/IVs, Tera type, level), their
+display names, and any validity/legality warnings. **Pass a `team_id` you got
+from `list_teams`** (you cannot guess one). Returns `{ "found": false }` if the id
+isn't one of this user's teams in the current format. Use this after `list_teams`
+to read the team the user is asking about ("my rain team", "this set") and ground
+advice in it.
 
-**Input schema:** none — a strict empty object.
+**Input schema:** a strict `team_id` string.
 
 ```json
-{ "type": "object", "properties": {}, "additionalProperties": false }
+{
+  "type": "object",
+  "properties": { "team_id": { "type": "string", "minLength": 1 } },
+  "required": ["team_id"],
+  "additionalProperties": false
+}
 ```
 
-The active team is **server-controlled**: the chat route resolves + authorizes
-`active_team_id` and binds the team onto `AgentContext.activeTeam` (the exact
-analogue of `mode` / the active format). It is deliberately **not** a tool input,
-so the model has no parameter to widen scope (TEAM-AD-1). The cached prompt
-prefix gains the tool *definition* once and otherwise stays byte-identical — the
-team is never injected into the prefix or history per turn.
+The team is loaded **account-scoped and format-gated** (`resolveActiveTeam`): an
+unknown, not-owned, or wrong-format id all yield `{ "found": false }`, so the model
+can never read a team outside the signed-in account or the turn's format. The id
+is opaque to the model — it only ever supplies one returned by `list_teams`.
 
 **Output shape (sample):**
 
 ```json
 {
-  "active": true,
+  "found": true,
   "team": {
     "name": "Sun Offense",
     "format": "scarlet-violet",
@@ -705,11 +717,19 @@ never stored — so they can't go stale across a re-ingest). Warning codes:
 `species_illegal`, `ability_not_for_species`, `item_illegal`,
 `move_not_in_learnset`, `duplicate_species`, `duplicate_item`.
 
-**Side effects:** Read-only. Idempotent. **Failure modes:** never fatal — an
-absent active team OR any read fault while enriching degrades to
-`{ "active": false }`. **Auth:** none at the tool layer (the route already
-resolved + authorized the team account-scoped; the agent never sees an account
-id).
+**Side effects:** Read-only. Idempotent. **Failure modes:** never fatal — a guest,
+an unknown/foreign/wrong-format id, OR any read fault while enriching degrades to
+`{ "found": false }`. **Auth:** the signed-in account id is bound server-side onto
+`AgentContext.accountId`; the tool scopes every read to it (the agent never sees
+the id itself).
+
+> **T16 — `list_teams`.** The companion pick-list: takes no arguments and returns
+> the user's saved teams for the turn's format — each team's `team_id`, `name`,
+> `member_count`, `incomplete` flag, and its Pokémon (`species`, display names) —
+> so the model can match a by-name reference against names AND contents, then call
+> `get_team`. `{ "signed_in": false }` for a guest; `{ "signed_in": true, "teams":
+> [] }` when the account has none. Format-scoped like `get_team` (a Champions team
+> never appears in standard mode). Read-only, idempotent, never fatal.
 
 ---
 
@@ -819,12 +839,14 @@ per-game model means a future re-crawl auto-absorbs Gen 9 if PokeAPI fills it in
 | get_move / get_ability / get_type_matchups / get_evolution_chain / get_item | ❌      | Read DS-4 (read-through cache over PokeAPI).               |
 | compute_stat / estimate_damage                                              | ❌      | Pure formula functions (D5).                               |
 | submit_answer                                                               | ❌      | Structured-output tool; schema in `output-formats.md`.     |
-| get_active_team                                                             | ✅      | Built by team-builder (TEAM-AD-1); reads server-bound `ctx.activeTeam`. |
+| get_team                                                                    | ✅      | Built by team-builder; loads one saved team by `team_id` (account-scoped, format-gated). Replaced the server-bound `get_active_team`. |
+| list_teams                                                                  | ✅      | Built by team-builder; the by-name pick-list — the account's saved teams (names + Pokémon) for the turn's format. |
 | save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
 | get_encounters                                                              | ✅      | Catch-location / obtain-method data from a committed PokeAPI snapshot (standard mode only; Gen 1–8 coverage). |
 
-(The ❌ marks are the original agent-design backlog state; `get_active_team` and
-`save_team` are implemented as part of the team-builder feature.)
+(The ❌ marks are the original agent-design backlog state; `get_team`,
+`list_teams`, and `save_team` are implemented as part of the team-builder
+feature. `get_team` + `list_teams` replaced the original `get_active_team`.)
 
 All tools are new work. None require auth or carry side effects beyond reads —
 simplifying retry logic in the loop.
