@@ -1,0 +1,26 @@
+{
+  "status": "clarification_needed",
+  "answer_markdown": "Which battle format are you asking about? The best spread differs between Singles and Doubles.",
+  "reasoning_markdown": "The optimal EV spread and item depend on whether this is a Singles or Doubles context, so I am pausing to ask before committing to a recommendation.",
+  "citations": [],
+  "inferences": [],
+  "generation_basis": {
+    "generation": "Gen 9 (Scarlet/Violet)",
+    "fallback": false
+  },
+  "question": {
+    "options": [
+      {
+        "label": "Singles",
+        "description": "Smogon-style 1v1 battles."
+      },
+      {
+        "label": "Doubles",
+        "description": "VGC-style 2v2 battles."
+      },
+      {
+        "label": "Either is fine"
+      }
+    ]
+  }
+}

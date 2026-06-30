@@ -1,0 +1,136 @@
+# Oak iOS — XcodeGen project spec
+#
+# The Xcode project is GENERATED from this file (`xcodegen generate` from `ios/`),
+# so `*.xcodeproj` is git-ignored and this spec is the source of truth. A separate
+# verifier owns the build gate; do not commit a generated project.
+#
+# Targets:
+#   OakApp        — the iOS application (SwiftUI, iOS 18+)
+#   OakAppTests   — unit tests (Swift Testing)
+#   OakAppUITests — UI tests (XCUITest)
+#
+# Source globs (`path: OakApp`, etc.) pull in whole directories so files added by
+# later phases are picked up automatically on regeneration.
+
+name: OakApp
+
+options:
+  bundleIdPrefix: us.optiwise.oak
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+# Project-wide build settings inherited by every target.
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # Swift 6 language mode already makes data-race violations errors; setting
+    # complete checking explicitly documents the intent (M-CON-1, conventions.md).
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    # iPhone only, v1 (M-CON-2).
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+  configs:
+    Debug:
+      # Debug builds target staging (BaseURL.swift switches on OAK_STAGING).
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG OAK_STAGING"
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      # Required for `@testable import OakApp` from the unit-test target (the
+      # scheme's Test action runs in Debug). XcodeGen does not set this by default.
+      ENABLE_TESTABILITY: "YES"
+    Release:
+      # Release builds target production (no OAK_STAGING flag → BaseURL.production).
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  OakApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: OakApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak
+        INFOPLIST_FILE: OakApp/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: "YES"
+        SUPPORTS_MACCATALYST: "NO"
+
+  OakAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      # Swift sources (and anything else) under the test target. The committed
+      # fixture DATA files are added to a Copy Bundle Resources phase by the entry
+      # below, so they're excluded here to avoid a duplicate file reference.
+      - path: OakAppTests
+        excludes:
+          - "Fixtures/*.json"
+          - "Fixtures/*.sse"
+      # Wire/SSE fixtures → Copy Bundle Resources, so Fixtures.load(_:) can read
+      # them from the test bundle at runtime (testing-strategy.md). Fixtures.swift
+      # is a Swift source and is picked up by the entry above, not here.
+      - path: OakAppTests/Fixtures
+        buildPhase: resources
+        includes:
+          - "*.json"
+          - "*.sse"
+    # Declaring the app dependency makes XcodeGen wire TEST_HOST + BUNDLE_LOADER.
+    dependencies:
+      - target: OakApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak.OakAppTests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  OakAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: OakAppUITests
+    # For a UI-test bundle XcodeGen sets TEST_TARGET_NAME from this dependency.
+    dependencies:
+      - target: OakApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak.OakAppUITests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+# Explicit shared scheme. `xcodebuild -scheme OakApp` resolves; the Test action
+# runs BOTH suites, and `-only-testing:OakAppTests` narrows to the unit suite.
+schemes:
+  OakApp:
+    build:
+      targets:
+        OakApp: all
+        OakAppTests: [test]
+        OakAppUITests: [test]
+      parallelizeBuild: true
+      buildImplicitDependencies: true
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - OakAppTests
+        - OakAppUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

@@ -1,0 +1,20 @@
+{
+  "status": "insufficient_data",
+  "answer_markdown": "I don't have catch-location data for this species in Scarlet/Violet.",
+  "reasoning_markdown": "PokeAPI records no encounter data for the Gen 9 titles, and no fallback source covers it, so I can't give obtain locations.",
+  "citations": [
+    {
+      "source": "get_encounters",
+      "detail": "No encounter records returned for this species."
+    }
+  ],
+  "inferences": [],
+  "generation_basis": {
+    "generation": "Gen 9 (Scarlet/Violet)",
+    "fallback": true,
+    "note": "Encounter coverage extends only up to Sword/Shield."
+  },
+  "uncertainty_flags": [
+    "No Gen 9 encounter data is available from PokeAPI."
+  ]
+}

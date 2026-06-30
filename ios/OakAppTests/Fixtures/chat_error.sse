@@ -1,0 +1,6 @@
+event: tool_activity
+data: {"tool":"resolve_entity","label":"Resolving \"Garchomp\""}
+
+event: error
+data: {"code":"model_unavailable","message":"The model provider is temporarily unavailable.","status":503}
+

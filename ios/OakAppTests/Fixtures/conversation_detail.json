@@ -1,0 +1,43 @@
+{
+  "id": "conv_1",
+  "title": "Fastest Dragons in Scarlet/Violet",
+  "format": "scarlet-violet",
+  "pinned": true,
+  "active_team_id": "team_abc123",
+  "turns": [
+    {
+      "id": "msg_1",
+      "role": "user",
+      "content": "What are the fastest Dragon-types in Scarlet/Violet?"
+    },
+    {
+      "id": "msg_2",
+      "role": "assistant",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "The fastest Dragon-type in Scarlet/Violet is **Dragapult** at base 142 Speed.",
+        "reasoning_markdown": "I queried Dragon-type Pokémon sorted by Speed descending and read the top row.",
+        "citations": [
+          {
+            "source": "query_pokedex",
+            "detail": "Dragon-type Speed ranking."
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "Gen 9 (Scarlet/Violet)",
+          "fallback": false
+        },
+        "subjects": [
+          {
+            "name": "Dragapult",
+            "dex_number": 887,
+            "sprite_url": "https://example.test/sprites/dragapult.png",
+            "types": ["dragon", "ghost"],
+            "is_fallback": false
+          }
+        ]
+      }
+    }
+  ]
+}

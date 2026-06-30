@@ -39,7 +39,14 @@ import "server-only";
 import { eq, lte, sql } from "drizzle-orm";
 
 import { db } from "@/data/db";
-import { account, auth_session, otp_code } from "@/data/schema";
+import {
+  account,
+  auth_session,
+  conversation,
+  conversation_message,
+  otp_code,
+  team,
+} from "@/data/schema";
 
 // ---------------------------------------------------------------------------
 // Row shapes (camelCase Interface-Definitions types — § Interface Definitions)
@@ -253,4 +260,59 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
     .where(lte(auth_session.expires_at, now))
     .returning({ id: auth_session.id });
   return deleted.length;
+}
+
+// ---------------------------------------------------------------------------
+// account deletion (cascade)
+// ---------------------------------------------------------------------------
+
+/**
+ * Permanently delete an account and EVERYTHING scoped to it
+ * (iphone-app M-ACCT-US-6 / M-BR-ACCT-6 "delete my account and all my data").
+ *
+ * FKs in this schema are LOGICAL (plain indexed columns, no physical
+ * `ON DELETE CASCADE` — see schema.ts), so every dependent row is removed
+ * explicitly inside ONE transaction, in FK-safe (child-before-parent) order:
+ *
+ *   conversation_message → conversation → team → auth_session   (all by account_id)
+ *   → otp_code (by the account's email)  → account              (by id)
+ *
+ * `otp_code` carries no `account_id` (it is keyed by email and can exist before
+ * the account does, BR-A5), so its row is located via the account's email read
+ * inside the same transaction.
+ *
+ * STRICTLY account-scoped (BR-A9 isolation): every delete filters on this
+ * `accountId` / its email, so another account's rows are never touched.
+ * Idempotent: deleting an absent account (no matching rows, no email) is a clean
+ * no-op, never an error — matching the repo's other deletes (deleteConversation,
+ * deleteTeam, deleteSessionByTokenHash).
+ */
+export async function deleteAccount(accountId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(conversation_message)
+      .where(eq(conversation_message.account_id, accountId));
+    await tx
+      .delete(conversation)
+      .where(eq(conversation.account_id, accountId));
+    await tx.delete(team).where(eq(team.account_id, accountId));
+    await tx
+      .delete(auth_session)
+      .where(eq(auth_session.account_id, accountId));
+
+    // otp_code is keyed by email, not account_id — resolve the email from the
+    // (about-to-be-deleted) account row in the same transaction. If the account
+    // does not exist there is nothing to clear (idempotent no-op).
+    const rows = await tx
+      .select({ email: account.email })
+      .from(account)
+      .where(eq(account.id, accountId))
+      .limit(1);
+    const email = rows[0]?.email;
+    if (email !== undefined) {
+      await tx.delete(otp_code).where(eq(otp_code.email, email));
+    }
+
+    await tx.delete(account).where(eq(account.id, accountId));
+  });
 }

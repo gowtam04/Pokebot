@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "kind": "move",
+  "format": "champions",
+  "resolved": { "slug": "earthquake", "display_name": "Earthquake" },
+  "generation": "Champions — Regulation M-B",
+  "is_fallback": false,
+  "citations": [
+    { "source": "move/earthquake", "detail": "Power, accuracy, PP." }
+  ],
+  "data": {
+    "display_name": "Earthquake",
+    "type": "ground",
+    "damage_class": "physical",
+    "power": 100,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "target": "all-other-pokemon",
+    "effect_short": "Hits all adjacent Pokémon.",
+    "effect_full": "Inflicts regular damage and hits all adjacent Pokémon."
+  }
+}

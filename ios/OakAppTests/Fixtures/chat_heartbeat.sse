@@ -1,0 +1,20 @@
+: keep-alive
+
+event: tool_activity
+data: {"tool":"query_pokedex","label":"Searching the Pokédex"}
+
+: keep-alive
+
+event: answer_start
+data: {}
+
+: keep-alive
+
+event: answer_delta
+data: {"text":"Here are the fastest Dragon-types."}
+
+: keep-alive
+
+event: answer
+data: {"answer":{"status":"answered","answer_markdown":"Here are the fastest Dragon-types.","reasoning_markdown":"I queried Dragon-type Pokémon sorted by Speed descending.","citations":[{"source":"query_pokedex","detail":"Dragon-type Speed ranking."}],"inferences":[],"generation_basis":{"generation":"Gen 9 (Scarlet/Violet)","fallback":false}}}
+

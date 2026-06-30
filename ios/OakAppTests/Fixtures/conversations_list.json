@@ -1,0 +1,18 @@
+{
+  "conversations": [
+    {
+      "id": "conv_1",
+      "title": "Fastest Dragons in Scarlet/Violet",
+      "format": "scarlet-violet",
+      "pinned": true,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_2",
+      "title": "Champions team ideas",
+      "format": "champions",
+      "pinned": false,
+      "updatedAt": 1719500000000
+    }
+  ]
+}

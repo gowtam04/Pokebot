@@ -31,7 +31,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/data/db";
@@ -208,4 +208,24 @@ export async function clearSessionCookie(): Promise<void> {
 export async function readSessionCookie(): Promise<string | undefined> {
   const store = await cookies();
   return store.get(SESSION_COOKIE)?.value;
+}
+
+/**
+ * Read the raw session token from the request's `Authorization: Bearer <token>`
+ * header, or `undefined` when the header is absent or not a Bearer credential
+ * (iphone-app ADR-2). The native client carries the SAME opaque token here that
+ * the cookie would hold, so {@link resolveSessionToken} hashes + looks it up
+ * identically — no separate token type or lookup path. Purely additive: the
+ * cookie remains the primary credential and is unaffected (the scheme match is
+ * case-insensitive per RFC 6750).
+ */
+export async function readBearerToken(): Promise<string | undefined> {
+  const store = await headers();
+  const header = store.get("authorization");
+  if (!header) {
+    return undefined;
+  }
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  const token = match?.[1]?.trim();
+  return token ? token : undefined;
 }

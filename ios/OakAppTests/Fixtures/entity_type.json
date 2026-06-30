@@ -1,0 +1,26 @@
+{
+  "status": "ok",
+  "kind": "type",
+  "format": "scarlet-violet",
+  "resolved": { "slug": "ground", "display_name": "Ground" },
+  "generation": "Gen 9 (Scarlet/Violet)",
+  "is_fallback": false,
+  "citations": [
+    { "source": "type/ground", "detail": "Type chart." }
+  ],
+  "data": {
+    "types": ["ground"],
+    "offensive": {
+      "super_effective_against": ["fire", "electric", "poison", "rock", "steel"],
+      "not_very_effective_against": ["bug", "grass"],
+      "no_effect_against": ["flying"]
+    },
+    "defensive": {
+      "weak_to": ["water", "grass", "ice"],
+      "resists": ["poison", "rock"],
+      "immune_to": ["electric"],
+      "quad_weak_to": [],
+      "quad_resists": []
+    }
+  }
+}

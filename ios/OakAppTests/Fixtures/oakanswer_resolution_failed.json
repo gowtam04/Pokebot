@@ -1,0 +1,12 @@
+{
+  "status": "resolution_failed",
+  "answer_markdown": "I couldn't find a Pokémon named \"Garchom\" in the Scarlet/Violet index.",
+  "reasoning_markdown": "Entity resolution returned no exact or close fuzzy match for that query, so I can't ground an answer.",
+  "citations": [],
+  "inferences": [],
+  "generation_basis": {
+    "generation": "Gen 9 (Scarlet/Violet)",
+    "fallback": false
+  },
+  "suggestions": ["Garchomp", "Gabite", "Gible"]
+}

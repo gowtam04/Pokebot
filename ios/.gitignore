@@ -1,0 +1,23 @@
+# Xcode / build artifacts
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Generated Xcode project — produced by `xcodegen generate` from project.yml,
+# which is the source of truth. Regenerate locally / in CI; never commit it.
+*.xcodeproj
+*.xcworkspace
+
+# Swift Package Manager (none today; here for when SPM is used)
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store

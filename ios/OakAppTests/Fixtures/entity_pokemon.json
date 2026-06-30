@@ -1,0 +1,51 @@
+{
+  "status": "ok",
+  "kind": "pokemon",
+  "format": "scarlet-violet",
+  "resolved": { "slug": "garchomp", "display_name": "Garchomp" },
+  "generation": "Gen 9 (Scarlet/Violet)",
+  "is_fallback": false,
+  "citations": [
+    { "source": "pokemon/garchomp", "detail": "Base stats and typing." }
+  ],
+  "data": {
+    "display_name": "Garchomp",
+    "national_dex_number": 445,
+    "types": ["dragon", "ground"],
+    "abilities": { "slot1": "sand-veil", "hidden": "rough-skin" },
+    "base_stats": {
+      "hp": 108,
+      "attack": 130,
+      "defense": 95,
+      "special_attack": 80,
+      "special_defense": 85,
+      "speed": 102
+    },
+    "base_stat_total": 600,
+    "sprite_url": "https://example.test/sprites/garchomp.png",
+    "artwork_url": "https://example.test/artwork/garchomp.png",
+    "forms": ["garchomp"],
+    "is_gen9_native": true,
+    "matchups": {
+      "weak_to": ["ice", "dragon", "fairy"],
+      "resists": ["rock", "fire", "poison", "electric"],
+      "immune_to": ["electric"],
+      "quad_weak_to": ["ice"],
+      "quad_resists": []
+    },
+    "movepool": [
+      {
+        "method": "level-up",
+        "moves": [
+          { "slug": "dragon-claw", "display_name": "Dragon Claw", "type": "dragon" }
+        ]
+      },
+      {
+        "method": "machine",
+        "moves": [
+          { "slug": "earthquake", "display_name": "Earthquake", "type": "ground" }
+        ]
+      }
+    ]
+  }
+}

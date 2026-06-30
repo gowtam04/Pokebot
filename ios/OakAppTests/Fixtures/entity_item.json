@@ -1,0 +1,21 @@
+{
+  "status": "ok",
+  "kind": "item",
+  "format": "scarlet-violet",
+  "resolved": { "slug": "leftovers", "display_name": "Leftovers" },
+  "generation": "Gen 9 (Scarlet/Violet)",
+  "is_fallback": true,
+  "fallback_note": "No Gen 9 entry; showing the latest available data.",
+  "citations": [
+    { "source": "item/leftovers", "detail": "Held item effect." }
+  ],
+  "data": {
+    "display_name": "Leftovers",
+    "effect_short": "Restores HP each turn.",
+    "effect_full": "The holder restores 1/16 of its max HP at the end of each turn.",
+    "held_by_wild": [
+      { "pokemon": "munchlax", "rarity_percent": 50 },
+      { "pokemon": "snorlax", "rarity_percent": 12.5 }
+    ]
+  }
+}

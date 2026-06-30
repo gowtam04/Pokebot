@@ -101,7 +101,13 @@ const cookieMock = vi.hoisted(() => {
   return { ctx, store };
 });
 
-vi.mock("next/headers", () => ({ cookies: async () => cookieMock.store }));
+// `headers()` is consulted only by the Bearer fallback in getCurrentAccount
+// (current-user.ts); this checkpoint drives auth entirely through the cookie jar,
+// so an empty header store is sufficient (Authorization absent ⇒ no bearer path).
+vi.mock("next/headers", () => ({
+  cookies: async () => cookieMock.store,
+  headers: async () => new Headers(),
+}));
 
 import {
   createPgSchema,
@@ -320,7 +326,14 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
       ),
     );
     expect(verifyCap.status).toBe(200);
-    expect(bodyJson(verifyCap)).toEqual({ ok: true, email, created: true });
+    // The body now ALSO returns the raw token + expiry for the native Bearer
+    // client (ADR-2). The token here equals the cookie token asserted below.
+    const verifyBody = bodyJson(verifyCap);
+    expect(verifyBody.ok).toBe(true);
+    expect(verifyBody.email).toBe(email);
+    expect(verifyBody.created).toBe(true);
+    expect(verifyBody.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(typeof verifyBody.expiresAt).toBe("number");
 
     expect(verifyCap.setCookies).toHaveLength(1);
     const setCookie = verifyCap.setCookies[0]!;
@@ -336,6 +349,9 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
       .slice("oak_session=".length)
       .split(";")[0]!;
     expect(sessionToken).toMatch(/^[0-9a-f]{64}$/);
+    // The body token IS the cookie token (one raw token, two carriers): the
+    // native client can use either; web keeps using the cookie.
+    expect(verifyBody.token).toBe(sessionToken);
     // The session row is real and exactly one.
     expect(await sessionCount()).toBe(1);
     // Cookie was threaded into the browser jar.
@@ -371,10 +387,14 @@ describe("auth-backend-e2e (Phase 4 checkpoint)", () => {
     expect(bodyJson(meReplay)).toEqual({ signedIn: false });
     browser.delete("oak_session");
 
-    // --- no raw code / token / secret in any response body or header --------
-    const secrets = [code, sessionToken, env.AUTH_SECRET];
-    for (const cap of [reqCap, verifyCap, meIn, signoutCap, meOut, meReplay]) {
-      assertNoSecretLeak(cap, secrets);
+    // --- no raw code / token / secret leaks where it must not appear --------
+    // verify deliberately delivers the session token in BOTH its Set-Cookie and
+    // (for the native Bearer client, ADR-2) its JSON body — both are legitimate,
+    // so the token is excluded from verify's leak check. The code + AUTH_SECRET
+    // must still never appear; and the token must not leak from any OTHER call.
+    assertNoSecretLeak(verifyCap, [code, env.AUTH_SECRET]);
+    for (const cap of [reqCap, meIn, signoutCap, meOut, meReplay]) {
+      assertNoSecretLeak(cap, [code, sessionToken, env.AUTH_SECRET]);
     }
   });
 

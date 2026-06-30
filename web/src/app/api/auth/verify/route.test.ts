@@ -71,10 +71,14 @@ describe("POST /api/auth/verify", () => {
     );
 
     expect(res.status).toBe(200);
+    // The body now ALSO carries the raw token + expiry (ADR-2): the native client
+    // stores them in the Keychain and sends the token as `Authorization: Bearer`.
     expect(await res.json()).toEqual({
       ok: true,
       email: "ash@pallet.town",
       created: true,
+      token: "raw-token-abc",
+      expiresAt: 2_000_000_000_000,
     });
     // The Set-Cookie step: session issued with the raw token + its expiry.
     expect(sess.setSessionCookie).toHaveBeenCalledWith(
@@ -105,6 +109,8 @@ describe("POST /api/auth/verify", () => {
       ok: true,
       email: "ash@pallet.town",
       created: false,
+      token: "tok",
+      expiresAt: 2_000_000_000_000,
     });
     expect(sess.setSessionCookie).toHaveBeenCalledTimes(1);
   });

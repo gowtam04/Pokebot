@@ -1,0 +1,18 @@
+event: tool_activity
+data: {"tool":"resolve_entity","label":"Resolving \"Garchomp\""}
+
+event: tool_activity
+data: {"tool":"get_pokemon","label":"Looking up Garchomp"}
+
+event: answer_start
+data: {}
+
+event: answer_delta
+data: {"text":"**Garchomp** is a Dragon/Ground "}
+
+event: answer_delta
+data: {"text":"pseudo-legendary with a base stat total of 600."}
+
+event: answer
+data: {"answer":{"status":"answered","answer_markdown":"**Garchomp** is a Dragon/Ground pseudo-legendary with a base stat total of 600.","reasoning_markdown":"I resolved Garchomp and read its base stats and typing.","citations":[{"source":"get_pokemon/garchomp","detail":"Base stats and typing."}],"inferences":[],"generation_basis":{"generation":"Gen 9 (Scarlet/Violet)","fallback":false},"subjects":[{"name":"Garchomp","dex_number":445,"sprite_url":"https://example.test/sprites/garchomp.png","types":["dragon","ground"],"is_fallback":false}]}}
+

@@ -54,10 +54,11 @@ afterAll(async () => {
 });
 
 // One migrated schema for the whole file (the singleton db is captured once);
-// reset the three tables between tests so each starts clean.
+// reset the tables between tests so each starts clean. The chat-history + team
+// tables are included because deleteAccount cascades into them.
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account, auth_session, otp_code RESTART IDENTITY`,
+    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team RESTART IDENTITY`,
   );
 });
 
@@ -292,5 +293,147 @@ describe("auth_session", () => {
     const now = 1_000_000;
     await repo.insertSession(session({ expiresAt: now + 5_000 }));
     expect(await repo.deleteExpiredSessions(now)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteAccount — full cascade across every account-scoped table in one txn
+// (iphone-app M-ACCT-US-6 / M-BR-ACCT-6; BR-A9 isolation)
+// ---------------------------------------------------------------------------
+
+describe("deleteAccount (cascade)", () => {
+  /** Read the row count for an aggregate `count(*)::int AS n` result. */
+  function n(res: { rows: unknown[] }): number {
+    return (res.rows[0] as { n: number }).n;
+  }
+
+  /** A full per-account row count across the six cascade tables. */
+  async function snapshot(accountId: string, email: string) {
+    return {
+      account: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM account WHERE id = ${accountId}`,
+        ),
+      ),
+      session: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM auth_session WHERE account_id = ${accountId}`,
+        ),
+      ),
+      otp: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM otp_code WHERE email = ${email}`,
+        ),
+      ),
+      conversation: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM conversation WHERE account_id = ${accountId}`,
+        ),
+      ),
+      message: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM conversation_message WHERE account_id = ${accountId}`,
+        ),
+      ),
+      team: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM team WHERE account_id = ${accountId}`,
+        ),
+      ),
+    };
+  }
+
+  /** Seed an account plus one row in every cascade table (2 messages). */
+  async function seedFullAccount(email: string) {
+    const accountId = randomUUID();
+    const t = 1_700_000_000_000;
+    await repo.createAccount(email, accountId, t);
+    await repo.insertSession({
+      id: randomUUID(),
+      tokenHash: `th-${randomUUID()}`,
+      accountId,
+      createdAt: t,
+      expiresAt: t + 30 * 24 * 60 * 60_000,
+    });
+    await repo.upsertOtpCode({
+      email,
+      codeHash: `ch-${randomUUID()}`,
+      createdAt: t,
+      expiresAt: t + 600_000,
+    });
+    const teamId = randomUUID();
+    await fix.db.execute(
+      sql`INSERT INTO team (id, account_id, format, name, members, created_at, updated_at)
+          VALUES (${teamId}, ${accountId}, 'scarlet-violet', 'My Team', '[]', ${t}, ${t})`,
+    );
+    const convId = randomUUID();
+    await fix.db.execute(
+      sql`INSERT INTO conversation (id, account_id, title, format, pinned, created_at, updated_at)
+          VALUES (${convId}, ${accountId}, 'Chat', 'scarlet-violet', 0, ${t}, ${t})`,
+    );
+    await fix.db.execute(
+      sql`INSERT INTO conversation_message (id, conversation_id, account_id, seq, role, text_content, answer_json, created_at)
+          VALUES (${randomUUID()}, ${convId}, ${accountId}, 0, 'user', 'hi', NULL, ${t})`,
+    );
+    await fix.db.execute(
+      sql`INSERT INTO conversation_message (id, conversation_id, account_id, seq, role, text_content, answer_json, created_at)
+          VALUES (${randomUUID()}, ${convId}, ${accountId}, 1, 'assistant', 'hello', '{}', ${t})`,
+    );
+    return { accountId, email };
+  }
+
+  const FULL = {
+    account: 1,
+    session: 1,
+    otp: 1,
+    conversation: 1,
+    message: 2,
+    team: 1,
+  };
+  const EMPTY = {
+    account: 0,
+    session: 0,
+    otp: 0,
+    conversation: 0,
+    message: 0,
+    team: 0,
+  };
+
+  it("removes EVERY account-scoped row across all six tables", async () => {
+    const { accountId, email } = await seedFullAccount(EMAIL);
+    expect(await snapshot(accountId, email)).toEqual(FULL);
+
+    await repo.deleteAccount(accountId);
+
+    expect(await snapshot(accountId, email)).toEqual(EMPTY);
+  });
+
+  it("never deletes another account's rows (BR-A9 isolation)", async () => {
+    const target = await seedFullAccount("ash@pallet.town");
+    const other = await seedFullAccount("misty@cerulean.gym");
+
+    await repo.deleteAccount(target.accountId);
+
+    // Target wiped; the OTHER account is wholly intact.
+    expect(await snapshot(target.accountId, target.email)).toEqual(EMPTY);
+    expect(await snapshot(other.accountId, other.email)).toEqual(FULL);
+  });
+
+  it("is idempotent — a second delete and an unknown id are clean no-ops", async () => {
+    const { accountId, email } = await seedFullAccount(EMAIL);
+    await repo.deleteAccount(accountId);
+
+    await expect(repo.deleteAccount(accountId)).resolves.toBeUndefined();
+    await expect(repo.deleteAccount(randomUUID())).resolves.toBeUndefined();
+    expect(await snapshot(accountId, email)).toEqual(EMPTY);
+  });
+
+  it("deletes an account that has no child rows (FK-safe, children are no-ops)", async () => {
+    const accountId = randomUUID();
+    await repo.createAccount(EMAIL, accountId, 1);
+
+    await repo.deleteAccount(accountId);
+
+    expect(await repo.findAccountByEmail(EMAIL)).toBeNull();
   });
 });

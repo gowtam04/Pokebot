@@ -1,0 +1,42 @@
+# Oak iOS — CI (build + unit tests on the simulator)
+#
+# NOTE: GitHub only auto-runs workflows under `.github/workflows/`. This file is
+# kept under `ios/ci/` per the iOS project layout; copy or symlink it into
+# `.github/workflows/ios.yml` (or have a top-level workflow `uses:` it) to make it
+# fire on PRs. It is a complete, valid Actions workflow as written.
+
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+
+jobs:
+  build-test:
+    name: Build & unit test (iPhone 16 simulator)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build & run unit tests
+        run: |
+          xcodebuild test \
+            -scheme OakApp \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:OakAppTests \
+            CODE_SIGNING_ALLOWED=NO

@@ -10,7 +10,7 @@
  * on-screen thread survives sign-in (BR-A10/BR-A11). Result → HTTP:
  *
  *   - { ok: true, account, token, expiresAt, created }
- *                                  → 200 { ok: true, email, created } + Set-Cookie
+ *                → 200 { ok: true, email, created, token, expiresAt } + Set-Cookie
  *   - invalid_code (attemptsRemaining) → 400 invalid_code + attemptsRemaining (AC-2.5)
  *   - invalid_or_expired               → 400 invalid_or_expired             (AC-2.6)
  *   - too_many_attempts                → 400 too_many_attempts              (BR-A4)
@@ -53,10 +53,17 @@ export async function POST(req: Request): Promise<Response> {
     // Secure-in-prod, 30-day window (BR-A7). `created` tells the client whether
     // this was a first-time signup (AC-2.3) or a returning login (AC-2.4).
     await setSessionCookie(result.token, result.expiresAt);
+    // The raw token is ALSO returned in the body (additive — iphone-app ADR-2):
+    // the native client carries it in `Authorization: Bearer` and stores it in
+    // the Keychain instead of relying on the cookie. Web is unaffected — it keeps
+    // using the httpOnly cookie set above and ignores the body token. `expiresAt`
+    // lets the client mirror the server-side 30-day window without guessing.
     return json(200, {
       ok: true,
       email: result.account.email,
       created: result.created,
+      token: result.token,
+      expiresAt: result.expiresAt,
     });
   }
 

@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "kind": "ability",
+  "format": "scarlet-violet",
+  "resolved": { "slug": "rough-skin", "display_name": "Rough Skin" },
+  "generation": "Gen 9 (Scarlet/Violet)",
+  "is_fallback": false,
+  "citations": [
+    { "source": "ability/rough-skin", "detail": "Effect text." }
+  ],
+  "data": {
+    "display_name": "Rough Skin",
+    "effect_short": "Damages attackers on contact.",
+    "effect_full": "Damages attacking Pokémon for 1/8 of their max HP on contact.",
+    "learned_by": [
+      { "slug": "garchomp", "display_name": "Garchomp" },
+      { "slug": "gible", "display_name": "Gible" }
+    ]
+  }
+}
