@@ -433,7 +433,14 @@ export default function Home() {
               controlsId={SIDEBAR_ID}
             />
           )}
-          <h1 className="chat-page__title">Oak</h1>
+          <button
+            type="button"
+            className="chat-page__title"
+            aria-label="Oak — reload"
+            onClick={() => window.location.reload()}
+          >
+            Oak
+          </button>
         </div>
         <div className="chat-page__header-cluster" ref={headerClusterRef}>
           {/* Collapsible group: inline on desktop, a popover under the gear on

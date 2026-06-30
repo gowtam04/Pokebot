@@ -321,12 +321,22 @@
   align-items: center;
   gap: var(--space-3);
   margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
   font-family: var(--display);
   font-weight: 600;
   font-size: 1.75rem;
   line-height: 1.2;
   letter-spacing: 0.01em;
   color: var(--neutral-0);
+  text-decoration: none;
+  cursor: pointer;
+}
+.chat-page__title:hover,
+.chat-page__title:focus-visible {
+  opacity: 0.85;
 }
 .chat-page__title::before {
   content: "";
