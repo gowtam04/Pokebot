@@ -1,6 +1,8 @@
 import type { SpriteCardProps } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
+import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
+import { pokeApiSprite } from "@/lib/sprites";
 
 /**
  * SpriteCard — renders one entry from `subjects[]`: sprite image, display
@@ -11,8 +13,9 @@ import EntityLink from "@/components/artifact/EntityLink";
  * type's artifact (B-4, AV-US-1) via `EntityLink` — whose no-op default keeps the
  * card fully renderable in isolation tests with no viewer provider mounted (TD-5).
  *
- * Sprite URL comes directly from the agent payload (PokeAPI CDN). Visual layout
- * deferred to `frontend-design`.
+ * The sprite URL comes from the answer payload (PokeAPI CDN for base forms, the
+ * Showdown CDN for alternate forms); `SpriteImg` falls back to base-species art
+ * by dex number if it 404s. Visual layout deferred to `frontend-design`.
  */
 export default function SpriteCard({ subject }: SpriteCardProps) {
   const {
@@ -32,10 +35,10 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
         className="sprite-card__sprite-link"
         testid="sprite-card-sprite-link"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <SpriteImg
           className="sprite-card__sprite"
           src={sprite_url}
+          fallbackSrc={dex_number != null ? pokeApiSprite(dex_number) : undefined}
           alt={name}
           width={96}
           height={96}

@@ -22,6 +22,12 @@ import {
   type FormatSource,
   type PkmnSpecies,
 } from "@/data/pkmn/gen-provider";
+import {
+  pokeApiArtwork,
+  pokeApiSprite,
+  showdownAniSprite,
+  showdownSpriteId,
+} from "@/lib/sprites";
 
 // ---------------------------------------------------------------------------
 // PokemonRow — mirrors the `pokemon` table columns in src/data/schema.ts
@@ -78,18 +84,23 @@ function makeDisplayName(speciesSlug: string, formSlug: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sprite URLs — derived from the national dex number (PokeAPI sprite CDN).
-// Per-forme art is not available from @pkmn; forms show base-species art (v1).
+// Sprite URLs (helpers in @/lib/sprites).
+//   - BASE forms → PokeAPI sprite CDN, keyed by national dex number.
+//   - ALT forms  → Pokémon Showdown animated CDN, keyed by the form's spriteid.
+//     A form shares its base species' dex number, so the dex-keyed URL would
+//     otherwise show base-species art. @pkmn doesn't expose `spriteid`, so it's
+//     recomputed from baseSpecies + forme (the divergence from `slugify` is why
+//     we can't reuse the row `id`).
 // ---------------------------------------------------------------------------
 
-const SPRITE_BASE =
-  "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
-
-function spriteUrl(num: number): string {
-  return `${SPRITE_BASE}/${num}.png`;
-}
-function artworkUrl(num: number): string {
-  return `${SPRITE_BASE}/other/official-artwork/${num}.png`;
+/**
+ * Showdown animated-sprite URL for an alternate form, or null for a base form
+ * (which keeps its dex-number PokeAPI URL). Drives BOTH sprite_url and
+ * artwork_url so the answer card and the entity artifact agree.
+ */
+function formeSpriteUrl(s: PkmnSpecies): string | null {
+  if (!s.forme) return null;
+  return showdownAniSprite(showdownSpriteId(s.baseSpecies || s.name, s.forme));
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +111,7 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
   const id = slugFor(s.id, s.name);
   const species_name = slugify(s.baseSpecies || s.name);
   const form_name = s.forme ? slugify(s.forme) : null;
+  const formeUrl = formeSpriteUrl(s);
 
   const types = s.types ?? [];
   const type1 = types[0] ? slugify(types[0]) : "normal";
@@ -147,8 +159,8 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     stat_special_defense,
     stat_speed,
     base_stat_total,
-    sprite_url: spriteUrl(s.num),
-    artwork_url: artworkUrl(s.num),
+    sprite_url: formeUrl ?? pokeApiSprite(s.num),
+    artwork_url: formeUrl ?? pokeApiArtwork(s.num),
     generation: champions ? "champions" : "gen-9",
     is_gen9_native: native ? 1 : 0,
     source_generation: native ? null : `gen-${s.gen}`,

@@ -85,6 +85,37 @@ describe("buildPokemonRow — Garchomp (stats + types + BST)", () => {
   });
 });
 
+describe("buildPokemonRow — alternate forms use the Showdown spriteid CDN", () => {
+  it("keys a Mega's sprite/artwork on its spriteid, not the shared dex number", () => {
+    // Charizard-Mega-X shares national dex #6 with base Charizard, so a
+    // dex-number URL would render base Charizard. A multi-token forme also
+    // exercises the slugify divergence: id "charizard-mega-x" vs spriteid
+    // "charizard-megax".
+    const r = row("charizardmegax");
+    expect(r.form_name).toBe("mega-x");
+    expect(r.national_dex_number).toBe(6);
+    expect(r.sprite_url).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+    );
+    expect(r.artwork_url).toBe(r.sprite_url);
+  });
+
+  it("keys a regional form on its spriteid", () => {
+    const r = row("ninetalesalola");
+    expect(r.sprite_url).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/ninetales-alola.gif",
+    );
+  });
+
+  it("leaves the base form on the dex-number PokeAPI URL (unchanged)", () => {
+    const r = row("ninetales");
+    expect(r.form_name).toBeNull();
+    expect(r.sprite_url).toBe(
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/38.png",
+    );
+  });
+});
+
 describe("buildPokemonRow — Farigiraf (3 abilities incl. armor-tail)", () => {
   const r = row("farigiraf");
 
@@ -220,5 +251,18 @@ describe("buildPokedex — D8 forms collapse", () => {
   it("dedupes by id within the roster", () => {
     const rows = buildPokedex({ format: SV, roster: [base, base] });
     expect(rows).toHaveLength(1);
+  });
+
+  it("gives the base the dex-number URL and the forme the Showdown spriteid URL", () => {
+    const rows = buildPokedex({ format: SV, roster: [base, battle] });
+    const b = rows.find((r) => r.id === "fakemon")!;
+    const f = rows.find((r) => r.id === "fakemon-blaze")!;
+    expect(b.sprite_url).toBe(
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/9999.png",
+    );
+    expect(f.sprite_url).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/fakemon-blaze.gif",
+    );
+    expect(f.artwork_url).toBe(f.sprite_url);
   });
 });
