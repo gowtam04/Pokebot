@@ -474,6 +474,62 @@ export const getEncountersOutputSchema = z.union([
 ]);
 
 // ===========================================================================
+// T15 — get_usage_stats (championsbattledata.com live competitive usage)
+//
+// CHAMPIONS MODE ONLY (the mirror of get_encounters' standard-only gate). Fetches
+// live usage — most-used moves/items/abilities/natures/stat-spreads/teammates,
+// each with a usage % — from championsbattledata.com AT REQUEST TIME (the only
+// network-at-request-time tool; everything else reads the offline @pkmn index).
+// The data is community-maintained, time-varying, and fan-sourced, so answers
+// MUST cite the source + season + `fetched_at` and flag uncertainty. A standard-
+// mode turn short-circuits to `not_available_in_standard`. See
+// get-usage-stats.tool.ts + src/server/champions-usage/usage-client.ts.
+// ===========================================================================
+
+/** Battle format the usage ladder is keyed by (the API uses "Doubles"/"Singles"). */
+export const usageFormatSchema = z.enum(["singles", "doubles"]);
+
+export const getUsageStatsInputSchema = z.object({
+  name: z.string(),
+  format: usageFormatSchema.default("doubles"),
+});
+
+/** One ranked usage row within a category (e.g. a move used 90.3% of the time). */
+export const usageEntrySchema = z.object({
+  name: z.string(),
+  /** Usage percentage as a number, e.g. 90.3 (parsed from the API's "90.3%"). */
+  pct: z.number().nullable(),
+  rank: z.number().int(),
+});
+
+export const usageStatsDetailSchema = z.object({
+  found: z.literal(true),
+  name: z.string(),
+  /** The championsbattledata `saved_name` actually queried (form-specific). */
+  saved_name: z.string(),
+  format: usageFormatSchema,
+  /** The API season label this snapshot is from, e.g. "Season M-3". */
+  season: z.string(),
+  /** Epoch-ms when Oak fetched this snapshot (the API carries no timestamp). */
+  fetched_at: z.number().int(),
+  moves: z.array(usageEntrySchema),
+  items: z.array(usageEntrySchema),
+  abilities: z.array(usageEntrySchema),
+  natures: z.array(usageEntrySchema),
+  spreads: z.array(usageEntrySchema),
+  teammates: z.array(usageEntrySchema),
+  source_url: z.string(),
+  attribution: z.string(),
+});
+
+export const getUsageStatsOutputSchema = z.union([
+  usageStatsDetailSchema,
+  notFoundSchema,
+  upstreamUnavailableSchema,
+  z.object({ error: z.literal("not_available_in_standard") }),
+]);
+
+// ===========================================================================
 // T9 — compute_stat
 // ===========================================================================
 
@@ -783,6 +839,11 @@ export type EncounterLocation = z.infer<typeof encounterLocationSchema>;
 export type EncounterGroup = z.infer<typeof encounterGroupSchema>;
 export type EncounterDetail = z.infer<typeof encounterDetailSchema>;
 export type GetEncountersOutput = z.infer<typeof getEncountersOutputSchema>;
+export type UsageFormat = z.infer<typeof usageFormatSchema>;
+export type GetUsageStatsInput = z.infer<typeof getUsageStatsInputSchema>;
+export type UsageEntry = z.infer<typeof usageEntrySchema>;
+export type UsageStatsDetail = z.infer<typeof usageStatsDetailSchema>;
+export type GetUsageStatsOutput = z.infer<typeof getUsageStatsOutputSchema>;
 export type ComputeStatInput = z.infer<typeof computeStatInputSchema>;
 export type ComputeStatOutput = z.infer<typeof computeStatOutputSchema>;
 export type EstimateDamageInput = z.infer<typeof estimateDamageInputSchema>;
@@ -860,13 +921,15 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   save_team: toJsonSchema(saveTeamInputSchema),
   // T14 — catch-location / obtain-method data (standard mode only).
   get_encounters: toJsonSchema(getEncountersInputSchema),
+  // T15 — live Champions competitive usage (championsbattledata.com; champions mode only).
+  get_usage_stats: toJsonSchema(getUsageStatsInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
 export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T12), in order. */
+/** Canonical tool name list (T1..T15), in order. */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -882,6 +945,7 @@ export const TOOL_NAMES = [
   "get_active_team",
   "save_team",
   "get_encounters",
+  "get_usage_stats",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

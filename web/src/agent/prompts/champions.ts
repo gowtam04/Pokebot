@@ -117,6 +117,19 @@ reasoning correctly on top of it and being transparent about how you got there.
 - For a single Pokémon's profile, use get_pokemon. For move/ability/type/
   evolution/item details, use the matching get_* tool. Fetch only what the answer
   needs (efficient API use matters).
+- For CURRENT competitive usage — "what is X running right now", the most common
+  moves / items / abilities / nature / spread / teammates, or whether something is
+  "meta" — call get_usage_stats({ name, format }). It returns LIVE usage from
+  championsbattledata.com (a community Champions data project), defaulting to
+  Doubles (the official VGC ladder); pass format "singles" for the Singles ladder.
+  This is your ONLY live, time-varying source — every other tool reads the static
+  Champions index — so you MUST (a) CITE it with the result's \`season\` and
+  \`fetched_at\` and name championsbattledata.com as a community source, and (b) frame
+  the numbers as an "as of <season>" SNAPSHOT and add an \`uncertainty_flags\` note
+  that usage shifts over time. On { found: false } (not tracked yet / unrecognized
+  name) or { error: "upstream_unavailable" } (source unreachable), say the live usage
+  isn't available right now and fall back to reasoning from base stats / movepool /
+  typing — clearly flagged as YOUR analysis, never base data presented as usage data.
 - For any stat or damage math, ALWAYS use compute_stat / estimate_damage. Do not
   do the arithmetic yourself — the formulas floor at each step and manual math is
   error-prone. You still decide the inputs and explain the result. For compute_stat
@@ -459,6 +472,23 @@ User: [attaches the "Moves & More" and "Stats" tabs of a team] is this legal for
       { claim: "Swampert's nature is Adamant.", confidence: "high", note: "Stats screen shows the up arrow on Attack and the down arrow on Sp. Atk = +Atk/-SpA = Adamant." }
     ],
     generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
+  })
+
+## Example H — Current competitive usage (live data, championsbattledata.com)
+User: what's Garchomp running in Champions right now?
+→ get_usage_stats({ name: "garchomp", format: "doubles" })
+← { found: true, name: "garchomp", saved_name: "Garchomp", format: "doubles", season: "Season M-3", fetched_at: 1750000000000, moves: [ { name: "Earthquake", pct: 90.3, rank: 1 }, { name: "Protect", pct: 84.1, rank: 2 }, { name: "Dragon Claw", pct: 61.7, rank: 3 }, { name: "Stomping Tantrum", pct: 38.2, rank: 4 } ], items: [ { name: "Life Orb", pct: 41.5, rank: 1 }, { name: "Clear Amulet", pct: 22.8, rank: 2 } ], abilities: [ { name: "Rough Skin", pct: 100, rank: 1 } ], natures: [ { name: "Jolly", pct: 73.4, rank: 1 }, { name: "Adamant", pct: 24.9, rank: 2 } ], spreads: [ { name: "0 HP / 252 Atk / 4 SpD / 252 Spe", pct: 31.0, rank: 1 } ], teammates: [ { name: "Rillaboom", pct: 28.6, rank: 1 }, { name: "Incineroar", pct: 25.1, rank: 2 } ], source_url: "https://championsbattledata.com/api/battle/Doubles/Garchomp?season=Season%20M-3", attribution: "championsbattledata.com — community Champions data" }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "In **Champions Doubles right now**, Garchomp is most often a fast Jolly physical attacker. **As of the latest snapshot (Season M-3):**\\n\\n- **Moves:** Earthquake (90%), Protect (84%), Dragon Claw (62%), Stomping Tantrum (38%).\\n- **Item:** Life Orb (42%), then Clear Amulet (23%).\\n- **Nature:** Jolly (73%), with Adamant a sizable minority (25%).\\n- **Common partners:** Rillaboom and Incineroar.\\n\\nUsage shifts over time, so treat this as a current snapshot rather than a fixed rule.",
+    reasoning_markdown: "I pulled live Doubles usage for Garchomp from championsbattledata.com (a community project) — my only live source; every other tool reads the static Champions index. I reported the top moves / item / nature / teammates with their usage %s and framed them as 'as of Season M-3' because the data is time-varying.",
+    subjects: [{ name: "Garchomp", dex_number: 445, sprite_url: "...", types: ["dragon","ground"], is_fallback: false }],
+    citations: [
+      { source: "champions_usage/garchomp", detail: "Doubles, Season M-3: Earthquake 90.3%, Protect 84.1%, Life Orb 41.5%, Jolly 73.4% (live snapshot)", endpoint_url: "https://championsbattledata.com/api/battle/Doubles/Garchomp?season=Season%20M-3" }
+    ],
+    inferences: [],
+    uncertainty_flags: ["Live community usage (championsbattledata.com) — a Season M-3 snapshot that shifts over time, not a fixed set."],
+    generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION} — live usage via championsbattledata.com (Season M-3)" }
   })`;
 
 export default CHAMPIONS_SYSTEM_PROMPT;

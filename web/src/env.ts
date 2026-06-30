@@ -70,6 +70,16 @@ const EnvSchema = z
       .url()
       .default("postgres://oak:oak@localhost:5432/oak"),
     POKEAPI_BASE_URL: z.string().url().default("https://pokeapi.co/api/v2"),
+    // championsbattledata.com — live Champions competitive usage stats (T15
+    // get_usage_stats; champions mode only). Public, keyless API; only the base
+    // URL is configurable. NOT boot-required — a bad/unreachable value just
+    // degrades the tool to `upstream_unavailable`. An empty value (e.g.
+    // `CHAMPIONSBATTLEDATA_BASE_URL=` in a compose env_file) falls back to the
+    // default rather than failing url() validation.
+    CHAMPIONSBATTLEDATA_BASE_URL: z.preprocess(
+      emptyToUndefined,
+      z.string().url().default("https://championsbattledata.com"),
+    ),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),

@@ -56,14 +56,17 @@ import { submitAnswerTool } from "./submit-answer";
 import { getActiveTeamTool } from "./get-active-team.tool";
 import { saveTeamTool } from "./save-team.tool";
 import { getEncountersTool } from "./get-encounters";
+import { getUsageStatsTool } from "./get-usage-stats.tool";
 
 /**
- * The 14 tools, in T1..T14 order. T1..T11 are the fixed agent-design contract;
+ * The 15 tools, in T1..T15 order. T1..T11 are the fixed agent-design contract;
  * T12 (`get_active_team`) and T13 (`save_team`) are the inlined team-builder
  * additions (TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
- * (`get_encounters`) adds PokeAPI catch-location data (standard mode only). All
- * appended last so the existing T1..T11 order — and thus most of the cached
- * prefix — is unchanged.
+ * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
+ * (`get_usage_stats`) adds live championsbattledata.com competitive usage
+ * (champions mode only). All appended last so the existing T1..T11 order — and
+ * thus most of the cached prefix — is unchanged. The list is sent byte-identical
+ * for both modes; each mode-gated tool self-gates on `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -80,6 +83,7 @@ export const tools: ToolDef[] = [
   getActiveTeamTool,
   saveTeamTool,
   getEncountersTool,
+  getUsageStatsTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

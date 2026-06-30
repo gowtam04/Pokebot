@@ -110,7 +110,7 @@ describe("Grok Champions body — XML-sectioned, Champions-correct", () => {
     expect(GROK_CHAMPIONS_FEW_SHOT).toContain('generation: "champions"');
     expect(GROK_CHAMPIONS_FEW_SHOT).toContain(CHAMPIONS_REGULATION);
     const exampleOpens = GROK_CHAMPIONS_FEW_SHOT.match(/<example name="/g) ?? [];
-    expect(exampleOpens).toHaveLength(7);
+    expect(exampleOpens).toHaveLength(8);
   });
 });
 
