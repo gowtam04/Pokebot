@@ -5,16 +5,16 @@ Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.
 ## App Name (30 chars max)
 
 ```
-Oak
+Oak – AI Battle Coach
 ```
-**3 / 30 chars.** Locked to the app's existing bundle/display name (`us.optiwise.oak`) — no descriptor added per the agreed "Oak solo" naming decision.
+**21 / 30 chars.** The bare name "Oak" was unavailable in the App Store, so a short descriptor was appended to make the store name unique. The bundle id (`us.optiwise.oak`), the `oak.optiwise.us` domain, and the in-app "Oak" assistant persona are all unchanged — only the *store display name* carries the descriptor, so no code change is required. "AI Battle Coach" also pulls double duty for ASO: it puts `ai`, `battle`, and `coach` into Apple's most heavily-weighted field (the bare "Oak" wasted it on 3 characters) and names Oak's category-defining wedge — it *coaches*: it reasons and explains, rather than just computing like the manual-tool competitors (ChampDex, VGC Helper). Separator is an en dash; swap for `:` or `|` to taste (all stay ≤30). (App Store name availability is only confirmed at name-reservation time in App Store Connect — "Battle Coach" is a generic phrase, so collision risk is low.)
 
 ## Subtitle (30 chars max)
 
 ```
-Team Chat, Battle Calculator
+Team Builder & Calculator
 ```
-**28 / 30 chars.** Comma-style tagline (mirrors ProDex's "Dex, TeamBuilder, Catch, Shiny" pattern) — conveys chat + team-building + battle math with zero trademarked words; also pre-indexes "team," "chat," "battle," "calculator" so the Keywords field doesn't need to repeat them.
+**25 / 30 chars.** Reworked now that "AI" and "Battle" live in the App Name — the subtitle no longer repeats them and instead carries the next tier of high-intent terms. It locks the exact phrase "team builder" (a Tier-1 search term) into a heavily-weighted field, and "Calculator" combines cross-field with the App Name's "Battle" → "battle calculator" (Tier 1) and with the keyword "damage" → "damage calculator" (Tier 2). Zero trademarked words. (5 chars of headroom remain if you later want to append a term.)
 
 ## Promotional Text (170 chars max, updatable without resubmission)
 
@@ -26,7 +26,7 @@ New: a one-tap format toggle scopes your whole team chat and battle calculator t
 ## Description (4000 chars max)
 
 ```
-Oak is an AI chat companion for building and reasoning about competitive creature-battle teams — ask any question about your roster and get a reasoned, cited answer, not a stat dump.
+Oak is your AI battle coach — a chat companion for building and reasoning about competitive creature-battle teams. Ask any question about your roster and get a reasoned, cited answer, not a stat dump.
 
 Most reference apps hand you raw numbers and leave the thinking to you. Oak reasons on top of the data: every answer comes with its reasoning, the sources it's grounded in, and explicit "this part is inferred" flags whenever the data doesn't fully cover your question — so you always know what's fact and what's a best guess.
 
@@ -48,14 +48,14 @@ Oak is an independent, unofficial fan project. It is not affiliated with, endors
 
 Questions or feedback? Reach us at oak.optiwise.us/support.
 ```
-**2,067 / 4000 chars** (well within budget).
+**2,085 / 4000 chars** (well within budget).
 
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-builder,type,chart,moveset,damage,stat,ev,iv,tera,regulation,showdown,import,trainer,reasoning,ai
+type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown,import,reasoning
 ```
-**97 / 100 chars.** Full rationale in `aso-keywords.md`.
+**97 / 100 chars.** Rebuilt for the new App Name/Subtitle: dropped `builder` (now in the Subtitle), `ai` (now in the App Name), and the two lowest-value terms `stat` and `trainer`; added `weakness`, `coverage`, and `speed` — high-intent terms matching the type-matchup and speed-tier features the direct competitors lead with. Full rationale + the deliberately-ceded `vgc` note in `aso-keywords.md`.
 
 ## What's New (this release)
 
