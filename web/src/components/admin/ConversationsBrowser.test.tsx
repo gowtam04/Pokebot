@@ -36,6 +36,17 @@ const CHAMPIONS_CONVO: ConversationSummary = {
   updatedAt: 1_700_000_080_000,
 };
 
+const GUEST_CONVO: ConversationSummary = {
+  id: "c-3",
+  accountId: null, // guest session — synthesized from turn_record, no real row
+  accountEmail: null,
+  title: "Type chart for Ground?",
+  format: "scarlet-violet",
+  messageCount: 4,
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_010_000,
+};
+
 const ROWS = [SIGNED_CONVO, CHAMPIONS_CONVO];
 
 function renderBrowser(overrides: Partial<ConversationsBrowserProps> = {}) {
@@ -80,6 +91,13 @@ describe("ConversationsBrowser", () => {
       "Champions",
     );
     expect(screen.getByTestId("admin-cell-c-1-messages")).toHaveTextContent("6");
+  });
+
+  it("shows a Guest label for a synthesized guest-session row (accountId: null)", () => {
+    renderBrowser({ rows: [...ROWS, GUEST_CONVO] });
+    expect(screen.getByTestId("admin-cell-c-3-account")).toHaveTextContent(
+      "Guest",
+    );
   });
 
   it("falls back to a placeholder title for an untitled conversation", () => {

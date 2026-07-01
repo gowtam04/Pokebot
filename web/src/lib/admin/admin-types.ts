@@ -252,12 +252,15 @@ export interface HeavyUserRow {
 /**
  * Cross-account conversation list projection (ADMIN-US-9). Like the user-facing
  * `ConversationSummary` but carries the owning account so the operator can see
- * whose thread it is (ADMIN-BR-4 owner-only full read access).
+ * whose thread it is (ADMIN-BR-4 owner-only full read access). `accountId: null`
+ * is a synthetic guest-session pseudo-conversation, reconstructed from that
+ * session's `turn_record` rows rather than a real `conversation` row (mirrors
+ * the `TurnSummary`/`HeavyUserRow` guest convention elsewhere in this file).
  */
 export interface ConversationSummary {
   id: string;
-  accountId: string;
-  accountEmail: string | null; // joined from account
+  accountId: string | null; // null = guest session (no real `conversation` row)
+  accountEmail: string | null; // joined from account; null for guests too
   title: string;
   format: string; // "scarlet-violet" | "champions"
   messageCount: number;

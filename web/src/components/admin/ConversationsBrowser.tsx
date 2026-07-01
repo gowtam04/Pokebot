@@ -10,7 +10,9 @@ import type { ConversationSummary } from "@/lib/admin/admin-types";
  * (ADMIN-US-9, ADMIN-AC-9.1): a searchable, format-filterable, keyset-paginated
  * table of saved conversations ACROSS ALL accounts (ADMIN-BR-4 owner-only
  * cross-account read access), with a row click that opens the full thread reader
- * (`/admin/conversations/[id]`, ADMIN-AC-9.2).
+ * (`/admin/conversations/[id]`, ADMIN-AC-9.2). Rows also include guest sessions
+ * (synthesized from `turn_record`, not a real saved conversation) — a row with
+ * `accountId: null` shows "Guest" in the Account column.
  *
  * Deliberately PURE + CONTROLLED (the admin component-test rule): it imports no
  * db/repos/runtime and holds no fetch/network state. The owning thin page
@@ -157,8 +159,8 @@ export default function ConversationsBrowser({
     {
       key: "account",
       header: "Account",
-      sortValue: (r) => r.accountEmail ?? r.accountId,
-      render: (r) => r.accountEmail ?? r.accountId,
+      sortValue: (r) => r.accountEmail ?? r.accountId ?? "Guest",
+      render: (r) => (r.accountId ? (r.accountEmail ?? r.accountId) : "Guest"),
     },
     {
       key: "format",
@@ -268,7 +270,7 @@ export default function ConversationsBrowser({
         onLoadMore={onLoadMore}
         loadingMore={loadingMore}
         emptyMessage={emptyMessage}
-        caption="Saved conversations across all accounts"
+        caption="Saved conversations across all accounts and guest sessions"
       />
     </section>
   );

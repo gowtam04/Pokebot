@@ -129,7 +129,11 @@ Indexes: `auth_event_created_idx` on `(created_at)`, `auth_event_type_created_id
   `account.created_at`; no need to derive them from `auth_event`.
 - `auth_session` (account_id, created_at, expires_at) — account "active sessions".
 - `conversation` / `conversation_message` — signed-in saved threads for the
-  moderation browser (existing `text_content` + `answer_json`).
+  moderation browser (existing `text_content` + `answer_json`). Guest sessions
+  never get a row here; the moderation browser instead synthesizes a guest
+  pseudo-conversation by grouping that session's `turn_record` rows
+  (`account_id IS NULL`) at read time — see `listAllConversations` /
+  `getConversationThread` below.
 - `team` — saved teams browser.
 
 No existing table is altered.
@@ -457,8 +461,12 @@ listAccounts(opts: { q?: string; sort?: "recent"|"turns"|"cost"|"errors"; limit:
 getAccountDetail(accountId: string): Promise<{ account: AccountWithActivity; sessions: SessionInfo[] } | null>;
 
 listAllConversations(opts: { q?: string; format?: string; limit: number; cursor?: string }):
-  Promise<{ rows: ConversationSummary[]; nextCursor: string | null }>;   // un-scoped variant of listConversations
+  Promise<{ rows: ConversationSummary[]; nextCursor: string | null }>;
+  // Un-scoped variant of listConversations, UNIONed with guest sessions
+  // synthesized from turn_record (accountId: null) — see Reused tables above.
 getConversationThread(conversationId: string): Promise<{ summary: ConversationSummary; turns: StoredTurn[] } | null>;
+  // Also resolves a guest session_id (no matching `conversation` row) by
+  // reconstructing the thread from that session's turn_record rows.
 
 listAllTeams(opts: { q?: string; format?: string; limit: number; cursor?: string }):
   Promise<{ rows: TeamSummary[]; nextCursor: string | null }>;

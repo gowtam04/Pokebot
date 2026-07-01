@@ -47,7 +47,6 @@ import {
   asc,
   desc,
   eq,
-  exists,
   gt,
   gte,
   ilike,
@@ -60,7 +59,9 @@ import {
   type SQL,
 } from "drizzle-orm";
 
+import type { AgentMode } from "@/agent/types";
 import { db } from "@/data/db";
+import { formatForMode, isFormat, modeForFormat } from "@/data/formats";
 import {
   account,
   auth_session,
@@ -71,6 +72,7 @@ import {
 } from "@/data/schema";
 import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
 import { estimateCostUsd } from "@/server/admin/pricing";
+import { deriveTitle } from "@/server/history/derive-title";
 import type { ToolTraceEntry } from "@/server/logger";
 import type {
   AccountDetailResponse,
@@ -163,6 +165,22 @@ function isIncomplete(members: TeamMember[]): boolean {
     members.length < 6 ||
     members.some((m) => m.species === null || m.moves.length < 4)
   );
+}
+
+/**
+ * Coerce a possibly-string (bigint/count/sum) raw `db.execute` value to a finite
+ * number — node-postgres returns bigint columns as strings (mirrors
+ * admin-analytics-repo.ts's `num`, needed here only for the guest-conversation
+ * UNION query, which can't be expressed through the query builder).
+ */
+function num(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** A raw result row from `db.execute` (loosely typed; coerced field-by-field). */
+function rowsOf(res: { rows: unknown[] }): Record<string, unknown>[] {
+  return res.rows as Record<string, unknown>[];
 }
 
 // ---------------------------------------------------------------------------
@@ -640,97 +658,140 @@ export async function getAccountDetail(
  * email) so the operator can see whose thread it is. `q` matches the title OR any
  * message text (ilike); `format` filters exactly. Keyset paginated on
  * `(updated_at, id)` DESC (most recently active first).
+ *
+ * ALSO includes guest sessions: a guest never gets a real `conversation` row
+ * (HIST-AD-1 — only signed-in turns are saved there), but every guest turn is
+ * already durably recorded in `turn_record` (account_id IS NULL). Guest turns are
+ * grouped by `session_id` into a synthetic conversation row (`accountId`/
+ * `accountEmail` both null, mirroring the existing `HeavyUserRow` guest
+ * convention) and UNIONed with the real rows so both are sorted/paginated
+ * together by `updated_at`. Since `conversation.id` IS the client `session_id`
+ * (HIST-AD-1), a guest session that was later imported into a real conversation
+ * is excluded from the guest side via `NOT EXISTS`, so it only ever shows once —
+ * as the real, fully-imported conversation. Expressed as one raw SQL statement
+ * (not the query builder) so the two sources paginate correctly as a single
+ * ordered result set, following the `db.execute(sql\`...\`)` precedent in
+ * admin-analytics-repo.ts's `getHeavyUsers`.
  */
 export async function listAllConversations(
   opts: ConversationListOpts,
 ): Promise<Paginated<ConversationSummary>> {
   const lim = clampLimit(opts.limit);
-  const conditions: SQL[] = [];
 
-  const format = opts.format?.trim();
-  if (format) conditions.push(eq(conversation.format, format));
+  const format = opts.format?.trim() || null;
+  const validFormat = format && isFormat(format) ? format : null;
+  const modeFilter = validFormat ? modeForFormat(validFormat) : null;
 
   const q = opts.q?.trim();
-  if (q) {
-    const pattern = likePattern(q);
-    // Title hit OR a message-text hit (correlated EXISTS over this
-    // conversation's messages — NOT account-scoped: this is the cross-account view).
-    const messageHit = exists(
-      db
-        .select({ one: sql`1` })
-        .from(conversation_message)
-        .where(
-          and(
-            eq(conversation_message.conversation_id, conversation.id),
-            ilike(conversation_message.text_content, pattern),
-          ),
-        ),
-    );
-    conditions.push(or(ilike(conversation.title, pattern), messageHit)!);
-  }
+  const pattern = q ? likePattern(q) : null;
 
   const cursor = decodeKeysetCursor(opts.cursor);
-  if (cursor) {
-    conditions.push(
-      or(
-        lt(conversation.updated_at, cursor.t),
-        and(
-          eq(conversation.updated_at, cursor.t),
-          lt(conversation.id, cursor.id),
-        ),
-      )!,
-    );
-  }
 
-  const rows = await db
-    .select({
-      id: conversation.id,
-      accountId: conversation.account_id,
-      accountEmail: account.email,
-      title: conversation.title,
-      format: conversation.format,
-      createdAt: conversation.created_at,
-      updatedAt: conversation.updated_at,
-    })
-    .from(conversation)
-    .leftJoin(account, eq(account.id, conversation.account_id))
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(conversation.updated_at), desc(conversation.id))
-    .limit(lim + 1);
+  const realFormatClause = format ? sql`WHERE c.format = ${format}` : sql``;
+  // Filter guest sessions by their REPRESENTATIVE mode — the same latest-turn
+  // value used for the displayed `format` column — via HAVING on the aggregate,
+  // NOT a pre-aggregation WHERE (which would silently drop the session's other
+  // turns from the group instead of excluding the session outright). A format
+  // WAS requested but isn't a recognized one ⇒ no guest session can ever match
+  // (mirrors the real side, which likewise matches nothing).
+  const guestFormatClause = !format
+    ? sql``
+    : modeFilter
+      ? sql`HAVING (array_agg(tr.mode ORDER BY tr.created_at DESC))[1] = ${modeFilter}`
+      : sql`HAVING false`;
+
+  const realQMatch = pattern
+    ? sql`(c.title ILIKE ${pattern} OR EXISTS (
+        SELECT 1 FROM conversation_message cm2
+        WHERE cm2.conversation_id = c.id AND cm2.text_content ILIKE ${pattern}
+      ))`
+    : sql`true`;
+  const guestQMatch = pattern
+    ? sql`bool_or(tr.prompt_text ILIKE ${pattern} OR tr.answer_text ILIKE ${pattern})`
+    : sql`true`;
+
+  const cursorClause = cursor
+    ? sql`AND (updated_at < ${cursor.t} OR (updated_at = ${cursor.t} AND id < ${cursor.id}))`
+    : sql``;
+
+  const rows = rowsOf(
+    await db.execute(sql`
+      WITH real_rows AS (
+        SELECT
+          c.id AS id,
+          c.account_id AS account_id,
+          a.email AS account_email,
+          c.title AS title,
+          c.format AS format,
+          c.created_at AS created_at,
+          c.updated_at AS updated_at,
+          (SELECT count(*) FROM conversation_message cm
+            WHERE cm.conversation_id = c.id)::bigint AS message_count,
+          ${realQMatch} AS q_match
+        FROM conversation c
+        LEFT JOIN account a ON a.id = c.account_id
+        ${realFormatClause}
+      ),
+      guest_rows AS (
+        SELECT
+          tr.session_id AS id,
+          NULL::text AS account_id,
+          NULL::text AS account_email,
+          (array_agg(tr.prompt_text ORDER BY tr.created_at ASC))[1] AS title,
+          (array_agg(tr.mode ORDER BY tr.created_at DESC))[1] AS format,
+          min(tr.created_at) AS created_at,
+          max(tr.created_at) AS updated_at,
+          sum(CASE WHEN tr.status = 'rate_limited' THEN 1 ELSE 2 END)::bigint
+            AS message_count,
+          ${guestQMatch} AS q_match
+        FROM turn_record tr
+        WHERE tr.account_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM conversation c2 WHERE c2.id = tr.session_id
+          )
+        GROUP BY tr.session_id
+        ${guestFormatClause}
+      ),
+      combined AS (
+        SELECT * FROM real_rows
+        UNION ALL
+        SELECT * FROM guest_rows
+      )
+      SELECT id, account_id, account_email, title, format, created_at,
+             updated_at, message_count
+      FROM combined
+      WHERE q_match
+      ${cursorClause}
+      ORDER BY updated_at DESC, id DESC
+      LIMIT ${lim + 1}
+    `),
+  );
 
   const hasMore = rows.length > lim;
   const page = hasMore ? rows.slice(0, lim) : rows;
 
-  // Message counts for the page in one grouped query.
-  const ids = page.map((p) => p.id);
-  const countRows = ids.length
-    ? await db
-        .select({
-          conversationId: conversation_message.conversation_id,
-          n: sql<number>`count(*)`.mapWith(Number),
-        })
-        .from(conversation_message)
-        .where(inArray(conversation_message.conversation_id, ids))
-        .groupBy(conversation_message.conversation_id)
-    : [];
-  const countMap = new Map(
-    countRows.map((c) => [c.conversationId, c.n] as const),
-  );
-
-  const summaries: ConversationSummary[] = page.map((p) => ({
-    id: p.id,
-    accountId: p.accountId,
-    accountEmail: p.accountEmail ?? null,
-    title: p.title,
-    format: p.format,
-    messageCount: countMap.get(p.id) ?? 0,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  }));
+  const summaries: ConversationSummary[] = page.map((r) => {
+    const accountId = (r.account_id as string | null) ?? null;
+    const isGuest = accountId === null;
+    return {
+      id: String(r.id),
+      accountId,
+      accountEmail: (r.account_email as string | null) ?? null,
+      title: isGuest ? deriveTitle(String(r.title ?? "")) : String(r.title),
+      format: isGuest
+        ? formatForMode(String(r.format) as AgentMode)
+        : String(r.format),
+      messageCount: num(r.message_count),
+      createdAt: num(r.created_at),
+      updatedAt: num(r.updated_at),
+    };
+  });
 
   const last = page[page.length - 1];
   const nextCursor =
-    hasMore && last ? encodeKeysetCursor(last.updatedAt, last.id) : null;
+    hasMore && last
+      ? encodeKeysetCursor(num(last.updated_at), String(last.id))
+      : null;
   return { rows: summaries, nextCursor };
 }
 
@@ -738,6 +799,12 @@ export async function listAllConversations(
  * A conversation's full thread (ADMIN-AC-9.2) — summary (with owning account +
  * message count) plus every stored turn in `seq` order. Un-scoped: ANY
  * conversation, regardless of account (ADMIN-BR-4). Returns `null` if missing.
+ *
+ * Also resolves guest pseudo-conversations (see {@link listAllConversations}):
+ * if `conversationId` matches no real `conversation` row, it's tried as a guest
+ * `session_id` — reconstructing the thread from that session's `turn_record` rows
+ * (account_id IS NULL). Each turn expands to a "user" turn (the prompt) plus,
+ * unless the turn was `rate_limited` (no answer), an "assistant" turn.
  */
 export async function getConversationThread(
   conversationId: string,
@@ -757,39 +824,102 @@ export async function getConversationThread(
     .where(eq(conversation.id, conversationId))
     .limit(1);
   const c = rows[0];
-  if (!c) return null;
 
-  const turnRows = await db
+  if (c) {
+    const turnRows = await db
+      .select({
+        id: conversation_message.id,
+        role: conversation_message.role,
+        seq: conversation_message.seq,
+        textContent: conversation_message.text_content,
+        answerJson: conversation_message.answer_json,
+        createdAt: conversation_message.created_at,
+      })
+      .from(conversation_message)
+      .where(eq(conversation_message.conversation_id, conversationId))
+      .orderBy(asc(conversation_message.seq));
+
+    const turns: StoredTurn[] = turnRows.map((t) => ({
+      id: t.id,
+      role: t.role as "user" | "assistant",
+      seq: t.seq,
+      textContent: t.textContent,
+      answerJson: t.answerJson,
+      createdAt: t.createdAt,
+    }));
+
+    const summary: ConversationSummary = {
+      id: c.id,
+      accountId: c.accountId,
+      accountEmail: c.accountEmail ?? null,
+      title: c.title,
+      format: c.format,
+      messageCount: turns.length,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    };
+
+    return { summary, turns };
+  }
+
+  // Not a real conversation — try it as a guest session_id (HIST-AD-1:
+  // conversation.id IS the client session_id, so a guest thread's id is its
+  // session_id too).
+  const guestTurns = await db
     .select({
-      id: conversation_message.id,
-      role: conversation_message.role,
-      seq: conversation_message.seq,
-      textContent: conversation_message.text_content,
-      answerJson: conversation_message.answer_json,
-      createdAt: conversation_message.created_at,
+      id: turn_record.id,
+      status: turn_record.status,
+      mode: turn_record.mode,
+      promptText: turn_record.prompt_text,
+      answerText: turn_record.answer_text,
+      answerJson: turn_record.answer_json,
+      createdAt: turn_record.created_at,
     })
-    .from(conversation_message)
-    .where(eq(conversation_message.conversation_id, conversationId))
-    .orderBy(asc(conversation_message.seq));
+    .from(turn_record)
+    .where(
+      and(
+        eq(turn_record.session_id, conversationId),
+        isNull(turn_record.account_id),
+      ),
+    )
+    .orderBy(asc(turn_record.created_at));
 
-  const turns: StoredTurn[] = turnRows.map((t) => ({
-    id: t.id,
-    role: t.role as "user" | "assistant",
-    seq: t.seq,
-    textContent: t.textContent,
-    answerJson: t.answerJson,
-    createdAt: t.createdAt,
-  }));
+  if (guestTurns.length === 0) return null;
 
+  const turns: StoredTurn[] = [];
+  let seq = 0;
+  for (const t of guestTurns) {
+    turns.push({
+      id: `${t.id}-u`,
+      role: "user",
+      seq: seq++,
+      textContent: t.promptText,
+      answerJson: null,
+      createdAt: t.createdAt,
+    });
+    if (t.status !== "rate_limited") {
+      turns.push({
+        id: `${t.id}-a`,
+        role: "assistant",
+        seq: seq++,
+        textContent: t.answerText ?? "",
+        answerJson: t.answerJson,
+        createdAt: t.createdAt,
+      });
+    }
+  }
+
+  const first = guestTurns[0]!;
+  const last = guestTurns[guestTurns.length - 1]!;
   const summary: ConversationSummary = {
-    id: c.id,
-    accountId: c.accountId,
-    accountEmail: c.accountEmail ?? null,
-    title: c.title,
-    format: c.format,
+    id: conversationId,
+    accountId: null,
+    accountEmail: null,
+    title: deriveTitle(first.promptText),
+    format: formatForMode(last.mode as AgentMode),
     messageCount: turns.length,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
+    createdAt: first.createdAt,
+    updatedAt: last.createdAt,
   };
 
   return { summary, turns };

@@ -239,8 +239,10 @@ in the panel but never users *of* the panel.
 - Conversation and team browsers are **read-only** and span all accounts, with
   full-text search over conversation content.
 - Guest activity is visible through the turn records (metadata + prompt +
-  answer); guests have no saved conversations to browse (see Open Questions on
-  guest content persistence).
+  answer). Guests never get a real saved `conversation` row, but the
+  Conversations browser also synthesizes a pseudo-conversation per guest
+  session by grouping that session's turn records — so guest threads are
+  browsable and readable there too, not only via the turns explorer.
 
 ### Live View
 

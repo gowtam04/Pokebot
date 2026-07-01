@@ -715,7 +715,11 @@ describe("GET /api/admin/conversations", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as ConversationsListResponse;
-    expect(body.rows.map((r) => r.id)).toEqual([
+    // Real conversations keep their relative updated_at DESC order even once
+    // guest pseudo-conversations (synthesized from the fixture's guest
+    // turn_record rows, e.g. sess-G1) are interleaved into the full list.
+    const signedRows = body.rows.filter((r) => r.accountId !== null);
+    expect(signedRows.map((r) => r.id)).toEqual([
       CONVERSATIONS.B1.id,
       CONVERSATIONS.A2.id,
       CONVERSATIONS.A1.id,
@@ -723,6 +727,13 @@ describe("GET /api/admin/conversations", () => {
     const a1 = body.rows.find((r) => r.id === CONVERSATIONS.A1.id)!;
     expect(a1.accountEmail).toBe(ACCOUNTS.A.email);
     expect(a1.messageCount).toBe(2);
+
+    // A guest session (no real `conversation` row) shows up too, synthesized
+    // from turn_record — accountId/accountEmail both null.
+    const guest = body.rows.find((r) => r.id === "sess-G1")!;
+    expect(guest).toBeDefined();
+    expect(guest.accountId).toBeNull();
+    expect(guest.accountEmail).toBeNull();
   });
 
   it("filters by format and searches title OR message text", async () => {
@@ -744,18 +755,22 @@ describe("GET /api/admin/conversations", () => {
   });
 
   it("round-trips the keyset cursor", async () => {
+    // The full unscoped list now also carries guest pseudo-conversations (the
+    // exact merged order is asserted in depth by the repo oracle test); this
+    // HTTP-level check only proves the cursor round-trips to a distinct page.
     asAdmin();
     const p1 = (await (
       await conversations.GET(adminReq("/api/admin/conversations", { limit: 1 }))
     ).json()) as ConversationsListResponse;
-    expect(p1.rows.map((r) => r.id)).toEqual([CONVERSATIONS.B1.id]);
+    expect(p1.rows).toHaveLength(1);
     expect(p1.nextCursor).not.toBeNull();
     const p2 = (await (
       await conversations.GET(
         adminReq("/api/admin/conversations", { limit: 1, cursor: p1.nextCursor! }),
       )
     ).json()) as ConversationsListResponse;
-    expect(p2.rows.map((r) => r.id)).toEqual([CONVERSATIONS.A2.id]);
+    expect(p2.rows).toHaveLength(1);
+    expect(p2.rows[0]!.id).not.toBe(p1.rows[0]!.id);
   });
 });
 
@@ -773,6 +788,20 @@ describe("GET /api/admin/conversations/[id]", () => {
     expect(body.turns.map((t) => t.seq)).toEqual([0, 1]);
     expect(body.turns[0].role).toBe("user");
     expect(body.turns[1].role).toBe("assistant");
+  });
+
+  it("reconstructs a guest session's thread from turn_record", async () => {
+    asAdmin();
+    const res = await conversationsId.GET(
+      adminReq("/api/admin/conversations/sess-G1"),
+      idCtx("sess-G1"),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ConversationThreadResponse;
+    expect(body.summary.accountId).toBeNull();
+    expect(body.summary.accountEmail).toBeNull();
+    expect(body.turns.length).toBeGreaterThan(0);
+    expect(body.turns[0]!.role).toBe("user");
   });
 
   it("returns 404 for an unknown conversation", async () => {

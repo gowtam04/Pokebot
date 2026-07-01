@@ -52,6 +52,8 @@ import {
 // pricing.ts is pure (no server-only / DB) — safe to import statically and use
 // as the oracle for cost expectations.
 import { estimateCostUsd } from "@/server/admin/pricing";
+import { deriveTitle } from "@/server/history/derive-title";
+import { conversation, conversation_message, turn_record } from "@/data/schema";
 
 import {
   ACCOUNTS,
@@ -76,10 +78,196 @@ let repo: Repo;
  * / live / tie GUEST rows don't perturb the deterministic in-range expectations. */
 const RANGE = { from: ADMIN_RANGE.from, to: ADMIN_RANGE.to };
 
+// ---------------------------------------------------------------------------
+// Guest-conversation fixture — LOCAL to this file, not the shared
+// admin-fixture.ts (which admin-analytics-repo.oracle.test.ts also asserts
+// against and must stay untouched). Every prompt/answer carries a "zzzguest"
+// token so `q: "zzzguest"` isolates exactly these three rows from the shared
+// fixture's own guest turns (sess-G1..G4, live/tie/out-of-range rows), keeping
+// the guest-conversation-synthesis assertions self-contained and exact.
+//
+//   GUEST1   — a guest session (no sign-in), two turns spanning mode
+//              "standard" then "champions" → its REPRESENTATIVE (latest)
+//              format is "champions".
+//   GUEST_RL — a guest session whose only turn was rate_limited (no answer)
+//              → contributes exactly one message (the user prompt), no
+//              assistant turn in the thread reader.
+//   IMPORTED — chatted as a guest, then was imported into a real conversation
+//              under the SAME id (HIST-AD-1) → must appear exactly ONCE, as
+//              the real conversation, not also as a guest phantom.
+// ---------------------------------------------------------------------------
+
+const GDAY = 40; // days past BASE — clear of ADMIN_RANGE (3d) / TIE_AT (10d) /
+// LIVE_NOW (100d), so this file's rows never collide with the shared fixture's.
+
+/**
+ * The IMPORTED conversation's owner. Reuses brock (ACCOUNTS.C, which the
+ * shared fixture gives zero conversations) rather than a freshly-inserted
+ * account — `listAccounts` is unscoped over the WHOLE `account` table, so a
+ * new account row would also perturb its recency/heavy-user sort and
+ * pagination assertions, not just conversation counts.
+ */
+const IMPORTED_OWNER = ACCOUNTS.C;
+
+const GUEST_CONV = {
+  GUEST1: {
+    id: "sess-QQ-GUEST1",
+    createdAt: BASE + GDAY * DAY,
+    updatedAt: BASE + (GDAY + 1) * DAY,
+  },
+  GUEST_RL: {
+    id: "sess-QQ-GUEST-RL",
+    createdAt: BASE + (GDAY + 2) * DAY,
+  },
+  IMPORTED: {
+    id: "sess-QQ-IMPORTED",
+    createdAt: BASE + (GDAY + 3) * DAY,
+    updatedAt: BASE + (GDAY + 4) * DAY,
+  },
+} as const;
+
+async function seedGuestConversationFixture(): Promise<void> {
+  await fix.db.insert(turn_record).values([
+    {
+      id: "tr-qq-g1-a",
+      session_id: GUEST_CONV.GUEST1.id,
+      account_id: null,
+      model: "grok-4.3",
+      provider_model: "grok-2",
+      mode: "standard",
+      status: "answered",
+      input_tokens: 100,
+      output_tokens: 20,
+      thinking_tokens: 0,
+      tool_trace: "[]",
+      tool_error_count: 0,
+      citation_count: 0,
+      turn_latency_ms: 1000,
+      images_count: 0,
+      prompt_text: "zzzguest first question",
+      answer_text: "zzzguest first answer",
+      answer_json: JSON.stringify({
+        status: "answered",
+        answer_markdown: "zzzguest first answer",
+      }),
+      created_at: GUEST_CONV.GUEST1.createdAt,
+    },
+    {
+      id: "tr-qq-g1-b",
+      session_id: GUEST_CONV.GUEST1.id,
+      account_id: null,
+      model: "grok-4.3",
+      provider_model: "grok-2",
+      mode: "champions",
+      status: "answered",
+      input_tokens: 100,
+      output_tokens: 20,
+      thinking_tokens: 0,
+      tool_trace: "[]",
+      tool_error_count: 0,
+      citation_count: 0,
+      turn_latency_ms: 1000,
+      images_count: 0,
+      prompt_text: "zzzguest follow up",
+      answer_text: "zzzguest second answer",
+      answer_json: JSON.stringify({
+        status: "answered",
+        answer_markdown: "zzzguest second answer",
+      }),
+      created_at: GUEST_CONV.GUEST1.updatedAt,
+    },
+    {
+      id: "tr-qq-rl",
+      session_id: GUEST_CONV.GUEST_RL.id,
+      account_id: null,
+      model: null,
+      provider_model: null,
+      mode: "standard",
+      status: "rate_limited",
+      input_tokens: 0,
+      output_tokens: 0,
+      thinking_tokens: 0,
+      tool_trace: "[]",
+      tool_error_count: 0,
+      citation_count: 0,
+      turn_latency_ms: 0,
+      images_count: 0,
+      prompt_text: "zzzguest rate limited",
+      answer_text: null,
+      answer_json: null,
+      created_at: GUEST_CONV.GUEST_RL.createdAt,
+    },
+    {
+      id: "tr-qq-imp-pre",
+      session_id: GUEST_CONV.IMPORTED.id,
+      account_id: null,
+      model: "grok-4.3",
+      provider_model: "grok-2",
+      mode: "standard",
+      status: "answered",
+      input_tokens: 100,
+      output_tokens: 20,
+      thinking_tokens: 0,
+      tool_trace: "[]",
+      tool_error_count: 0,
+      citation_count: 0,
+      turn_latency_ms: 1000,
+      images_count: 0,
+      prompt_text: "zzzguest pre-import msg",
+      answer_text: "zzzguest pre-import reply",
+      answer_json: JSON.stringify({
+        status: "answered",
+        answer_markdown: "zzzguest pre-import reply",
+      }),
+      created_at: GUEST_CONV.IMPORTED.createdAt,
+    },
+  ]);
+
+  // The same session_id, now a real (imported) conversation — the guest turn
+  // above must be excluded from the guest synthesis once this exists.
+  await fix.db.insert(conversation).values([
+    {
+      id: GUEST_CONV.IMPORTED.id,
+      account_id: IMPORTED_OWNER.id,
+      title: "zzzguest imported thread",
+      format: "scarlet-violet",
+      pinned: 0,
+      created_at: GUEST_CONV.IMPORTED.createdAt,
+      updated_at: GUEST_CONV.IMPORTED.updatedAt,
+    },
+  ]);
+  await fix.db.insert(conversation_message).values([
+    {
+      id: "msg-qq-imp-0",
+      conversation_id: GUEST_CONV.IMPORTED.id,
+      account_id: IMPORTED_OWNER.id,
+      seq: 0,
+      role: "user",
+      text_content: "zzzguest pre-import msg",
+      answer_json: null,
+      created_at: GUEST_CONV.IMPORTED.createdAt,
+    },
+    {
+      id: "msg-qq-imp-1",
+      conversation_id: GUEST_CONV.IMPORTED.id,
+      account_id: IMPORTED_OWNER.id,
+      seq: 1,
+      role: "assistant",
+      text_content: "zzzguest pre-import reply",
+      answer_json: JSON.stringify({
+        status: "answered",
+        answer_markdown: "zzzguest pre-import reply",
+      }),
+      created_at: GUEST_CONV.IMPORTED.updatedAt,
+    },
+  ]);
+}
+
 beforeAll(async () => {
   fix = await createPgSchema({ seed: "none" });
   await installAsSingleton(fix);
   await seedAdminFixture(fix.db);
+  await seedGuestConversationFixture();
   repo = await import("./admin-content-repo");
 }, 60_000);
 
@@ -367,13 +555,16 @@ describe("listAccounts", () => {
       teams: 1,
     });
 
-    // brock: 1 claude answered turn, no content.
+    // brock: 1 claude answered turn, no teams. 1 conversation — the
+    // guest-conversation fixture's IMPORTED thread reuses brock as owner
+    // (see IMPORTED_OWNER) rather than seeding a fresh account, which would
+    // otherwise perturb the account-wide sort/pagination tests below.
     const c = rows.find((r) => r.id === ACCOUNTS.C.id)!;
     expect(c).toMatchObject({
       turns: 1,
       failed: 0,
       rateLimited: 0,
-      conversations: 0,
+      conversations: 1,
       teams: 0,
     });
   });
@@ -454,11 +645,15 @@ describe("getAccountDetail", () => {
 describe("listAllConversations", () => {
   it("lists conversations across accounts with owner + message count", async () => {
     const { rows } = await repo.listAllConversations({ limit: 50 });
-    // updated_at DESC: B1 (Jan-6 2h) > A2 (Jan-6 1h) > A1 (Jan-5 2h).
-    expect(rows.map((r) => r.id)).toEqual([
-      CONVERSATIONS.B1.id,
-      CONVERSATIONS.A2.id,
-      CONVERSATIONS.A1.id,
+    // Real (signed-in) conversations keep their relative updated_at DESC order
+    // even once guest pseudo-conversations (incl. the imported one, which is
+    // real too) are interleaved into the full, unfiltered list.
+    const signedRows = rows.filter((r) => r.accountId !== null);
+    expect(signedRows.map((r) => r.id)).toEqual([
+      GUEST_CONV.IMPORTED.id, // updated_at: GDAY+4
+      CONVERSATIONS.B1.id, // Jan-6 2h
+      CONVERSATIONS.A2.id, // Jan-6 1h
+      CONVERSATIONS.A1.id, // Jan-5 2h
     ]);
     const a1 = rows.find((r) => r.id === CONVERSATIONS.A1.id)!;
     expect(a1.accountEmail).toBe(ACCOUNTS.A.email);
@@ -466,14 +661,43 @@ describe("listAllConversations", () => {
     const b1 = rows.find((r) => r.id === CONVERSATIONS.B1.id)!;
     expect(b1.accountEmail).toBe(ACCOUNTS.B.email);
     expect(b1.messageCount).toBe(2);
+
+    // The imported session shows up ONCE, as the real conversation — never
+    // also as a null-account guest phantom (its pre-import turn_record row
+    // would otherwise synthesize a duplicate).
+    const imported = rows.filter((r) => r.id === GUEST_CONV.IMPORTED.id);
+    expect(imported).toHaveLength(1);
+    expect(imported[0]!.accountId).toBe(IMPORTED_OWNER.id);
+
+    // A guest session with real (non-rate_limited) turns: title from the
+    // first turn, format from the LATEST turn's mode, 2 messages per turn.
+    const guest1 = rows.find((r) => r.id === GUEST_CONV.GUEST1.id)!;
+    expect(guest1).toBeDefined();
+    expect(guest1.accountId).toBeNull();
+    expect(guest1.accountEmail).toBeNull();
+    expect(guest1.title).toBe(deriveTitle("zzzguest first question"));
+    expect(guest1.format).toBe("champions"); // latest turn's mode
+    expect(guest1.messageCount).toBe(4); // 2 turns × (user + assistant)
+    expect(guest1.createdAt).toBe(GUEST_CONV.GUEST1.createdAt);
+    expect(guest1.updatedAt).toBe(GUEST_CONV.GUEST1.updatedAt);
+
+    // A guest session whose only turn was rate_limited: no assistant answer,
+    // so it contributes exactly one message.
+    const guestRl = rows.find((r) => r.id === GUEST_CONV.GUEST_RL.id)!;
+    expect(guestRl).toBeDefined();
+    expect(guestRl.accountId).toBeNull();
+    expect(guestRl.format).toBe("scarlet-violet");
+    expect(guestRl.messageCount).toBe(1);
   });
 
   it("filters by format and searches title OR message text", async () => {
+    // format=champions matches the real A2 conversation AND the guest session
+    // whose latest turn is in champions mode (GUEST1), newest first.
     expect(
       (
         await repo.listAllConversations({ limit: 50, format: "champions" })
       ).rows.map((r) => r.id),
-    ).toEqual([CONVERSATIONS.A2.id]);
+    ).toEqual([GUEST_CONV.GUEST1.id, CONVERSATIONS.A2.id]);
     // Title match.
     expect(
       (await repo.listAllConversations({ limit: 50, q: "Garchomp" })).rows.map(
@@ -486,23 +710,37 @@ describe("listAllConversations", () => {
         (r) => r.id,
       ),
     ).toEqual([CONVERSATIONS.B1.id]);
+    // q matches guest prompt/answer text too, isolating this file's three
+    // "zzzguest" rows (imported real conversation + two guest sessions) from
+    // everything else in the shared fixture.
+    expect(
+      (
+        await repo.listAllConversations({ limit: 50, q: "zzzguest" })
+      ).rows.map((r) => r.id),
+    ).toEqual([
+      GUEST_CONV.IMPORTED.id,
+      GUEST_CONV.GUEST_RL.id,
+      GUEST_CONV.GUEST1.id,
+    ]);
   });
 
-  it("keyset-paginates without overlap", async () => {
-    const p1 = await repo.listAllConversations({ limit: 1 });
-    expect(p1.rows.map((r) => r.id)).toEqual([CONVERSATIONS.B1.id]);
+  it("keyset-paginates without overlap across a mixed signed-in + guest set", async () => {
+    const p1 = await repo.listAllConversations({ limit: 1, q: "zzzguest" });
+    expect(p1.rows.map((r) => r.id)).toEqual([GUEST_CONV.IMPORTED.id]);
     expect(p1.nextCursor).not.toBeNull();
     const p2 = await repo.listAllConversations({
       limit: 1,
+      q: "zzzguest",
       cursor: p1.nextCursor!,
     });
-    expect(p2.rows.map((r) => r.id)).toEqual([CONVERSATIONS.A2.id]);
+    expect(p2.rows.map((r) => r.id)).toEqual([GUEST_CONV.GUEST_RL.id]);
     expect(p2.nextCursor).not.toBeNull();
     const p3 = await repo.listAllConversations({
       limit: 1,
+      q: "zzzguest",
       cursor: p2.nextCursor!,
     });
-    expect(p3.rows.map((r) => r.id)).toEqual([CONVERSATIONS.A1.id]);
+    expect(p3.rows.map((r) => r.id)).toEqual([GUEST_CONV.GUEST1.id]);
     expect(p3.nextCursor).toBeNull();
   });
 });
@@ -521,6 +759,40 @@ describe("getConversationThread", () => {
 
   it("returns null for an unknown conversation", async () => {
     expect(await repo.getConversationThread("nope")).toBeNull();
+  });
+
+  it("reconstructs a guest session's thread from turn_record", async () => {
+    const thread = await repo.getConversationThread(GUEST_CONV.GUEST1.id);
+    expect(thread).not.toBeNull();
+    expect(thread!.summary.accountId).toBeNull();
+    expect(thread!.summary.accountEmail).toBeNull();
+    expect(thread!.summary.format).toBe("champions");
+    expect(thread!.summary.messageCount).toBe(4);
+    expect(thread!.turns.map((t) => t.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(thread!.turns[0]!.textContent).toBe("zzzguest first question");
+    expect(thread!.turns[1]!.textContent).toBe("zzzguest first answer");
+    expect(thread!.turns[1]!.answerJson).not.toBeNull();
+  });
+
+  it("omits the assistant turn for a rate_limited guest turn", async () => {
+    const thread = await repo.getConversationThread(GUEST_CONV.GUEST_RL.id);
+    expect(thread).not.toBeNull();
+    expect(thread!.summary.messageCount).toBe(1);
+    expect(thread!.turns).toHaveLength(1);
+    expect(thread!.turns[0]!.role).toBe("user");
+    expect(thread!.turns[0]!.textContent).toBe("zzzguest rate limited");
+  });
+
+  it("resolves an imported session as the real conversation, not a guest thread", async () => {
+    const thread = await repo.getConversationThread(GUEST_CONV.IMPORTED.id);
+    expect(thread).not.toBeNull();
+    expect(thread!.summary.accountId).toBe(IMPORTED_OWNER.id);
+    expect(thread!.summary.messageCount).toBe(2);
   });
 });
 
