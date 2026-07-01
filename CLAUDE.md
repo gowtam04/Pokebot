@@ -153,3 +153,48 @@ What's real vs. faked: Postgres (a real migrated+seeded schema), the tool layer,
 - **Don't force `tool_choice` while thinking is on.** Thinking + a forced `tool_choice` is a hard 400 on Sonnet 4.6. The loop uses `tool_choice: "auto"` + adaptive thinking and drives `submit_answer` via the system prompt and the max-iteration guard. If you change this, keep the iteration cap.
 - **The native Grok provider speaks xAI's Responses API, not Chat Completions.** `grok-provider.ts` uses `client.responses.create` (the OpenAI SDK pointed at `XAI_BASE_URL` — no extra dependency). Quirks vs. the OpenAI shim: tools use the FLATTENED Responses shape (`{type:"function", name, …}`, *not* `{function:{…}}`); `reasoning:{effort:"high"}` is set EXPLICITLY (grok-4.3 defaults to `low`); the turn is stateless (`store:false`) and echoes the whole `response.output` (reasoning + message + function_call) back, flattening the opaque transcript at request time — so the loop stays untouched; reasoning round-trips via `include:["reasoning.encrypted_content"]` (set `echoReasoning:false` if xAI ever rejects reasoning-as-input); and xAI delivers tool-call args in ONE chunk, so `answer_markdown` arrives in a single `answer_delta` (the `function_call_arguments.done` fallback covers it). Prompt caching is automatic on a stable prefix — no `cache_control`.
 - **`env` is validated at module load and throws on a missing `XAI_API_KEY`** (Grok is the primary provider — its key is the only required one; `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` are optional, validate-on-use). That's why the route dynamically imports the runtime and `drizzle.config.ts` reads `DATABASE_URL` directly instead of importing `src/env.ts`. (`DATABASE_URL` itself has a dev default, so it's not required to boot.)
+
+## iOS app (TestFlight releases)
+
+The native client lives in **`ios/`** (Swift 6 / SwiftUI; `OakApp.xcodeproj` is gitignored and generated from `ios/project.yml` via `xcodegen generate` — see `ios/README.md` for the full build/test walkthrough). To ship a new TestFlight build:
+
+1. Bump `CURRENT_PROJECT_VERSION` in `ios/project.yml` — App Store Connect rejects a reused build number for the same `MARKETING_VERSION`.
+2. `cd ios && xcodegen generate` to regenerate the project from the new settings.
+3. Run the unit suite: `xcodebuild test -scheme OakApp -only-testing:OakAppTests -destination 'platform=iOS Simulator,name=iPhone 17'`.
+4. Archive, export, and upload — **no fastlane and no App Store Connect API key needed.** Xcode's already-authenticated local account (Xcode → Settings → Accounts) is enough, provided it has App Manager/Admin access on the team; `-allowProvisioningUpdates` lets `xcodebuild` mint/renew the Apple Distribution certificate and provisioning profile on the fly, so having only an "Apple Development" identity in the keychain beforehand is fine.
+
+```bash
+cd ios
+xcodebuild -scheme OakApp -configuration Release archive \
+  -archivePath build/OakApp.xcarchive \
+  -destination 'generic/platform=iOS' \
+  DEVELOPMENT_TEAM=<team id> \
+  -allowProvisioningUpdates
+
+xcodebuild -exportArchive \
+  -archivePath build/OakApp.xcarchive \
+  -exportOptionsPlist build/ExportOptions.plist \
+  -exportPath build/export \
+  -allowProvisioningUpdates
+```
+
+`build/ExportOptions.plist` (create once — `ios/build/` is gitignored):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string><TEAM ID></string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>destination</key>
+    <string>upload</string>
+</dict>
+</plist>
+```
+
+`destination: upload` makes `-exportArchive` upload straight to App Store Connect in the same step — there's no separate `altool`/`xcrun` upload command to run. Find `<TEAM ID>` (a 10-char alphanumeric, e.g. `6HXCPT677B`) via `security find-certificate -c "Apple Development: <your name>" -p | openssl x509 -noout -subject` (the `OU=` field), or Xcode → Settings → Accounts → select the team. The build appears in App Store Connect → TestFlight after Apple finishes processing it (a few minutes) — no manual "distribute" step required once `destination: upload` is set.
