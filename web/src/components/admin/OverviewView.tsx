@@ -35,7 +35,8 @@
  * primitives; never touches db/repos/runtime.
  */
 
-import type { OverviewResponse } from "@/lib/admin/admin-types";
+import { enumerateBuckets } from "@/lib/admin/bucket-axis";
+import type { OverviewResponse, UsageBucket } from "@/lib/admin/admin-types";
 
 import KpiCard, { type KpiTone } from "./KpiCard";
 import TimeSeriesChart, { type ChartSeries } from "./TimeSeriesChart";
@@ -133,29 +134,34 @@ function OverviewContent({
 }) {
   const { totals, buckets, totalEstUsd, errorRatePct, range } = data;
 
+  // Densify the axis: the repo emits only NON-EMPTY buckets, so plot every bucket
+  // the selected range covers (zeros for the gaps). This gives the chart a
+  // continuous, evenly-spaced x-axis over the whole window instead of a few
+  // clustered points. Gated on `buckets.length` so an empty range still yields
+  // empty series → the chart's empty-state placeholder (not flat zero-lines).
+  const domain = buckets.length === 0 ? [] : enumerateBuckets(range);
+  const byT = new Map<number, UsageBucket>(buckets.map((b) => [b.t, b]));
+  const seriesPoints = (pick: (b: UsageBucket) => number) =>
+    domain.map((t) => {
+      const b = byT.get(t);
+      return { t, value: b ? pick(b) : 0 };
+    });
+
   // Per-bucket usage series (ADMIN-AC-2.2): one line per tracked dimension over
   // the shared time axis. Keys/labels mirror the UsageBucket fields.
   const usageSeries: ChartSeries[] = [
-    {
-      key: "turns",
-      label: "Turns",
-      points: buckets.map((b) => ({ t: b.t, value: b.turns })),
-    },
+    { key: "turns", label: "Turns", points: seriesPoints((b) => b.turns) },
     {
       key: "activeSigned",
       label: "Active signed-in",
-      points: buckets.map((b) => ({ t: b.t, value: b.activeSigned })),
+      points: seriesPoints((b) => b.activeSigned),
     },
     {
       key: "activeGuest",
       label: "Active guests",
-      points: buckets.map((b) => ({ t: b.t, value: b.activeGuest })),
+      points: seriesPoints((b) => b.activeGuest),
     },
-    {
-      key: "signups",
-      label: "Signups",
-      points: buckets.map((b) => ({ t: b.t, value: b.signups })),
-    },
+    { key: "signups", label: "Signups", points: seriesPoints((b) => b.signups) },
   ];
 
   return (

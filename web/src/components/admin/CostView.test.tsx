@@ -4,6 +4,7 @@ import { render, screen, cleanup, within } from "@testing-library/react";
 afterEach(() => cleanup());
 
 import CostView, { formatUsd, formatTokens } from "./CostView";
+import { enumerateBuckets } from "@/lib/admin/bucket-axis";
 import type { CostResponse } from "@/lib/admin/admin-types";
 
 // --- Fixtures (no db/repo imports — this is the jsdom component project) -----
@@ -93,6 +94,20 @@ describe("CostView", () => {
     // The hand-rolled TimeSeriesChart renders an SVG when there are points.
     expect(screen.getByTestId("time-series-chart-svg")).toBeInTheDocument();
     expect(screen.getByTestId("ts-series-estUsd")).toBeInTheDocument();
+  });
+
+  it("densifies the cost trend to one point per bucket over the range", () => {
+    const { container } = render(<CostView data={FIXTURE} />);
+    // FIXTURE.range spans 7 daily buckets; the repo returned only 3 → densify
+    // fills the other 4 with $0 so the axis is continuous.
+    const expected = enumerateBuckets(FIXTURE.range).length;
+    expect(expected).toBe(7);
+    const line = container.querySelector(
+      '[data-testid="ts-series-estUsd"] polyline.time-series-chart__line',
+    );
+    expect(line).not.toBeNull();
+    const coords = (line!.getAttribute("points") ?? "").trim().split(/\s+/);
+    expect(coords).toHaveLength(expected);
   });
 
   it("renders a by-model breakdown row per model (ADMIN-AC-3.1)", () => {
