@@ -64,7 +64,11 @@ import type {
 } from "@/agent/types";
 import type { OakDb } from "@/data/db";
 import { formatForMode } from "@/data/formats";
-import { validateTeam, type TeamWarning } from "@/server/teams/validate-team";
+import {
+  validateTeam,
+  isHardViolation,
+  type TeamWarning,
+} from "@/server/teams/validate-team";
 import { logTurn, type ToolTraceEntry, type TurnTrace } from "@/server/logger";
 
 // Re-exported for back-compat (was previously declared here). The value lives in
@@ -86,16 +90,16 @@ export const MAX_ITERATIONS = 14;
 export const MAX_SUBMIT_RETRIES = 2;
 
 /**
- * Re-emit budget when a `proposed_team` has a HARD legality violation: a
- * species NOT in the turn's format roster (e.g. Heatran in Champions), the
- * species clause (the same species held twice), or the item clause (the same
- * held item twice). The server validates the proposal and feeds the
- * violation(s) back so the model rebuilds legally. Bounded so the loop can't
- * churn: once spent, the answer is accepted with the warnings attached
- * (warn-but-allow, surfaced in the UI) rather than failing the turn
- * (MAX_ITERATIONS is the hard backstop).
+ * Re-emit budget when a `proposed_team` has a HARD legality violation (see
+ * `HARD_VIOLATION_CODES`): a species NOT in the turn's format roster (e.g.
+ * Heatran in Champions), an illegal move/ability/item, a battle-ready member
+ * missing its held item, the species clause (by Dex number), or the item
+ * clause. The server validates the proposal and feeds the violation(s) back so
+ * the model rebuilds legally. Bounded so the loop can't churn: once spent, the
+ * answer is accepted with the warnings attached (warn-but-allow, surfaced in
+ * the UI) rather than failing the turn (MAX_ITERATIONS is the hard backstop).
  */
-export const MAX_PROPOSED_TEAM_RETRIES = 1;
+export const MAX_PROPOSED_TEAM_RETRIES = 2;
 
 /**
  * Re-prompt budget when the model ends a turn with no tool call at all (it wrote
@@ -869,13 +873,16 @@ export async function runWithProvider(
           // Roster-validate a proposed team against the turn's ACTUAL format
           // (server-controlled — never the model-emitted proposed_team.format, so
           // the model can't dodge the check by mislabeling). validateTeam never
-          // throws. Three codes are HARD illegality: an out-of-format species
-          // (`species_illegal`) and the two team-level competitive clauses,
-          // `duplicate_species` (species clause) and `duplicate_item` (item
-          // clause) — feed them back and let the model rebuild, one dedicated
-          // retry, then accept-with-warnings (warn-but-allow). Softer per-slot
-          // warnings (EV/IV caps, learnset/item/ability edge cases) ride through
-          // as badges.
+          // throws. HARD format-illegalities (see HARD_VIOLATION_CODES) — an
+          // out-of-format species, an illegal move/ability/item, and the species
+          // (by Dex number) / item clauses — are fed back verbatim so the model
+          // rebuilds legally, up to MAX_PROPOSED_TEAM_RETRIES, then
+          // accept-with-warnings (warn-but-allow). We ALSO require a held item on
+          // every battle-ready member (`item_missing`) — but only for a BUILT
+          // team, not when the user attached an image: an import honestly reflects
+          // an obscured/unset item as null and shouldn't be forced to fabricate
+          // one. Softer per-slot warnings (EV/IV caps, `incomplete`) ride through
+          // as badges and never block.
           const pt = parsed.data.proposed_team;
           const teamWarnings = pt
             ? await validateTeam(
@@ -884,11 +891,10 @@ export async function runWithProvider(
                 ctx.db as unknown as OakDb,
               )
             : [];
+          const hasImages = (ctx.images?.length ?? 0) > 0;
           const hardViolations = teamWarnings.filter(
             (w) =>
-              w.code === "species_illegal" ||
-              w.code === "duplicate_species" ||
-              w.code === "duplicate_item",
+              isHardViolation(w) || (w.code === "item_missing" && !hasImages),
           );
           if (
             hardViolations.length > 0 &&
@@ -902,40 +908,21 @@ export async function runWithProvider(
               cache_hit: false,
               error: "proposed_team_illegal",
             });
-            const illegalSpecies = hardViolations.filter(
-              (w) => w.code === "species_illegal",
-            );
-            const clauseViolations = hardViolations.filter(
-              (w) => w.code !== "species_illegal",
-            );
-            const messageParts: string[] = [];
-            if (illegalSpecies.length > 0) {
-              const offenders = illegalSpecies
-                .map((w) => {
-                  const species =
-                    w.slot !== undefined ? pt?.members[w.slot]?.species : null;
-                  return species ?? `slot ${w.slot ?? "?"}`;
-                })
-                .join(", ");
-              messageParts.push(
-                `Your proposed_team includes Pokémon that are NOT in the ` +
-                  `${formatForMode(ctx.mode)} roster (${offenders}).`,
-              );
-            }
-            if (clauseViolations.length > 0) {
-              messageParts.push(clauseViolations.map((w) => w.message).join(" "));
-            }
-            messageParts.push(
-              `Rebuild the team so every member is legal in this format and ` +
-                `no two members share a species or a held item — drop or ` +
-                `replace the offending members — and call submit_answer again. ` +
-                `If unsure whether a species exists in this format, verify it ` +
-                `with resolve_entity first.`,
-            );
+            // Each warning message is already specific (names the species, move,
+            // item, or clashing slots). Enumerate them, then a rebuild directive.
+            const issues = hardViolations.map((w) => w.message).join(" ");
+            const content =
+              `Your proposed_team is not legal for ${formatForMode(ctx.mode)} and ` +
+              `was rejected: ${issues} Rebuild it so every member is legal AND ` +
+              `complete — replace the offending moves, abilities, or items; give ` +
+              `every battle-ready member a held item; and make sure no two members ` +
+              `share a species or a held item — then call submit_answer again. If ` +
+              `unsure whether a species, move, or item is legal in this format, ` +
+              `verify it with resolve_entity or the pokedex tools first.`;
             toolResults.push({
               toolCallId: call.id,
               isError: true,
-              content: messageParts.join(" "),
+              content,
             });
             continue;
           }

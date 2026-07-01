@@ -484,6 +484,7 @@ export const SEARCHABLE_NAMES_SEED: SearchableNameSeed[] = [
   { kind: "type", slug: "water", display_name: "Water" },
   { kind: "type", slug: "dragon", display_name: "Dragon" },
   { kind: "item", slug: "leftovers", display_name: "Leftovers" },
+  { kind: "item", slug: "life-orb", display_name: "Life Orb" },
 ];
 
 export type ReferenceCacheSeed = {

@@ -28,7 +28,7 @@ import {
 import type { OakDb } from "@/data/db";
 import { formatForMode } from "@/data/formats";
 import { createTeam } from "@/data/repos/team-repo";
-import { validateTeam } from "@/server/teams/validate-team";
+import { validateTeam, isHardViolation } from "@/server/teams/validate-team";
 
 const description =
   "Save a team to the user's saved Teams. Call this ONLY when the user EXPLICITLY " +
@@ -64,25 +64,22 @@ export const saveTeamTool: ToolDef = {
 
     const name = (input.name ?? team.name ?? "").trim() || "Untitled team";
 
-    // Don't persist an unusable team. Roster-validate against the turn's format
-    // (server-controlled, like the runtime proposal gate) and refuse a HARD
-    // illegality — an out-of-format species, the species clause, or the item
-    // clause — the same violations the model is told to rebuild away from in
-    // the submit_answer loop. Softer warnings (EV/IV caps, learnset edge cases)
-    // are advisory and still allowed through, matching the warn-but-allow Teams
-    // API.
+    // Don't persist a format-illegal team. Roster-validate against the turn's
+    // format (server-controlled, like the runtime proposal gate) and refuse any
+    // HARD illegality (see HARD_VIOLATION_CODES) — an out-of-format species, an
+    // illegal move/ability/item, or the species/item clauses — the same
+    // violations the model is told to rebuild away from in the submit_answer
+    // loop. Softer warnings (EV/IV caps, `incomplete` skeletons, and a missing
+    // held item — legal, just weak) are advisory and still saved, matching the
+    // warn-but-allow Teams API (e.g. a team imported from a screenshot with an
+    // obscured item stays saveable).
     try {
       const warnings = await validateTeam(
         team.members,
         formatForMode(ctx.mode),
         ctx.db as unknown as OakDb,
       );
-      const illegal = warnings.filter(
-        (w) =>
-          w.code === "species_illegal" ||
-          w.code === "duplicate_species" ||
-          w.code === "duplicate_item",
-      );
+      const illegal = warnings.filter(isHardViolation);
       if (illegal.length > 0) {
         return { saved: false, reason: "illegal_team", warnings: illegal };
       }

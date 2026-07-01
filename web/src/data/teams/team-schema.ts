@@ -95,6 +95,7 @@ export const warningCodeSchema = z.enum([
   "species_illegal", // species not in the format roster
   "ability_not_for_species", // ability not one of the species' legal abilities
   "item_illegal", // item not legal in the format
+  "item_missing", // battle-ready member (4 moves) with no held item
   "move_not_in_learnset", // move not in the species' learnset for the format
   "duplicate_species", // species clause
   "duplicate_item", // item clause
@@ -115,3 +116,32 @@ export const teamWarningSchema = z
   .strict();
 
 export type TeamWarning = z.infer<typeof teamWarningSchema>;
+
+/**
+ * Codes that make a team HARD-ILLEGAL in the format — a proposal carrying any
+ * of these is rejected and sent back for the model to rebuild (runtime.ts), and
+ * a save carrying any of them is refused (save-team.tool.ts). Single source of
+ * truth for both gates.
+ *
+ * `item_missing` is deliberately NOT here: a member with no held item is still
+ * a legal team (running item-less is allowed, just weak), so it must never
+ * block a SAVE — e.g. a team imported from a screenshot with an obscured item.
+ * It's a PROPOSAL-completeness rule instead, enforced only by the runtime gate
+ * (and only for built teams, not image imports). Everything else (`incomplete`,
+ * the EV/IV over-cap warnings) is soft/advisory: a badge that never blocks.
+ */
+export const HARD_VIOLATION_CODES: ReadonlySet<WarningCode> = new Set<WarningCode>(
+  [
+    "species_illegal",
+    "ability_not_for_species",
+    "item_illegal",
+    "move_not_in_learnset",
+    "duplicate_species",
+    "duplicate_item",
+  ],
+);
+
+/** True when a warning is a hard format-illegality (see `HARD_VIOLATION_CODES`). */
+export function isHardViolation(warning: TeamWarning): boolean {
+  return HARD_VIOLATION_CODES.has(warning.code);
+}

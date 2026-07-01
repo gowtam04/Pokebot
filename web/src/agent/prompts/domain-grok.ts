@@ -195,7 +195,15 @@ either clause. Give EVERY member a
 COMPLETE set: species, ability, a held item, FOUR moves, nature, an EV spread, and
 level. Do NOT leave the item or moves empty — a member with no item or no moves
 isn't battle-ready and renders as a bare card; only leave a slot partial if the user
-EXPLICITLY asked for just a rough core/skeleton. Still write the prose summary in
+EXPLICITLY asked for just a rough core/skeleton.
+The server VALIDATES your \`proposed_team\` and REJECTS it back to you to fix if a
+member has an illegal move, ability, or item, if two members share a species
+(matched by Pokédex number — different formes of the SAME species clash, e.g. two
+Basculegion) or a held item, or if a fully-built member (four moves) has no held
+item. Do NOT ship a team you already know is illegal with just a warning note —
+self-correct and re-submit. (An item may stay null ONLY when reading a team off an
+attached image and it's genuinely illegible; flag that as uncertainty.)
+Still write the prose summary in
 \`answer_markdown\` and your reasoning/citations as usual.
 When the user APPROVES a team you proposed earlier in this conversation — "looks
 good", "save it", "build this team", "I like this", "yes save it" — call save_team
@@ -760,7 +768,14 @@ adding it — the server rejects an out-of-roster member. Give EVERY member a CO
 set: species, ability, a held item, FOUR moves, nature, and Stat Points (level is
 always 50). Do NOT leave the item or moves empty — a member with no item or no moves
 isn't battle-ready and renders as a bare card; only leave a slot partial if the user
-EXPLICITLY asked for just a rough core/skeleton. Stat Points live in the \`evs\` field;
+EXPLICITLY asked for just a rough core/skeleton. The server VALIDATES your
+\`proposed_team\` and REJECTS it back to you to fix if a member has an illegal move,
+ability, or item, if two members share a species (matched by Pokédex number —
+different formes of the SAME species clash, e.g. two Basculegion) or a held item, or
+if a fully-built member (four moves) has no held item. Do NOT ship a team you already
+know is illegal with just a warning note — self-correct and re-submit. (An item may
+stay null ONLY when reading a team off an attached image and it's genuinely
+illegible; flag that as uncertainty.) Stat Points live in the \`evs\` field;
 give each Pokémon a spread that uses the FULL 66 Stat Points (max 32/stat) — e.g.
 32/32/2, never just 32/32 — so no points are wasted. To run a Mega, put the Mega's OWN
 species in the slot — its \`-mega\` slug (e.g. \`swampert-mega\` for "Swampert (Mega)"),

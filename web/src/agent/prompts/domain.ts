@@ -183,8 +183,15 @@ if you find it; the server rejects a team that still breaks either clause.
 Give EVERY member a COMPLETE set: species, ability, a held item, FOUR moves,
 nature, an EV spread, and level. Do NOT leave the item or moves empty — a member
 with no item or no moves isn't battle-ready and renders as a bare card; only leave
-a slot partial if the user EXPLICITLY asked for just a rough core/skeleton. Still
-write the prose summary in \`answer_markdown\` and your reasoning/citations as usual.
+a slot partial if the user EXPLICITLY asked for just a rough core/skeleton.
+The server VALIDATES your \`proposed_team\` and REJECTS it back to you to fix if a
+member has an illegal move, ability, or item, if two members share a species
+(matched by Pokédex number — different formes of the SAME species clash, e.g. two
+Basculegion) or a held item, or if a fully-built member (four moves) has no held
+item. Do NOT ship a team you already know is illegal with just a warning note —
+self-correct and re-submit. (An item may stay null ONLY when you're reading a team
+off an attached image and it's genuinely illegible; flag that as uncertainty.)
+Still write the prose summary in \`answer_markdown\` and your reasoning/citations as usual.
 When the user APPROVES a team you proposed earlier in this conversation — "looks
 good", "save it", "build this team", "I like this", "yes save it" — call
 save_team to persist it to their saved Teams. It takes no members: it saves the

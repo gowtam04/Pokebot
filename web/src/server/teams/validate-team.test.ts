@@ -11,7 +11,8 @@
  *     dragon-claw, fire-fang.
  *   - ninetales: abilities { flash-fire, drought }; learns will-o-wisp,
  *     trick-room, flamethrower.
- *   - the ONLY legal held item is "leftovers".
+ *   - the legal held items are "leftovers" and "life-orb" (e.g. "choice-band"
+ *     is NOT in the list → item_illegal).
  *
  * Each WarningCode gets a test that proves it fires on a bad team AND is silent
  * on a clean one; the service never throws and always returns an array (BR-T6).
@@ -267,6 +268,24 @@ describe("validateTeam", () => {
       expect(codes(warnings)).not.toContain("duplicate_species");
     });
 
+    it("flags duplicate_species for two FORMES of the same species (by Dex number)", async () => {
+      // tauros (#128) and tauros-paldea-combat (#128) are different slugs but the
+      // SAME species under the clause — a slug-only check would miss this.
+      const warnings = await validateTeam(
+        [
+          member({ species: "tauros" }),
+          member({ species: "tauros-paldea-combat" }),
+        ],
+        SV,
+        db,
+      );
+      const dups = warnings.filter((x) => x.code === "duplicate_species");
+      expect(dups).toHaveLength(1);
+      expect(dups[0]?.slot).toBeUndefined(); // team-level
+      // Names the species (a slug, not the bare Dex number) in the message.
+      expect(dups[0]?.message).toContain("tauros");
+    });
+
     it("does not treat different forms / blank slots as duplicates", async () => {
       const warnings = await validateTeam(
         [
@@ -302,6 +321,39 @@ describe("validateTeam", () => {
     it("is silent when species is set and there are 4 moves", async () => {
       const warnings = await validateTeam([legalGarchomp()], SV, db);
       expect(codes(warnings)).not.toContain("incomplete");
+    });
+  });
+
+  describe("item_missing — a complete member must hold an item", () => {
+    it("flags a complete member (4 moves) with no held item", async () => {
+      const warnings = await validateTeam(
+        [legalGarchomp({ item: null })],
+        SV,
+        db,
+      );
+      const w = warnings.find((x) => x.code === "item_missing");
+      expect(w).toBeDefined();
+      expect(w?.slot).toBe(0);
+      expect(w?.field).toBe("item");
+      // A full 4-move set → not incomplete; the only gap is the missing item.
+      expect(codes(warnings)).not.toContain("incomplete");
+    });
+
+    it("is silent when the member holds an item", async () => {
+      const warnings = await validateTeam([legalGarchomp()], SV, db);
+      expect(codes(warnings)).not.toContain("item_missing");
+    });
+
+    it("does NOT flag item_missing for a skeleton member (<4 moves)", async () => {
+      // The skeleton carve-out: fewer than 4 moves ⇒ `incomplete`, exempt from
+      // the item requirement (an explicitly-requested rough core).
+      const warnings = await validateTeam(
+        [legalGarchomp({ item: null, moves: ["earthquake", "dragon-claw"] })],
+        SV,
+        db,
+      );
+      expect(codes(warnings)).toContain("incomplete");
+      expect(codes(warnings)).not.toContain("item_missing");
     });
   });
 

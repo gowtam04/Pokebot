@@ -337,9 +337,9 @@ describe("team-lookup-agent-e2e — list_teams + get_team via the real runtime",
 // ---------------------------------------------------------------------------
 // proposed_team roster gate — the runtime roster-validates a proposed team
 // against the turn's format. An out-of-roster species (`species_illegal`) is
-// fed back so the model rebuilds legally (one dedicated retry), then accepted
-// with warnings stamped (warn-but-allow). `heatran` is ABSENT from the "tools"
-// seed → species_illegal; `garchomp` is present → legal.
+// fed back so the model rebuilds legally (up to MAX_PROPOSED_TEAM_RETRIES=2),
+// then accepted with warnings stamped (warn-but-allow). `heatran` is ABSENT from
+// the "tools" seed → species_illegal; `garchomp` is present → legal.
 // ---------------------------------------------------------------------------
 
 /** A second seeded-roster species (distinct from garchomp), for clause tests. */
@@ -399,7 +399,7 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
     // model re-emitted — so the stream ran twice, not once.
     expect(stream).toHaveBeenCalledTimes(2);
     const feedback = lastToolResultText(snapshots[1]);
-    expect(feedback).toMatch(/not in the .*roster/i);
+    expect(feedback).toMatch(/not legal/i);
     expect(feedback).toContain("heatran");
 
     // Final answer carries the LEGAL rebuild; no species_illegal survives.
@@ -421,10 +421,11 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
         members: [heatranMember(), garchompMember()],
       },
     };
-    // Model stays illegal on the retry; budget (MAX_PROPOSED_TEAM_RETRIES=1) spent.
+    // Model stays illegal on every retry; budget (MAX_PROPOSED_TEAM_RETRIES=2) spent.
     const { client, stream } = scriptedClient([
       message([toolUse("submit_answer", illegalAnswer, "t1")]),
       message([toolUse("submit_answer", illegalAnswer, "t2")]),
+      message([toolUse("submit_answer", illegalAnswer, "t3")]),
     ]);
 
     const result = await runtime.runOakWith(
@@ -434,9 +435,9 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
       ctx,
     );
 
-    // One re-emit, then accepted on the 2nd despite still being illegal — the
+    // Two re-emits, then accepted on the 3rd despite still being illegal — the
     // turn never fails; the warning rides through for the UI to flag.
-    expect(stream).toHaveBeenCalledTimes(2);
+    expect(stream).toHaveBeenCalledTimes(3);
     expect(result.proposed_team).toBeDefined();
     expect(
       (result.proposed_team_warnings ?? []).some(
@@ -448,10 +449,11 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
 });
 
 // ---------------------------------------------------------------------------
-// proposed_team clause gate — the species clause (duplicate species) and item
-// clause (duplicate held item) are the other two HARD violations alongside
-// species_illegal: fed back so the model rebuilds legally (one dedicated
-// retry), then accepted with warnings stamped (warn-but-allow) once spent.
+// proposed_team clause gate — the species clause (duplicate species, by Dex
+// number) and item clause (duplicate held item) are HARD violations alongside
+// species_illegal: fed back so the model rebuilds legally (up to
+// MAX_PROPOSED_TEAM_RETRIES=2), then accepted with warnings stamped
+// (warn-but-allow) once spent.
 // ---------------------------------------------------------------------------
 
 describe("active-team-agent-e2e — proposed_team clause gate (species/item)", () => {
@@ -511,6 +513,7 @@ describe("active-team-agent-e2e — proposed_team clause gate (species/item)", (
     const { client, stream } = scriptedClient([
       message([toolUse("submit_answer", illegalAnswer, "t1")]),
       message([toolUse("submit_answer", illegalAnswer, "t2")]),
+      message([toolUse("submit_answer", illegalAnswer, "t3")]),
     ]);
 
     const result = await runtime.runOakWith(
@@ -520,7 +523,7 @@ describe("active-team-agent-e2e — proposed_team clause gate (species/item)", (
       ctx,
     );
 
-    expect(stream).toHaveBeenCalledTimes(2);
+    expect(stream).toHaveBeenCalledTimes(3);
     expect(result.proposed_team).toBeDefined();
     expect(
       (result.proposed_team_warnings ?? []).some(
@@ -566,6 +569,214 @@ describe("active-team-agent-e2e — proposed_team clause gate (species/item)", (
     expect(feedback).toContain("garchomp");
 
     expect(result.proposed_team?.members[1]?.species).toBe("ninetales");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "duplicate_species",
+      ),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// proposed_team legality gate (moves / items / formes) — the codes promoted to
+// HARD alongside species/clauses: an illegal move (move_not_in_learnset), a
+// battle-ready member with no held item (item_missing — BUILT teams only), and
+// the species clause matched by DEX NUMBER so two formes of one species collide.
+// ---------------------------------------------------------------------------
+
+/** A fully-legal, COMPLETE Garchomp (4 in-learnset moves + a legal item). */
+function completeGarchomp(overrides: Partial<TeamMember> = {}): TeamMember {
+  return {
+    species: "garchomp",
+    ability: "rough-skin",
+    item: "leftovers",
+    moves: ["earthquake", "dragon-claw", "fire-fang", "earthquake"],
+    nature: "jolly",
+    evs: { ...spread(), atk: 252, spe: 252, hp: 4 },
+    ivs: spread(31),
+    tera_type: "ground",
+    level: 50,
+    ...overrides,
+  };
+}
+
+/** A blank member of a given Tauros forme (all formes share Dex #128). */
+function taurosForme(slug: string): TeamMember {
+  return {
+    species: slug,
+    ability: null,
+    item: null,
+    moves: [],
+    nature: null,
+    evs: spread(),
+    ivs: spread(31),
+    tera_type: null,
+    level: 50,
+  };
+}
+
+describe("active-team-agent-e2e — proposed_team legality gate (moves/items/formes)", () => {
+  it("re-emits on an illegal move (move_not_in_learnset), then accepts the fix", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      // "psychic" is not in Garchomp's learnset → now a HARD violation.
+      proposed_team: {
+        name: "Bad Move",
+        format: SV,
+        members: [
+          completeGarchomp({
+            moves: ["earthquake", "dragon-claw", "psychic", "earthquake"],
+          }),
+        ],
+      },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Good Move",
+        format: SV,
+        members: [completeGarchomp()],
+      },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/learnset/i);
+    expect(feedback).toContain("psychic");
+
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "move_not_in_learnset",
+      ),
+    ).toBe(false);
+  });
+
+  it("re-emits on a complete member with no held item (item_missing), then accepts the fix", async () => {
+    const ctx = await buildCtx("standard", undefined); // no images → item required
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "No Item",
+        format: SV,
+        members: [completeGarchomp({ item: null })],
+      },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "With Item",
+        format: SV,
+        members: [completeGarchomp()],
+      },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/held item/i);
+
+    expect(result.proposed_team?.members[0]?.item).toBe("leftovers");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "item_missing",
+      ),
+    ).toBe(false);
+  });
+
+  it("does NOT enforce item_missing when the user attached an image (import)", async () => {
+    // An import honestly reflects an obscured/unset item as null; forcing an item
+    // would push the model to fabricate one. With an image attached the complete
+    // member with item:null is accepted on the FIRST submit (no re-emit), and the
+    // missing-item warning still rides through as an advisory badge.
+    const ctx = await buildCtx("standard", undefined);
+    ctx.images = [{ mimeType: "image/png", data: "aGVsbG8=" }];
+    const answer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Imported",
+        format: SV,
+        members: [completeGarchomp({ item: null })],
+      },
+    };
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", answer, "t1")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "rate my team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(1); // accepted first try, no re-emit
+    expect(result.proposed_team?.members[0]?.item).toBeNull();
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "item_missing",
+      ),
+    ).toBe(true); // advisory badge, not a blocker
+  });
+
+  it("re-emits on two FORMES of one species (species clause by Dex number), then accepts the fix", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    // tauros (#128) + tauros-paldea-combat (#128): distinct slugs, SAME species.
+    // A slug-only clause would miss this; the Dex-number clause catches it.
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Two Tauros",
+        format: SV,
+        members: [taurosForme("tauros"), taurosForme("tauros-paldea-combat")],
+      },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "One Each",
+        format: SV,
+        members: [taurosForme("tauros"), ninetalesMember("life-orb")],
+      },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/species clause/i);
+    expect(feedback).toContain("tauros");
+
     expect(
       (result.proposed_team_warnings ?? []).some(
         (w) => w.code === "duplicate_species",

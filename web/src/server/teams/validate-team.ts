@@ -23,7 +23,8 @@
  *   - ability_not_for_species — ability not one of the species' legal abilities.
  *   - move_not_in_learnset  — a move not learnable by the species in the format.
  *   - item_illegal          — held item not legal in the format.
- *   - duplicate_species     — species clause (team-level).
+ *   - item_missing          — a complete member (4 moves) with no held item.
+ *   - duplicate_species     — species clause, by National Dex number (team-level).
  *   - duplicate_item        — item clause (team-level).
  */
 
@@ -41,6 +42,10 @@ import { movesForPokemon } from "@/data/repos/learnset-repo";
 // pulling this server-only service into a client bundle. Re-exported here for
 // back-compat with existing `@/server/teams/validate-team` importers.
 export type { WarningCode, TeamWarning } from "@/data/teams/team-schema";
+export {
+  HARD_VIOLATION_CODES,
+  isHardViolation,
+} from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/data/teams/team-schema";
 
 /**
@@ -229,11 +234,32 @@ export async function validateTeam(
         message: `Item "${member.item}" is not legal in this format.`,
       });
     }
+
+    // Missing held item — only for an OTHERWISE-COMPLETE member (species + a
+    // full 4-move set). A member with fewer than 4 moves is already `incomplete`
+    // (an explicitly-requested skeleton/rough core) and is exempt, so this never
+    // punishes a partial team the user asked for.
+    if (member.species && member.moves.length === 4 && !member.item) {
+      warnings.push({
+        code: "item_missing",
+        slot,
+        field: "item",
+        message: `${member.species} has no held item; every battle-ready member must hold an item.`,
+      });
+    }
   });
 
   // ---- Team-level clauses ----
 
-  for (const dup of duplicates(members.map((m) => m.species))) {
+  // Species clause is by National Dex number, not slug — two members that are
+  // different formes of the same species (e.g. `basculegion` + `basculegion-f`,
+  // both #902) share a Dex number and so violate the clause. Fall back to the
+  // slug when a species isn't in the index (it's already flagged species_illegal).
+  const speciesKey = (slug: string): string => {
+    const profile = profiles.get(slug);
+    return profile && profile.found ? String(profile.national_dex_number) : slug;
+  };
+  for (const dup of duplicates(members.map((m) => m.species), speciesKey)) {
     warnings.push({
       code: "duplicate_species",
       message: `Species clause: "${dup.value}" appears in slots ${dup.slots
@@ -263,22 +289,30 @@ interface Duplicate {
 /**
  * Group non-null/non-empty values and return those that occur more than once,
  * in first-seen order (deterministic). Empty/null entries are ignored (a partial
- * team's blank slots never trip a clause).
+ * team's blank slots never trip a clause). `keyOf` maps a raw value to its
+ * grouping key (default: identity) — the reported `value` is the first-seen RAW
+ * value for that key, so a Dex-number-keyed species clause still names a species.
  */
-function duplicates(values: Array<string | null>): Duplicate[] {
-  const slotsByValue = new Map<string, number[]>();
+function duplicates(
+  values: Array<string | null>,
+  keyOf: (value: string) => string = (value) => value,
+): Duplicate[] {
+  const slotsByKey = new Map<string, number[]>();
+  const displayByKey = new Map<string, string>();
   const order: string[] = [];
   values.forEach((value, slot) => {
     if (!value) return;
-    const existing = slotsByValue.get(value);
+    const key = keyOf(value);
+    const existing = slotsByKey.get(key);
     if (existing) {
       existing.push(slot);
     } else {
-      slotsByValue.set(value, [slot]);
-      order.push(value);
+      slotsByKey.set(key, [slot]);
+      displayByKey.set(key, value);
+      order.push(key);
     }
   });
   return order
-    .filter((value) => slotsByValue.get(value)!.length > 1)
-    .map((value) => ({ value, slots: slotsByValue.get(value)! }));
+    .filter((key) => slotsByKey.get(key)!.length > 1)
+    .map((key) => ({ value: displayByKey.get(key)!, slots: slotsByKey.get(key)! }));
 }
