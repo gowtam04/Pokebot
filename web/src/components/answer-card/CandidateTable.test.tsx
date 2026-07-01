@@ -45,11 +45,13 @@ describe("CandidateTable", () => {
       );
     });
 
-    it("shows the sort label when present", () => {
+    it("shows a humanized sort label when present", () => {
+      // Raw sort is the technical "speed desc"; the chip must read the friendly
+      // "sorted by Speed ↓", never the shouty slug.
       render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
-      expect(screen.getByTestId("candidate-table-sort")).toHaveTextContent(
-        "speed desc",
-      );
+      const sort = screen.getByTestId("candidate-table-sort");
+      expect(sort).toHaveTextContent("sorted by Speed");
+      expect(sort).not.toHaveTextContent("speed desc");
     });
   });
 

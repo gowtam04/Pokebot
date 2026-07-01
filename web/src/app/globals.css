@@ -1043,6 +1043,14 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* The field name stays human-readable Title Case ("Base Stat Total"), not the
+   shouty technical slug — only the leading "SORTED BY" is uppercased. */
+.candidate-table__sort-field {
+  text-transform: none;
+}
+.candidate-table__sort-dir {
+  opacity: 0.75;
+}
 /* Horizontal-scroll wrapper: keeps the real table layout intact while still
    allowing the table to scroll sideways when it can't fit (e.g. Ability column,
    very narrow viewports). Scrolling lived on the <table> before, which dropped

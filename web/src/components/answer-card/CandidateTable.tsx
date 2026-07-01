@@ -28,6 +28,39 @@ const STAT_LABELS: Record<(typeof STAT_ORDER)[number], string> = {
 };
 
 /**
+ * Human-readable labels for the query_pokedex sort fields. The raw `sort` value
+ * is a technical `"<field> <asc|desc>"` string (e.g. `"base_stat_total desc"`);
+ * the chip should read "Base Stat Total", not "BASE_STAT_TOTAL DESC".
+ */
+const SORT_FIELD_LABELS: Record<string, string> = {
+  hp: "HP",
+  attack: "Attack",
+  defense: "Defense",
+  special_attack: "Special Attack",
+  special_defense: "Special Defense",
+  speed: "Speed",
+  base_stat_total: "Base Stat Total",
+  national_dex_number: "National Dex No.",
+};
+
+/**
+ * Turn the raw `sort` string ("base_stat_total desc") into a friendly field
+ * label plus a direction arrow (↓ high→low for desc, ↑ low→high for asc).
+ * Unknown fields fall back to a Title-Cased version of the slug.
+ */
+function formatSort(sort: string): { field: string; arrow: string } {
+  const [field, direction] = sort.trim().split(/\s+/);
+  const label =
+    SORT_FIELD_LABELS[field] ??
+    field
+      .split("_")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(" ");
+  const arrow = direction === "asc" ? "↑" : direction === "desc" ? "↓" : "";
+  return { field: label, arrow };
+}
+
+/**
  * CandidateTable — renders the `candidates` result set for filter/superlative
  * answers (US-1/2/3).
  *
@@ -48,6 +81,8 @@ export default function CandidateTable({
     ? `Showing ${shown.length} of ${total_count}`
     : `${total_count} result${total_count !== 1 ? "s" : ""}`;
 
+  const sortDisplay = sort ? formatSort(sort) : null;
+
   const hasAbilityColumn = shown.some((row) => row.ability != null);
   const hasStats = shown.some(
     (row) =>
@@ -64,12 +99,21 @@ export default function CandidateTable({
         >
           {countLabel}
         </span>
-        {sort && (
+        {sortDisplay && (
           <span
             className="candidate-table__sort"
             data-testid="candidate-table-sort"
           >
-            sorted by {sort}
+            sorted by{" "}
+            <span className="candidate-table__sort-field">
+              {sortDisplay.field}
+              {sortDisplay.arrow && (
+                <span className="candidate-table__sort-dir">
+                  {" "}
+                  {sortDisplay.arrow}
+                </span>
+              )}
+            </span>
           </span>
         )}
         {truncated && onShowAll && (
