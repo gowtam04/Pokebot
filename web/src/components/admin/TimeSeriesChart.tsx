@@ -1,3 +1,7 @@
+"use client";
+
+import { useRef, useState } from "react";
+
 import type { BucketSize } from "@/lib/admin/admin-types";
 
 /**
@@ -20,9 +24,12 @@ import type { BucketSize } from "@/lib/admin/admin-types";
  *     vertical axis is 1:1 with its pixel height, `top: <pct>%` overlays align
  *     exactly with the SVG y-scale.
  *
- * This component holds NO state and reads NO db/repo/runtime — it renders purely
- * from its props, so the jsdom component test renders it from fixtures (and an
- * empty series) without a Postgres connection.
+ * Interactivity: a pointer (or touch) over the plot snaps a vertical crosshair +
+ * a per-series dot to the NEAREST bucket and shows an HTML tooltip of that
+ * bucket's values (local `hoverT` state only — the crosshair/dots/tooltip render
+ * only while hovering, so the static DOM is unchanged). It still reads NO
+ * db/repo/runtime and renders from its props, so the jsdom component test renders
+ * it from fixtures (and an empty series) without a Postgres connection.
  */
 
 /** A single plotted point: x is a bucket-start epoch-ms, y is the value. */
@@ -133,6 +140,11 @@ export default function TimeSeriesChart({
     ? `time-series-chart ${className}`
     : "time-series-chart";
 
+  // Hover state — declared BEFORE any early return (Rules of Hooks). `hoverT` is
+  // the bucket-start the crosshair/tooltip snap to; null when not hovering.
+  const [hoverT, setHoverT] = useState<number | null>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+
   // ---- Empty state: no points anywhere ------------------------------------
   if (allPoints.length === 0) {
     return (
@@ -190,6 +202,48 @@ export default function TimeSeriesChart({
     return { v, pct: (1 - (v - yMin) / ySpan) * 100 };
   }).reverse(); // highest value first (renders top → bottom)
 
+  // Series color resolver — shared by the legend, lines, hover dots, and tooltip
+  // so all four always agree on a series' color.
+  const colorAt = (i: number) =>
+    allSeries[i]?.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
+
+  // ---- Hover: snap to the nearest distinct bucket -------------------------
+  // The distinct bucket-starts across all series; the pointer picks the closest.
+  const domain = [...new Set(xs)].sort((a, b) => a - b);
+  const snapToNearest = (clientX: number) => {
+    const rect = plotRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return; // not laid out (or jsdom) → no-op
+    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const logicalX = frac * VIEW_W;
+    let best = domain[0];
+    let bestDist = Infinity;
+    for (const t of domain) {
+      const dist = Math.abs(sx(t) - logicalX);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = t;
+      }
+    }
+    if (best !== hoverT) setHoverT(best);
+  };
+
+  // The hovered bucket's per-series rows (only series that have that bucket) +
+  // the crosshair's logical-x. Used by the SVG overlay and the HTML tooltip.
+  const hoverX = hoverT == null ? 0 : sx(hoverT);
+  const hoverRows =
+    hoverT == null
+      ? []
+      : allSeries
+          .map((s, i) => {
+            const pt = (Array.isArray(s.points) ? s.points : []).find(
+              (p) => p.t === hoverT,
+            );
+            return pt
+              ? { key: s.key, label: s.label, color: colorAt(i), value: pt.value }
+              : null;
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
   return (
     <figure
       className={rootClass}
@@ -224,7 +278,7 @@ export default function TimeSeriesChart({
                 width: 10,
                 height: 10,
                 borderRadius: 2,
-                background: s.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length],
+                background: colorAt(i),
                 display: "inline-block",
               }}
             />
@@ -235,8 +289,23 @@ export default function TimeSeriesChart({
 
       {/* Plot area: SVG + percentage-positioned y-axis labels */}
       <div
+        ref={plotRef}
         className="time-series-chart__plot"
-        style={{ position: "relative", width: "100%", height }}
+        data-testid="time-series-chart-plot"
+        onMouseMove={(e) => snapToNearest(e.clientX)}
+        onMouseLeave={() => setHoverT(null)}
+        onTouchMove={(e) => {
+          const touch = e.touches[0];
+          if (touch) snapToNearest(touch.clientX);
+        }}
+        onTouchEnd={() => setHoverT(null)}
+        style={{
+          position: "relative",
+          width: "100%",
+          height,
+          cursor: "crosshair",
+          touchAction: "pan-y",
+        }}
       >
         <svg
           className="time-series-chart__svg"
@@ -269,7 +338,7 @@ export default function TimeSeriesChart({
 
           {/* Series: optional area fill + line (or a dot for a single point) */}
           {allSeries.map((s, i) => {
-            const color = s.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
+            const color = colorAt(i);
             const pts = (Array.isArray(s.points) ? s.points : [])
               .slice()
               .sort((a, b) => a.t - b.t);
@@ -333,6 +402,55 @@ export default function TimeSeriesChart({
               </g>
             );
           })}
+
+          {/* Hover crosshair + per-series dots (only while hovering). Dots reuse
+              the zero-length round-cap <line> trick so they stay round under
+              preserveAspectRatio="none" (a <circle> would distort to an ellipse). */}
+          {hoverT != null && (
+            <g className="time-series-chart__hover" aria-hidden="true">
+              <line
+                className="time-series-chart__crosshair"
+                x1={hoverX}
+                y1={0}
+                x2={hoverX}
+                y2={height}
+                stroke="var(--text-muted, #6e625a)"
+                strokeWidth={1}
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
+              />
+              {hoverRows.map((r) => {
+                const cy = sy(r.value);
+                return (
+                  <g key={r.key}>
+                    {/* white halo so the dot reads over a same-colored line */}
+                    <line
+                      className="time-series-chart__hover-halo"
+                      x1={hoverX}
+                      y1={cy}
+                      x2={hoverX}
+                      y2={cy}
+                      stroke="var(--surface, #fff)"
+                      strokeWidth={9}
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <line
+                      className="time-series-chart__hover-dot"
+                      x1={hoverX}
+                      y1={cy}
+                      x2={hoverX}
+                      y2={cy}
+                      stroke={r.color}
+                      strokeWidth={6}
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
         </svg>
 
         {/* y-axis tick labels overlaid on the plot (aligned to the gridlines) */}
@@ -361,6 +479,73 @@ export default function TimeSeriesChart({
             </span>
           ))}
         </div>
+
+        {/* Hover tooltip: the hovered bucket's time + each series' value. Anchored
+            to the crosshair via left:% (same logical→% mapping as the crosshair),
+            flipped past the midpoint so it never overflows the right edge. */}
+        {hoverT != null && hoverRows.length > 0 && (
+          <div
+            className="time-series-chart__tooltip"
+            data-testid="time-series-chart-tooltip"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: 4,
+              left: `${(hoverX / VIEW_W) * 100}%`,
+              transform:
+                hoverX / VIEW_W >= 0.5
+                  ? "translateX(calc(-100% - 10px))"
+                  : "translateX(10px)",
+              pointerEvents: "none",
+              zIndex: 2,
+              background: "var(--surface, #fff)",
+              border: "1px solid var(--border, #e9e0d8)",
+              borderRadius: 6,
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+              padding: "6px 8px",
+              font: "500 11px/1.35 var(--body, system-ui, sans-serif)",
+              color: "var(--text-strong, #2b2320)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <div
+              className="time-series-chart__tooltip-time"
+              style={{ marginBottom: 4, color: "var(--text-muted, #6e625a)" }}
+            >
+              {formatTime(hoverT, bucket)}
+            </div>
+            {hoverRows.map((r) => (
+              <div
+                key={r.key}
+                className="time-series-chart__tooltip-row"
+                data-testid={`ts-tooltip-${r.key}`}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 2,
+                    background: r.color,
+                    display: "inline-block",
+                    flex: "0 0 auto",
+                  }}
+                />
+                <span style={{ flex: "1 1 auto" }}>{r.label}</span>
+                <span
+                  style={{
+                    marginLeft: 10,
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {yFormat(r.value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* x-axis tick labels (first / middle / last bucket) */}

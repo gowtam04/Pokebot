@@ -31,6 +31,7 @@
 import type { CSSProperties, ReactElement } from "react";
 
 import { isModelKey, modelLabel } from "@/agent/models";
+import { enumerateBuckets } from "@/lib/admin/bucket-axis";
 import type { CostByModel, CostResponse } from "@/lib/admin/admin-types";
 
 import DataTable, { type Column } from "./DataTable";
@@ -123,14 +124,18 @@ function CostBody({ data }: { data: CostResponse }) {
   const hasUnpriced = byModel.some((m) => !m.priced);
 
   // Cost trend over the range (ADMIN-AC-3.2): one estUsd point per bucket.
+  // Densify like the Overview usage chart — the repo emits only non-empty
+  // buckets, so plot every bucket the range covers (zeros for the gaps) for a
+  // continuous axis. Gated on `series.length` so an empty range keeps the
+  // chart's empty-state placeholder.
+  const rawSeries = Array.isArray(data.series) ? data.series : [];
+  const domain = rawSeries.length === 0 ? [] : enumerateBuckets(data.range);
+  const estByT = new Map<number, number>(rawSeries.map((b) => [b.t, b.estUsd]));
   const costSeries: ChartSeries = {
     key: "estUsd",
     label: "Estimated cost",
     color: "var(--success, #2fb573)",
-    points: (Array.isArray(data.series) ? data.series : []).map((b) => ({
-      t: b.t,
-      value: b.estUsd,
-    })),
+    points: domain.map((t) => ({ t, value: estByT.get(t) ?? 0 })),
   };
 
   const columns: Column<CostByModel>[] = [

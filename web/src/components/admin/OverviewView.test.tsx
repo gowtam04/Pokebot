@@ -14,14 +14,19 @@ import { render, screen, cleanup, fireEvent, within } from "@testing-library/rea
 afterEach(() => cleanup());
 
 import OverviewView, { errorRateTone } from "./OverviewView";
+import { enumerateBuckets } from "@/lib/admin/bucket-axis";
 import type { OverviewResponse } from "@/lib/admin/admin-types";
 
 const DAY = 86_400_000;
 const BASE = Date.UTC(2026, 0, 1); // 2026-01-01
 
-/** A realistic resolved overview payload over a 4-bucket daily window. */
+/**
+ * A realistic resolved overview payload over a 4-bucket daily window. `to` is
+ * BASE + 4*DAY so the half-open `[from, to)` window exactly covers the four
+ * bucket-starts BASE … BASE+3*DAY (densify is then lossless).
+ */
 const FIXTURE: OverviewResponse = {
-  range: { from: BASE, to: BASE + 3 * DAY, bucket: "day" },
+  range: { from: BASE, to: BASE + 4 * DAY, bucket: "day" },
   totals: {
     turns: 101,
     activeSigned: 7,
@@ -96,6 +101,40 @@ describe("OverviewView", () => {
     expect(chart.getByTestId("ts-series-activeSigned")).toBeInTheDocument();
     expect(chart.getByTestId("ts-series-activeGuest")).toBeInTheDocument();
     expect(chart.getByTestId("ts-series-signups")).toBeInTheDocument();
+  });
+
+  it("densifies the series to one point per bucket over the whole range (ADMIN-AC-2.2)", () => {
+    const { container } = render(<OverviewView data={FIXTURE} />);
+    const expected = enumerateBuckets(FIXTURE.range).length; // 4 daily buckets
+    expect(expected).toBe(4);
+    const line = container.querySelector(
+      '[data-testid="ts-series-turns"] polyline.time-series-chart__line',
+    );
+    expect(line).not.toBeNull();
+    const coords = (line!.getAttribute("points") ?? "").trim().split(/\s+/);
+    expect(coords).toHaveLength(expected);
+  });
+
+  it("zero-fills interior gaps so the axis stays continuous (no missing days)", () => {
+    // A range that spans 4 days but whose repo output skips the 2nd and 3rd days
+    // (the repo emits no row for empty buckets) — densify must fill them with 0.
+    const gappy: OverviewResponse = {
+      ...FIXTURE,
+      buckets: [
+        { t: BASE, turns: 12, activeSigned: 2, activeGuest: 3, signups: 1 },
+        { t: BASE + 3 * DAY, turns: 41, activeSigned: 4, activeGuest: 6, signups: 1 },
+      ],
+    };
+    const { container } = render(<OverviewView data={gappy} />);
+    const line = container.querySelector(
+      '[data-testid="ts-series-turns"] polyline.time-series-chart__line',
+    );
+    const pointsAttr = line!.getAttribute("points") ?? "";
+    // Full enumerated length (gaps filled), and no NaN from a densified point.
+    expect(pointsAttr.trim().split(/\s+/)).toHaveLength(
+      enumerateBuckets(FIXTURE.range).length,
+    );
+    expect(pointsAttr).not.toMatch(/NaN/);
   });
 
   it("renders a loading placeholder before any data arrives", () => {

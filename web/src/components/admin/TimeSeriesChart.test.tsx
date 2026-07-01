@@ -1,5 +1,5 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(() => cleanup());
 
@@ -163,6 +163,88 @@ describe("TimeSeriesChart", () => {
     const fig = screen.getByTestId("time-series-chart");
     expect(fig).toHaveClass("time-series-chart");
     expect(fig).toHaveClass("cost-chart");
+  });
+});
+
+describe("TimeSeriesChart hover", () => {
+  /** Mock the plot's layout box so clientX maps 1:1 to the logical VIEW_W=1000. */
+  function mockPlotWidth(plot: HTMLElement, width = 1000) {
+    vi.spyOn(plot, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width,
+      height: 180,
+      right: width,
+      bottom: 180,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+  }
+
+  it("shows a crosshair + tooltip for the nearest bucket on mousemove", () => {
+    const { container } = render(
+      <TimeSeriesChart series={[TURNS_SERIES, SIGNUPS_SERIES]} />,
+    );
+    const plot = screen.getByTestId("time-series-chart-plot");
+    mockPlotWidth(plot);
+
+    // Buckets sit at logical x = 0 / 333 / 667 / 1000; clientX 700 → bucket #2
+    // (BASE+2*DAY) unambiguously (nearest to 667, not 1000).
+    fireEvent.mouseMove(plot, { clientX: 700 });
+
+    expect(container.querySelector(".time-series-chart__crosshair")).not.toBeNull();
+    const tooltip = screen.getByTestId("time-series-chart-tooltip");
+    // Tooltip header = that bucket's time (tz-agnostic via the shared helper).
+    expect(tooltip).toHaveTextContent(formatTime(BASE + 2 * DAY, "day"));
+    // Per-series values at BASE+2*DAY: turns 18, signups 0.
+    expect(screen.getByTestId("ts-tooltip-turns")).toHaveTextContent("Turns");
+    expect(screen.getByTestId("ts-tooltip-turns")).toHaveTextContent("18");
+    expect(screen.getByTestId("ts-tooltip-signups")).toHaveTextContent("Signups");
+  });
+
+  it("clears the crosshair + tooltip on mouseleave", () => {
+    const { container } = render(<TimeSeriesChart series={[TURNS_SERIES]} />);
+    const plot = screen.getByTestId("time-series-chart-plot");
+    mockPlotWidth(plot);
+
+    fireEvent.mouseMove(plot, { clientX: 500 });
+    expect(container.querySelector(".time-series-chart__crosshair")).not.toBeNull();
+
+    fireEvent.mouseLeave(plot);
+    expect(container.querySelector(".time-series-chart__crosshair")).toBeNull();
+    expect(screen.queryByTestId("time-series-chart-tooltip")).toBeNull();
+  });
+
+  it("is a no-op when the plot has no layout box (0 width) — never NaNs", () => {
+    // No rect mock: jsdom reports width 0, so hover must guard and do nothing.
+    const { container } = render(<TimeSeriesChart series={[TURNS_SERIES]} />);
+    const plot = screen.getByTestId("time-series-chart-plot");
+    expect(() => fireEvent.mouseMove(plot, { clientX: 100 })).not.toThrow();
+    expect(container.querySelector(".time-series-chart__crosshair")).toBeNull();
+    expect(screen.queryByTestId("time-series-chart-tooltip")).toBeNull();
+  });
+
+  it("snaps to the sole bucket of a single-point series (centered)", () => {
+    const single: ChartSeries = {
+      key: "solo",
+      label: "Solo",
+      points: [{ t: BASE, value: 7 }],
+    };
+    const { container } = render(<TimeSeriesChart series={[single]} />);
+    const plot = screen.getByTestId("time-series-chart-plot");
+    mockPlotWidth(plot);
+
+    fireEvent.mouseMove(plot, { clientX: 250 });
+    expect(container.querySelector(".time-series-chart__crosshair")).not.toBeNull();
+    expect(screen.getByTestId("ts-tooltip-solo")).toHaveTextContent("Solo");
+    expect(screen.getByTestId("ts-tooltip-solo")).toHaveTextContent("7");
+  });
+
+  it("does not render hover elements before any pointer interaction", () => {
+    const { container } = render(<TimeSeriesChart series={[TURNS_SERIES]} />);
+    expect(container.querySelector(".time-series-chart__crosshair")).toBeNull();
+    expect(screen.queryByTestId("time-series-chart-tooltip")).toBeNull();
   });
 });
 
