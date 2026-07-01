@@ -15,6 +15,7 @@
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/lib/api/sprites-client";
 import { showdownAniSprite, showdownSpriteId } from "@/lib/sprites";
+import { titleizeSlug } from "./display-names";
 
 export interface RosterStripProps {
   members: TeamMember[];
@@ -22,16 +23,6 @@ export interface RosterStripProps {
   spriteBySpecies: Record<string, SpriteRef | undefined>;
   onSelect: (index: number) => void;
   onAdd: () => void;
-}
-
-/** Title-case a slug for the chip label ("great-tusk" → "Great Tusk"). */
-function titleize(value: string | null): string {
-  if (!value) return "Empty";
-  return value
-    .split(/[-\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 export default function RosterStrip({
@@ -74,7 +65,7 @@ export default function RosterStrip({
                 <span className="roster-slot__sprite-empty" aria-hidden />
               )}
             </span>
-            <span className="roster-slot__name">{titleize(species)}</span>
+            <span className="roster-slot__name">{titleizeSlug(species)}</span>
             {types.length > 0 && (
               <span className="roster-slot__types" aria-hidden>
                 {types.map((t) => (

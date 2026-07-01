@@ -28,6 +28,7 @@ import { searchEntities, type EntityKind } from "@/lib/api/search-client";
 import type { Format } from "@/data/formats";
 import { showdownAniSprite, showdownSpriteId } from "@/lib/sprites";
 import type { PickerOption } from "./dex-constants";
+import { titleizeSlug } from "./display-names";
 
 export interface EntityPickerProps {
   /** Entity kind to search; omit when supplying a static `options` list. */
@@ -85,9 +86,20 @@ export default function EntityPicker({
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<PickerOption[]>([]);
   const [active, setActive] = useState(-1);
+
+  // Resolve a committed slug to its friendly label: prefer the matching
+  // option's `display_name` from the current results (static `options` or the
+  // latest network search); fall back to a client-side title-case so the
+  // field never shows a raw slug, even before that data has loaded.
+  function labelFor(slug: string): string {
+    if (!slug) return "";
+    const match = results.find((o) => o.slug === slug);
+    return match ? match.display_name : titleizeSlug(slug);
+  }
+
   // The text shown in the input. Held LOCALLY so typing filters without
   // committing — only a real selection (or a cleared field) reaches `onChange`.
-  const [text, setText] = useState(value);
+  const [text, setText] = useState(() => labelFor(value));
   const reqId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listboxId = useId();
@@ -96,7 +108,8 @@ export default function EntityPicker({
   // mega-stone auto-fill, clear). Typing never changes `value`, so this won't
   // fight the user mid-edit.
   useEffect(() => {
-    setText(value);
+    setText(labelFor(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- labelFor reads `results` fresh each render; we only want to react to `value` changing externally.
   }, [value]);
 
   // Tear down any pending debounce on unmount.
@@ -154,7 +167,7 @@ export default function EntityPicker({
 
   function select(option: PickerOption) {
     onChange(option.slug);
-    setText(option.slug);
+    setText(option.display_name);
     setOpen(false);
     setActive(-1);
   }
@@ -174,7 +187,7 @@ export default function EntityPicker({
   /**
    * On blur, reconcile the typed text against a real selection:
    *   - empty            → commit "" (clearing is allowed).
-   *   - already `value`  → nothing to do (a prior selection stands).
+   *   - already `value`'s label → nothing to do (a prior selection stands).
    *   - exact match in the current results (slug or display name) → commit it.
    *   - otherwise        → reject the free text; revert to the committed value.
    */
@@ -187,7 +200,7 @@ export default function EntityPicker({
       setText("");
       return;
     }
-    if (trimmed === value) return;
+    if (trimmed === labelFor(value)) return;
     const lower = trimmed.toLowerCase();
     const match = results.find(
       (o) =>
@@ -197,10 +210,10 @@ export default function EntityPicker({
     );
     if (match) {
       onChange(match.slug);
-      setText(match.slug);
+      setText(match.display_name);
       return;
     }
-    setText(value);
+    setText(labelFor(value));
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {

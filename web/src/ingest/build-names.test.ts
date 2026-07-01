@@ -8,21 +8,16 @@
  * isolation — no @pkmn, no network.
  *
  * Coverage:
- *   slugToDisplayName — pure helper
- *   buildNames        — five entity kinds, display_name pass-through for pokemon,
- *                       slug derivation, format stamping, dedupe
+ *   buildNames — five entity kinds, display_name pass-through from the real
+ *                @pkmn name (not re-derived from the slug), slug derivation,
+ *                format stamping, dedupe
  */
 
 import { describe, expect, it } from "vitest";
 
 import type { Format } from "@/data/formats";
 import type { FormatSource } from "@/data/pkmn/gen-provider";
-import {
-  buildNames,
-  slugToDisplayName,
-  type NameRow,
-  type PokemonNameSource,
-} from "./build-names";
+import { buildNames, type NameRow, type PokemonNameSource } from "./build-names";
 
 const SV: Format = "scarlet-violet";
 
@@ -80,41 +75,6 @@ const POKEMON: PokemonNameSource[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// slugToDisplayName
-// ---------------------------------------------------------------------------
-
-describe("slugToDisplayName", () => {
-  it("capitalizes a single-word slug", () => {
-    expect(slugToDisplayName("fire")).toBe("Fire");
-    expect(slugToDisplayName("garchomp")).toBe("Garchomp");
-    expect(slugToDisplayName("water")).toBe("Water");
-  });
-
-  it("capitalizes each hyphenated segment and preserves hyphens", () => {
-    expect(slugToDisplayName("will-o-wisp")).toBe("Will-O-Wisp");
-    expect(slugToDisplayName("fake-out")).toBe("Fake-Out");
-    expect(slugToDisplayName("armor-tail")).toBe("Armor-Tail");
-    expect(slugToDisplayName("choice-band")).toBe("Choice-Band");
-    expect(slugToDisplayName("sap-sipper")).toBe("Sap-Sipper");
-    expect(slugToDisplayName("flash-fire")).toBe("Flash-Fire");
-  });
-
-  it("handles multi-segment slugs correctly", () => {
-    expect(slugToDisplayName("tauros-paldea-aqua")).toBe("Tauros-Paldea-Aqua");
-    expect(slugToDisplayName("mr-mime")).toBe("Mr-Mime");
-  });
-
-  it("returns an empty string unchanged", () => {
-    expect(slugToDisplayName("")).toBe("");
-  });
-
-  it("does not double-capitalize already-uppercase letters", () => {
-    expect(slugToDisplayName("earthquake")).toBe("Earthquake");
-    expect(slugToDisplayName("Earthquake")).toBe("Earthquake");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // buildNames
 // ---------------------------------------------------------------------------
 
@@ -151,12 +111,12 @@ describe("buildNames — move rows", () => {
     expect(moveRows).toHaveLength(3);
   });
 
-  it("derives the slug from the name and the display via slugToDisplayName", () => {
+  it("derives the slug from the id/name and takes the display verbatim from @pkmn's name", () => {
     expect(moveRows.find((r) => r.slug === "will-o-wisp")?.display_name).toBe(
       "Will-O-Wisp",
     );
     expect(moveRows.find((r) => r.slug === "fake-out")?.display_name).toBe(
-      "Fake-Out",
+      "Fake Out",
     );
     expect(moveRows.find((r) => r.slug === "earthquake")?.display_name).toBe(
       "Earthquake",
@@ -168,13 +128,13 @@ describe("buildNames — ability rows", () => {
   const rows = buildNames(SOURCE, POKEMON);
   const abilityRows = rows.filter((r) => r.kind === "ability");
 
-  it("emits one ability row per source ability with a slugged display", () => {
+  it("emits one ability row per source ability with the real @pkmn display name", () => {
     expect(abilityRows).toHaveLength(3);
     expect(abilityRows.find((r) => r.slug === "armor-tail")?.display_name).toBe(
-      "Armor-Tail",
+      "Armor Tail",
     );
     expect(abilityRows.find((r) => r.slug === "flash-fire")?.display_name).toBe(
-      "Flash-Fire",
+      "Flash Fire",
     );
   });
 });
@@ -197,13 +157,13 @@ describe("buildNames — item rows", () => {
   const rows = buildNames(SOURCE, POKEMON);
   const itemRows = rows.filter((r) => r.kind === "item");
 
-  it("emits one item row per source item with a slugged display", () => {
+  it("emits one item row per source item with the real @pkmn display name", () => {
     expect(itemRows).toHaveLength(2);
     expect(itemRows.find((r) => r.slug === "leftovers")?.display_name).toBe(
       "Leftovers",
     );
     expect(itemRows.find((r) => r.slug === "choice-band")?.display_name).toBe(
-      "Choice-Band",
+      "Choice Band",
     );
   });
 });

@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 
 import type { ImportNote, TeamDetail } from "@/lib/api/teams-client";
+import { formatLabel } from "./display-names";
 
 export interface PasteImportDialogProps {
   open: boolean;
@@ -85,7 +86,9 @@ export default function PasteImportDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="import-dialog__header">
-          <h2 className="import-dialog__title">Import from paste ({format})</h2>
+          <h2 className="import-dialog__title">
+            Import from paste ({formatLabel(format)})
+          </h2>
           <button
             type="button"
             className="import-dialog__close"

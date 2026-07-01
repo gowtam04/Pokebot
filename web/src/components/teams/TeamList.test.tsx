@@ -50,7 +50,7 @@ describe("TeamList", () => {
   it("renders a row per team with name, format and member count", () => {
     setup();
     expect(screen.getByText("Rain Offense")).toBeInTheDocument();
-    expect(screen.getByText(/scarlet-violet · 6\/6/)).toBeInTheDocument();
+    expect(screen.getByText(/Scarlet\/Violet · 6\/6/)).toBeInTheDocument();
   });
 
   it("flags incomplete teams", () => {

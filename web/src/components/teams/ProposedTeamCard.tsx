@@ -11,22 +11,11 @@ import {
 } from "@/lib/api/teams-client";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import TeamWarnings from "@/components/teams/TeamWarnings";
+import { formatLabel, titleizeSlug } from "@/components/teams/display-names";
 
-/** Human-friendly format label for the header badge. */
-function formatLabel(format: string): string {
-  if (format === "champions") return "Champions";
-  if (format === "scarlet-violet") return "Scarlet/Violet";
-  return format;
-}
-
-/** Title-case a slug-ish id (`great-tusk` → `Great Tusk`) for display. */
+/** Title-case a slug-ish id (`great-tusk` → `Great Tusk`) for this card. */
 function titleize(value: string | null): string {
-  if (!value) return "—";
-  return value
-    .split(/[-\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return titleizeSlug(value, "—");
 }
 
 type ApplyState =

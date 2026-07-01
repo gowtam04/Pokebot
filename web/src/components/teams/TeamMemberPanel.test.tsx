@@ -58,14 +58,14 @@ describe("TeamMemberPanel", () => {
         onRemove={noop}
       />,
     );
-    expect(screen.getByTestId("member-0-species")).toHaveValue("garchomp");
-    expect(screen.getByTestId("member-0-ability")).toHaveValue("rough-skin");
-    expect(screen.getByTestId("member-0-item")).toHaveValue("life-orb");
-    expect(screen.getByTestId("member-0-nature")).toHaveValue("jolly");
-    expect(screen.getByTestId("member-0-tera")).toHaveValue("steel");
+    expect(screen.getByTestId("member-0-species")).toHaveValue("Garchomp");
+    expect(screen.getByTestId("member-0-ability")).toHaveValue("Rough Skin");
+    expect(screen.getByTestId("member-0-item")).toHaveValue("Life Orb");
+    expect(screen.getByTestId("member-0-nature")).toHaveValue("Jolly");
+    expect(screen.getByTestId("member-0-tera")).toHaveValue("Steel");
     expect(screen.getByTestId("member-0-level")).toHaveValue(50);
-    expect(screen.getByTestId("member-0-move-0")).toHaveValue("earthquake");
-    expect(screen.getByTestId("member-0-move-1")).toHaveValue("dragon-claw");
+    expect(screen.getByTestId("member-0-move-0")).toHaveValue("Earthquake");
+    expect(screen.getByTestId("member-0-move-1")).toHaveValue("Dragon Claw");
     expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(252);
     expect(screen.getByTestId("member-0-iv-hp")).toHaveValue(31);
   });

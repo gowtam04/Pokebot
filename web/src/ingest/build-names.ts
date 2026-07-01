@@ -28,18 +28,6 @@ export interface PokemonNameSource {
 }
 
 /**
- * Capitalize each hyphen-separated word of a slug: "will-o-wisp" → "Will-O-Wisp".
- * (Matches the legacy display style for non-Pokémon entities.)
- */
-export function slugToDisplayName(slug: string): string {
-  if (!slug) return slug;
-  return slug
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join("-");
-}
-
-/**
  * Build all searchable_names rows for one format.
  *
  * @param source       The resolved @pkmn FormatSource (moves/abilities/items/types).
@@ -58,22 +46,22 @@ export function buildNames(
 
   for (const m of source.moves) {
     const slug = slugFor(m.id, m.name);
-    rows.push({ format, kind: "move", slug, display_name: slugToDisplayName(slug) });
+    rows.push({ format, kind: "move", slug, display_name: m.name });
   }
 
   for (const a of source.abilities) {
     const slug = slugFor(a.id, a.name);
-    rows.push({ format, kind: "ability", slug, display_name: slugToDisplayName(slug) });
+    rows.push({ format, kind: "ability", slug, display_name: a.name });
   }
 
   for (const i of source.items) {
     const slug = slugFor(i.id, i.name);
-    rows.push({ format, kind: "item", slug, display_name: slugToDisplayName(slug) });
+    rows.push({ format, kind: "item", slug, display_name: i.name });
   }
 
   for (const t of source.types) {
     const slug = slugify(t.name);
-    rows.push({ format, kind: "type", slug, display_name: slugToDisplayName(slug) });
+    rows.push({ format, kind: "type", slug, display_name: t.name });
   }
 
   // Dedupe by (kind, slug) — formes/aliases can collide on a slug.

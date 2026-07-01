@@ -12,13 +12,7 @@
 
 import type { SavedTeamCardProps } from "@/components/types";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
-
-/** Human-friendly format label for the header badge. */
-function formatLabel(format: string): string {
-  if (format === "champions") return "Champions";
-  if (format === "scarlet-violet") return "Scarlet/Violet";
-  return format;
-}
+import { formatLabel } from "@/components/teams/display-names";
 
 export default function SavedTeamCard({
   savedTeam,

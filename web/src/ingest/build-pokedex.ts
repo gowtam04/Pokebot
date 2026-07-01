@@ -73,19 +73,18 @@ export interface PokemonRow {
 }
 
 // ---------------------------------------------------------------------------
-// Display-name helpers (preserve the legacy "Base (Forme)" style)
+// Display-name helper (preserve the legacy "Base (Forme)" style)
 // ---------------------------------------------------------------------------
 
-function titleCase(slug: string): string {
-  return slug
-    .split("-")
-    .map((w) => (w.length > 0 ? w[0]!.toUpperCase() + w.slice(1) : w))
-    .join("-");
-}
-
-function makeDisplayName(speciesSlug: string, formSlug: string | null): string {
-  if (formSlug === null) return titleCase(speciesSlug);
-  return `${titleCase(speciesSlug)} (${titleCase(formSlug)})`;
+/**
+ * Human-readable label, sourced from @pkmn's own name fields (which already
+ * carry the correct canonical casing/punctuation — "Ho-Oh", "Type: Null",
+ * "Porygon-Z" — instead of re-deriving it by title-casing the ASCII slug,
+ * which mangles those irregular cases.
+ */
+function makeDisplayName(s: PkmnSpecies): string {
+  if (!s.forme) return s.name;
+  return `${s.baseSpecies} (${s.forme})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +149,7 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     id,
     species_name,
     form_name,
-    display_name: makeDisplayName(species_name, form_name),
+    display_name: makeDisplayName(s),
     national_dex_number: s.num,
     type1,
     type2,

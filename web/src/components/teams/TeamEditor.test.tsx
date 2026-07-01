@@ -64,10 +64,10 @@ describe("TeamEditor", () => {
 
   it("focuses a member when its roster chip is clicked", () => {
     setup();
-    expect(screen.getByTestId("member-0-species")).toHaveValue("gyarados");
+    expect(screen.getByTestId("member-0-species")).toHaveValue("Gyarados");
     fireEvent.click(screen.getByTestId("roster-slot-1"));
     expect(screen.getByTestId("member-1-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("member-1-species")).toHaveValue("garchomp");
+    expect(screen.getByTestId("member-1-species")).toHaveValue("Garchomp");
   });
 
   it("renames and saves the draft", () => {
@@ -102,18 +102,18 @@ describe("TeamEditor", () => {
     fireEvent.click(screen.getByTestId("member-1-remove"));
     // Back to a single member; slot 1 no longer exists.
     expect(screen.queryByTestId("roster-slot-1")).not.toBeInTheDocument();
-    expect(screen.getByTestId("member-0-species")).toHaveValue("gyarados");
+    expect(screen.getByTestId("member-0-species")).toHaveValue("Gyarados");
   });
 
   it("reorders members (swap on move up, focus follows)", () => {
     setup();
     fireEvent.click(screen.getByTestId("roster-slot-1"));
-    expect(screen.getByTestId("member-1-species")).toHaveValue("garchomp");
+    expect(screen.getByTestId("member-1-species")).toHaveValue("Garchomp");
     fireEvent.click(screen.getByTestId("member-1-up"));
     // The moved member (garchomp) is now slot 0 and stays focused.
-    expect(screen.getByTestId("member-0-species")).toHaveValue("garchomp");
+    expect(screen.getByTestId("member-0-species")).toHaveValue("Garchomp");
     fireEvent.click(screen.getByTestId("roster-slot-1"));
-    expect(screen.getByTestId("member-1-species")).toHaveValue("gyarados");
+    expect(screen.getByTestId("member-1-species")).toHaveValue("Gyarados");
   });
 
   it("saves even a partial team (BR-T4)", () => {

@@ -40,6 +40,7 @@ import {
   type PickerOption,
   type SpreadKey,
 } from "./dex-constants";
+import { titleizeSlug } from "./display-names";
 import TeamWarnings from "./TeamWarnings";
 
 /** Base-stat spread as exposed by the entity/sprite index (`base_stats`). */
@@ -103,16 +104,6 @@ function clampInt(raw: string, min: number, max: number): number {
   const n = Number.parseInt(raw, 10);
   if (Number.isNaN(n)) return min;
   return Math.min(max, Math.max(min, n));
-}
-
-/** Title-case a slug for display ("great-tusk" → "Great Tusk"). */
-function titleize(value: string | null): string {
-  if (!value) return "Empty slot";
-  return value
-    .split(/[-\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 export interface TeamMemberPanelProps {
@@ -207,7 +198,7 @@ export default function TeamMemberPanel({
   const itemLocked = Boolean(requiredItem);
   // The species' legal abilities, as picker options (only these are offered).
   const abilityOptions: PickerOption[] = (spriteRef?.abilities ?? []).map(
-    (slug) => ({ slug, display_name: titleize(slug) }),
+    (slug) => ({ slug, display_name: titleizeSlug(slug) }),
   );
 
   return (
@@ -217,7 +208,7 @@ export default function TeamMemberPanel({
           <span className="team-member-panel__slot-label">Slot {slot + 1}</span>
           {member.species && (
             <span className="team-member-panel__species-name">
-              {titleize(member.species)}
+              {titleizeSlug(member.species, "Empty slot")}
             </span>
           )}
         </div>
@@ -266,7 +257,7 @@ export default function TeamMemberPanel({
           </span>
           <div className="team-member-panel__identity-meta">
             <span className="team-member-panel__identity-name">
-              {titleize(member.species)}
+              {titleizeSlug(member.species, "Empty slot")}
             </span>
             {types.length > 0 && (
               <span className="team-member-panel__types">

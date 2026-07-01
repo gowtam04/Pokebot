@@ -19,6 +19,7 @@
 import { useState } from "react";
 
 import type { TeamSummary } from "@/lib/api/teams-client";
+import { formatLabel } from "./display-names";
 
 export interface TeamListProps {
   teams: TeamSummary[];
@@ -93,7 +94,7 @@ export default function TeamList({
                     {team.name || "Untitled team"}
                   </span>
                   <span className="team-list__meta">
-                    {team.format} · {team.memberCount}/6
+                    {formatLabel(team.format)} · {team.memberCount}/6
                     {team.incomplete && (
                       <span
                         className="team-list__flag team-list__flag--incomplete"

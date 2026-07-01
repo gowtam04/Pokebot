@@ -31,13 +31,7 @@ import TeamList from "@/components/teams/TeamList";
 import TeamEditor from "@/components/teams/TeamEditor";
 import PasteImportDialog from "@/components/teams/PasteImportDialog";
 import ExportDialog from "@/components/teams/ExportDialog";
-
-/** Human-friendly format label for the header selector. */
-function formatLabel(format: string): string {
-  if (format === "champions") return "Champions";
-  if (format === "scarlet-violet") return "Scarlet / Violet";
-  return format;
-}
+import { formatLabel } from "@/components/teams/display-names";
 
 export default function TeamsPage() {
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });

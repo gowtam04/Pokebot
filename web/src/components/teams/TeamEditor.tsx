@@ -32,6 +32,7 @@ import { type Format } from "@/data/formats";
 import TeamMemberPanel from "./TeamMemberPanel";
 import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
+import { formatLabel } from "./display-names";
 
 /** A fresh, empty member (partial team allowed — BR-T4). IVs default to 31. */
 export function blankMember(): TeamMember {
@@ -47,13 +48,6 @@ export function blankMember(): TeamMember {
     level: 50,
     nickname: null,
   };
-}
-
-/** Human-friendly format label for the editor badge. */
-function formatLabel(format: string): string {
-  if (format === "champions") return "Champions";
-  if (format === "scarlet-violet") return "Scarlet/Violet";
-  return format;
 }
 
 export interface TeamEditorProps {
