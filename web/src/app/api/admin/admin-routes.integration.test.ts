@@ -375,6 +375,28 @@ describe("POST /api/admin/champions-items", () => {
     expect(on.status).toBe(200);
     expect(await on.json()).toEqual({ slug: "focus-sash", available: true });
   });
+
+  it("200s an admin on a bulk { all: true } deselect / select", async () => {
+    asAdmin();
+    const off = await championsItems.POST(toggleReq({ all: true, available: false }));
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ all: true, available: false });
+
+    const on = await championsItems.POST(toggleReq({ all: true, available: true }));
+    expect(on.status).toBe(200);
+    expect(await on.json()).toEqual({ all: true, available: true });
+  });
+
+  it("rejects a bulk toggle from a guest (401) / non-admin (403)", async () => {
+    asGuest();
+    expect(
+      (await championsItems.POST(toggleReq({ all: true, available: false }))).status,
+    ).toBe(401);
+    asNonAdmin();
+    expect(
+      (await championsItems.POST(toggleReq({ all: true, available: false }))).status,
+    ).toBe(403);
+  });
 });
 
 // ===========================================================================

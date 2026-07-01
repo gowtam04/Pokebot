@@ -129,3 +129,49 @@ export async function setChampionsItemAvailability(
   const { resetResolveIndex } = await import("@/data/repos/resolve-index");
   resetResolveIndex(CHAMPIONS_FORMAT);
 }
+
+/**
+ * Bulk-set EVERY Champions item's availability — the "Select all" / "Deselect
+ * all" actions. `available:true` clears the whole exclusion table (everything
+ * available again); `available:false` excludes every item currently in the
+ * Champions item universe (so the operator can start from an empty allowlist and
+ * check only the valid items). Returns the number of items now excluded.
+ *
+ * NOTE: "Deselect all" is a snapshot of the CURRENT item universe — an item
+ * added by a later ingest is not retroactively excluded and would default to
+ * available, so re-run Deselect all after an ingest that adds items.
+ */
+export async function setAllChampionsItemsAvailability(
+  available: boolean,
+  excludedBy: string | null,
+): Promise<{ excludedCount: number }> {
+  const { db } = await import("@/data/db");
+  let excludedCount = 0;
+  if (available) {
+    await db.delete(champions_item_exclusion);
+  } else {
+    const rows = await db
+      .select({ slug: searchable_names.slug })
+      .from(searchable_names)
+      .where(
+        and(
+          eq(searchable_names.format, CHAMPIONS_FORMAT),
+          eq(searchable_names.kind, "item"),
+        ),
+      );
+    if (rows.length > 0) {
+      const now = Date.now();
+      // ~581 items × 3 params is well under Postgres' 65535 bind-param cap.
+      await db
+        .insert(champions_item_exclusion)
+        .values(
+          rows.map((r) => ({ slug: r.slug, excluded_at: now, excluded_by: excludedBy })),
+        )
+        .onConflictDoNothing();
+    }
+    excludedCount = rows.length;
+  }
+  const { resetResolveIndex } = await import("@/data/repos/resolve-index");
+  resetResolveIndex(CHAMPIONS_FORMAT);
+  return { excludedCount };
+}

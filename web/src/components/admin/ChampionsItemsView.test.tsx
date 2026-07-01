@@ -88,4 +88,24 @@ describe("ChampionsItemsView", () => {
       "Failed to save that change — reverted.",
     );
   });
+
+  it("fires onSelectAll / onDeselectAll from the bulk buttons", () => {
+    const onSelectAll = vi.fn();
+    const onDeselectAll = vi.fn();
+    renderView({ onSelectAll, onDeselectAll });
+    fireEvent.click(screen.getByTestId("champions-items-deselect-all"));
+    expect(onDeselectAll).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("champions-items-select-all"));
+    expect(onSelectAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables both bulk buttons while a bulk action is pending", () => {
+    renderView({ bulkPending: true });
+    expect(
+      (screen.getByTestId("champions-items-select-all") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("champions-items-deselect-all") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
 });

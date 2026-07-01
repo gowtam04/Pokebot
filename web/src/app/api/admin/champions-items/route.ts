@@ -20,6 +20,7 @@
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
 import type {
+  ChampionsItemsBulkResponse,
   ChampionsItemsResponse,
   ChampionsItemToggleResponse,
 } from "@/lib/admin/admin-types";
@@ -46,20 +47,34 @@ export async function POST(req: Request): Promise<Response> {
   if ("response" in guard) return guard.response;
 
   const raw = await readJsonObject(req);
-  const slug = typeof raw?.slug === "string" ? raw.slug.trim() : "";
   const available = raw?.available;
-  if (slug === "" || typeof available !== "boolean") {
+  if (typeof available !== "boolean") {
     return jsonError(
       400,
       "invalid_request",
-      "Body must be { slug: string, available: boolean }.",
+      "Body must be { slug, available } or { all: true, available }.",
     );
   }
 
-  const { setChampionsItemAvailability } = await import(
-    "@/data/repos/champions-items-repo"
-  );
-  await setChampionsItemAvailability(slug, available, guard.account.email);
+  const repo = await import("@/data/repos/champions-items-repo");
+
+  // Bulk: { all: true, available } — Select all / Deselect all.
+  if (raw?.all === true) {
+    await repo.setAllChampionsItemsAvailability(available, guard.account.email);
+    const body: ChampionsItemsBulkResponse = { all: true, available };
+    return json(200, body);
+  }
+
+  // Single: { slug, available }.
+  const slug = typeof raw?.slug === "string" ? raw.slug.trim() : "";
+  if (slug === "") {
+    return jsonError(
+      400,
+      "invalid_request",
+      "Body must be { slug, available } or { all: true, available }.",
+    );
+  }
+  await repo.setChampionsItemAvailability(slug, available, guard.account.email);
   const body: ChampionsItemToggleResponse = { slug, available };
   return json(200, body);
 }

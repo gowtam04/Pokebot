@@ -151,6 +151,25 @@ describe("champions-items-repo", () => {
     const excluded = await repo.loadChampionsItemExclusions({ db: fix.db });
     expect([...excluded]).toEqual(["choice-band"]);
   });
+
+  it("setAllChampionsItemsAvailability(false) excludes every item; (true) clears all", async () => {
+    const deselect = await repo.setAllChampionsItemsAvailability(false, "admin@example.com");
+    expect(deselect.excludedCount).toBe(3);
+    const afterDeselect = await repo.listChampionsItemsForAdmin();
+    expect(afterDeselect.every((i) => !i.available)).toBe(true);
+
+    await repo.setAllChampionsItemsAvailability(true, null);
+    const afterSelect = await repo.listChampionsItemsForAdmin();
+    expect(afterSelect.every((i) => i.available)).toBe(true);
+    expect((await repo.loadChampionsItemExclusions({ db: fix.db })).size).toBe(0);
+  });
+
+  it("Deselect all then re-select a valid item leaves only it available", async () => {
+    await repo.setAllChampionsItemsAvailability(false, null);
+    await repo.setChampionsItemAvailability("leftovers", true, null);
+    const items = await repo.listChampionsItemsForAdmin();
+    expect(items.filter((i) => i.available).map((i) => i.slug)).toEqual(["leftovers"]);
+  });
 });
 
 describe("resolve_entity honours the champions exclusion set", () => {

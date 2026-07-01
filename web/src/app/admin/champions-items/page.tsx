@@ -32,33 +32,56 @@ export default function ChampionsItemsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/champions-items", {
-          method: "GET",
-          credentials: "same-origin",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as ChampionsItemsResponse;
-        if (!active) return;
-        setItems(Array.isArray(data.items) ? data.items : []);
-      } catch {
-        if (!active) return;
-        setItems([]);
-        setError("Failed to load Champions items.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
+    try {
+      const res = await fetch("/api/admin/champions-items", {
+        method: "GET",
+        credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as ChampionsItemsResponse;
+      setItems(Array.isArray(data.items) ? data.items : []);
+    } catch {
+      setItems([]);
+      setError("Failed to load Champions items.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const onBulk = useCallback(
+    (available: boolean) => {
+      // Optimistic: flip every item at once.
+      setItems((prev) => prev.map((it) => ({ ...it, available })));
+      setBulkPending(true);
+      setError(null);
+      void (async () => {
+        try {
+          const res = await fetch("/api/admin/champions-items", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ all: true, available }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } catch {
+          setError("Failed to apply that change — reloading.");
+          await reload();
+        } finally {
+          setBulkPending(false);
+        }
+      })();
+    },
+    [reload],
+  );
 
   const setAvailability = useCallback((slug: string, available: boolean) => {
     setItems((prev) =>
@@ -103,9 +126,12 @@ export default function ChampionsItemsPage() {
       query={query}
       onQueryChange={setQuery}
       onToggle={onToggle}
+      onSelectAll={() => onBulk(true)}
+      onDeselectAll={() => onBulk(false)}
       loading={loading}
       error={error}
       pending={pending}
+      bulkPending={bulkPending}
     />
   );
 }

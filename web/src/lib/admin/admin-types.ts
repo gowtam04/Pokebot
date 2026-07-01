@@ -495,3 +495,20 @@ export interface ChampionsItemToggleResponse {
   slug: string;
   available: boolean;
 }
+
+/**
+ * POST /api/admin/champions-items (bulk) — set EVERY item's availability at once.
+ * `available:true` = Select all (clear all exclusions); `available:false` =
+ * Deselect all (exclude every current item, so the operator starts from an empty
+ * allowlist and checks only the valid items).
+ */
+export interface ChampionsItemsBulkRequest {
+  all: true;
+  available: boolean;
+}
+
+/** POST /api/admin/champions-items (bulk) response. */
+export interface ChampionsItemsBulkResponse {
+  all: true;
+  available: boolean;
+}

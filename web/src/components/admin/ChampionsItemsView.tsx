@@ -42,12 +42,18 @@ export interface ChampionsItemsViewProps {
   onQueryChange: (q: string) => void;
   /** Emits (slug, nextAvailable) when a checkbox is toggled. */
   onToggle: (slug: string, nextAvailable: boolean) => void;
+  /** Mark EVERY item available (clear all exclusions). */
+  onSelectAll?: () => void;
+  /** Mark EVERY item unavailable — start from an empty allowlist. */
+  onDeselectAll?: () => void;
   /** True while the initial list is loading. */
   loading?: boolean;
   /** A transport/HTTP error message, or null when healthy. */
   error?: string | null;
   /** Slugs with an in-flight toggle (checkbox disabled until it settles). */
   pending?: ReadonlySet<string>;
+  /** True while a bulk Select/Deselect all is in flight. */
+  bulkPending?: boolean;
 }
 
 export default function ChampionsItemsView({
@@ -55,9 +61,12 @@ export default function ChampionsItemsView({
   query,
   onQueryChange,
   onToggle,
+  onSelectAll,
+  onDeselectAll,
   loading = false,
   error = null,
   pending,
+  bulkPending = false,
 }: ChampionsItemsViewProps) {
   const availableCount = useMemo(
     () => items.reduce((n, it) => n + (it.available ? 1 : 0), 0),
@@ -89,7 +98,9 @@ export default function ChampionsItemsView({
         Every held item is <strong>available</strong> by default. Uncheck the
         items that aren&apos;t in Pokémon Champions yet — they immediately stop
         appearing in the team builder, in the assistant&apos;s suggestions, and
-        count as illegal. Re-check them as they&apos;re added to the game.
+        count as illegal. Re-check them as they&apos;re added to the game. Or use{" "}
+        <strong>Deselect all</strong> to start from an empty list and check only
+        the valid items.
       </p>
 
       <div className="champions-items-view__toolbar">
@@ -105,13 +116,35 @@ export default function ChampionsItemsView({
             onChange={(e) => onQueryChange(e.target.value)}
           />
         </label>
-        <p
-          className="champions-items-view__summary"
-          data-testid="champions-items-summary"
-        >
-          {availableCount} available · {excludedCount} unavailable ·{" "}
-          {items.length} total
-        </p>
+        <div className="champions-items-view__meta">
+          <p
+            className="champions-items-view__summary"
+            data-testid="champions-items-summary"
+          >
+            {availableCount} available · {excludedCount} unavailable ·{" "}
+            {items.length} total
+          </p>
+          <div className="champions-items-view__bulk">
+            <button
+              type="button"
+              className="champions-items-view__bulk-btn"
+              data-testid="champions-items-select-all"
+              disabled={bulkPending || items.length === 0}
+              onClick={() => onSelectAll?.()}
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              className="champions-items-view__bulk-btn"
+              data-testid="champions-items-deselect-all"
+              disabled={bulkPending || items.length === 0}
+              onClick={() => onDeselectAll?.()}
+            >
+              Deselect all
+            </button>
+          </div>
+        </div>
       </div>
 
       {error != null && error !== "" && (
