@@ -53,13 +53,15 @@ The most important things to fix, in order:
 
 ### Security
 
-#### S1 — `X-Forwarded-For` leftmost-hop trust defeats the guest rate limit (and OTP per-IP throttle). **P1. CONFIRMED. RESOLVED.**
+#### S1 — `X-Forwarded-For` leftmost-hop trust defeats the guest rate limit (and OTP per-IP throttle). **P1. CONFIRMED. RESOLVED (DEPLOYED).**
 
-> **Resolved:** the two helpers were consolidated into `web/src/server/client-ip.ts`, which now
-> trusts `Fly-Client-IP` first, then the rightmost (proxy-appended) `X-Forwarded-For` hop via an
-> explicit `TRUSTED_PROXY_HOPS = 1` constant, then `X-Real-IP`, else `"unknown"`. The spoofable
-> leftmost hop is no longer trusted. Covered by `web/src/server/client-ip.test.ts` plus updated
-> rate-limit / request-code route tests.
+> **Resolved & deployed:** the two helpers were consolidated into `web/src/server/client-ip.ts`,
+> which now trusts `Fly-Client-IP` first, then the rightmost (proxy-appended) `X-Forwarded-For`
+> hop via an explicit `TRUSTED_PROXY_HOPS = 1` constant, then `X-Real-IP`, else `"unknown"`. The
+> spoofable leftmost hop is no longer trusted. Covered by `web/src/server/client-ip.test.ts` plus
+> updated rate-limit / request-code route tests. Shipped to production (`oak-gowtam`, region `iad`,
+> release v27) on 2026-07-02; `Fly-Client-IP` is the authoritative path there, so the spoof no
+> longer widens either bound.
 
 `web/src/app/api/chat/route.ts:124-133` and `web/src/app/api/auth/_lib/http.ts:58-67` both derive
 the client IP as `xff.split(",")[0]`. The Fly edge (per `web/fly.toml`) *appends* the true client
@@ -430,7 +432,7 @@ Fine for one honest user, fragile for one dishonest one.
 
 | ID | Severity | Status | Location |
 |----|----------|--------|----------|
-| S1 | P1 | CONFIRMED · RESOLVED | `server/client-ip.ts` (was `app/api/chat/route.ts:124-133`, `app/api/auth/_lib/http.ts:58-67`) |
+| S1 | P1 | RESOLVED · DEPLOYED | `server/client-ip.ts` (was `app/api/chat/route.ts:124-133`, `app/api/auth/_lib/http.ts:58-67`) |
 | C1 | P2 | CONFIRMED | `server/session-store.ts`, `server/rate-limit.ts` |
 | C2 | P2 | CONFIRMED | `agent/formulas/estimate-damage.ts:106-115` |
 | U1 | P2 | CONFIRMED † | `app/api/teams/import/route.ts:50-60,91-93`, `server/teams/import-export.ts:276-279` |
