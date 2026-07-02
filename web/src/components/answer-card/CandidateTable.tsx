@@ -74,6 +74,7 @@ function formatSort(sort: string): { field: string; arrow: string } {
 export default function CandidateTable({
   candidates,
   onShowAll,
+  disabled = false,
 }: CandidateTableProps) {
   const { total_count, truncated, shown, sort } = candidates;
 
@@ -122,6 +123,7 @@ export default function CandidateTable({
             className="candidate-table__show-all"
             data-testid="candidate-table-show-all"
             onClick={onShowAll}
+            disabled={disabled}
           >
             Show all {total_count}
           </button>

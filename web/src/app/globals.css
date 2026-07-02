@@ -1030,9 +1030,17 @@
   border-radius: var(--radius-pill);
   transition: background var(--motion-fast), border-color var(--motion-fast);
 }
-.candidate-table__show-all:hover {
+.candidate-table__show-all:hover:not(:disabled) {
   background: var(--azure-soft);
   border-color: var(--azure);
+}
+/* Streaming: the "Show all" follow-up is disabled so it can't abort the
+   in-flight turn (U2). Token-based mute so it reads dimmed in both themes. */
+.candidate-table__show-all:disabled {
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  cursor: not-allowed;
 }
 .candidate-table__count {
   font-weight: 700;
@@ -1740,13 +1748,21 @@
   transition: background var(--motion-spring), border-color var(--motion-fast),
     transform var(--motion-spring);
 }
-.suggestion-chips__chip:hover {
+.suggestion-chips__chip:hover:not(:disabled) {
   background: var(--azure-soft);
   border-color: var(--azure);
   transform: scale(1.04);
 }
-.suggestion-chips__chip:active {
+.suggestion-chips__chip:active:not(:disabled) {
   transform: scale(0.97);
+}
+/* Streaming: chips are disabled so a click can't abort the in-flight turn (U2). */
+.suggestion-chips__chip:disabled {
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Question options — the "stop and ask" affordance (clarification_needed with
@@ -1772,13 +1788,24 @@
   transition: background var(--motion-spring), border-color var(--motion-fast),
     transform var(--motion-spring);
 }
-.question-options__option:hover {
+.question-options__option:hover:not(:disabled) {
   background: var(--azure-soft);
   border-color: var(--azure);
   transform: translateY(-1px);
 }
-.question-options__option:active {
+.question-options__option:active:not(:disabled) {
   transform: translateY(0);
+}
+/* Streaming: options are disabled so a click can't abort the in-flight turn (U2). */
+.question-options__option:disabled {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  cursor: not-allowed;
+  transform: none;
+}
+.question-options__option:disabled .question-options__label,
+.question-options__option:disabled .question-options__desc {
+  color: var(--text-faint);
 }
 .question-options__label {
   font-size: 0.875rem;

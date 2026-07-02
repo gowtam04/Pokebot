@@ -38,7 +38,11 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
  * Pokémon's artifact in the viewer (CandidateTable owns that, no follow-up).
  * Visual styling is deferred to the `frontend-design` skill.
  */
-export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
+export default function AnswerCard({
+  answer,
+  onFollowUp,
+  disabled = false,
+}: AnswerCardProps) {
   const {
     status,
     answer_markdown,
@@ -58,8 +62,11 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
   } = answer;
 
   // Stable no-op so the interactive leaves always have a handler even when the
-  // host did not pass one (keeps rows/chips clickable in isolation/tests).
-  const followUp = onFollowUp ?? (() => {});
+  // host did not pass one (keeps rows/chips clickable in isolation/tests). While
+  // a turn is streaming (`disabled`) the alias is inert too — belt-and-suspenders
+  // so a mid-stream follow-up can't abort/orphan the in-flight turn even if a
+  // leaf were to fire its callback regardless of the `disabled` attribute (U2).
+  const followUp = disabled ? () => {} : (onFollowUp ?? (() => {}));
 
   // Per-section "open in viewer" controls (B-4, AV-US-2). `openStructured` opens
   // a rich block (damage-calc, comparison) from THIS committed payload — no
@@ -79,6 +86,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
         <QuestionOptions
           options={question.options}
           onSelect={(label) => followUp(label)}
+          disabled={disabled}
         />
       )}
 
@@ -120,6 +128,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
               `Show me all ${candidates.total_count} of those, not just the top ${candidates.shown.length}.`,
             )
           }
+          disabled={disabled}
         />
       )}
 
@@ -146,6 +155,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
           suggestions={suggestions}
           status={status}
           onSelect={(suggestion) => followUp(suggestion)}
+          disabled={disabled}
         />
       )}
 

@@ -18,6 +18,7 @@ export default function SuggestionChips({
   suggestions,
   status,
   onSelect,
+  disabled = false,
 }: SuggestionChipsProps) {
   if (suggestions.length === 0) return null;
 
@@ -39,6 +40,7 @@ export default function SuggestionChips({
             type="button"
             className="suggestion-chips__chip"
             onClick={() => onSelect(suggestion)}
+            disabled={disabled}
             data-testid={`suggestion-chip-${i}`}
           >
             {suggestion}

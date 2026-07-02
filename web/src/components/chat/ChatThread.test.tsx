@@ -1,10 +1,18 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { render, screen, cleanup, within, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  act,
+  fireEvent,
+} from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
 import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
+import { RESOLUTION_FAILED_ANSWER } from "@/components/test-fixtures";
 
 /** Minimal props with sensible defaults; override per test. */
 function props(overrides: Partial<ChatThreadProps> = {}): ChatThreadProps {
@@ -120,6 +128,50 @@ describe("ChatThread — user-turn image thumbnails", () => {
       />,
     );
     expect(screen.queryByTestId("user-turn-images")).toBeNull();
+  });
+});
+
+describe("ChatThread — answer-card follow-ups gated while streaming (U2)", () => {
+  // A committed assistant turn with suggestion chips (the ungated U2 surface).
+  const assistantTurn = {
+    id: "a1",
+    role: "assistant" as const,
+    answer: RESOLUTION_FAILED_ANSWER,
+  };
+  const turns = [
+    { id: "u1", role: "user" as const, content: "garcomp" },
+    assistantTurn,
+  ];
+
+  it("disables committed answer-card follow-up chips while a new turn streams", () => {
+    const onFollowUp = vi.fn();
+    render(
+      <ChatThread
+        {...props({
+          turns,
+          status: "streaming",
+          streamingMarkdown: "Working on it…",
+          onFollowUp,
+        })}
+      />,
+    );
+    const chip = screen.getByTestId("suggestion-chip-0");
+    expect(chip).toBeDisabled();
+    fireEvent.click(chip);
+    // A mid-stream chip click must NOT enqueue a follow-up (which would abort +
+    // orphan the in-flight turn).
+    expect(onFollowUp).not.toHaveBeenCalled();
+  });
+
+  it("keeps committed answer-card follow-up chips clickable when idle", () => {
+    const onFollowUp = vi.fn();
+    render(
+      <ChatThread {...props({ turns, status: "idle", onFollowUp })} />,
+    );
+    const chip = screen.getByTestId("suggestion-chip-0");
+    expect(chip).not.toBeDisabled();
+    fireEvent.click(chip);
+    expect(onFollowUp).toHaveBeenCalledWith("Garchomp");
   });
 });
 

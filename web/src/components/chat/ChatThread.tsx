@@ -196,7 +196,11 @@ export default function ChatThread({
             className="chat-turn chat-turn--assistant"
             data-testid="assistant-turn"
           >
-            <AnswerCard answer={turn.answer} onFollowUp={onFollowUp} />
+            <AnswerCard
+              answer={turn.answer}
+              onFollowUp={onFollowUp}
+              disabled={status === "streaming"}
+            />
           </div>
         ),
       )}

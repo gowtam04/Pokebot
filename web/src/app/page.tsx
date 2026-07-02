@@ -239,6 +239,13 @@ export default function Home() {
 
   const handleSend = useCallback(
     (message: string, images: PendingImage[] = []) => {
+      // Ignore sends while a turn is in flight. The composer is already disabled
+      // then, but a follow-up affordance on an EARLIER answer card (suggestion
+      // chip / question option / "Show all") could otherwise fire this, which
+      // would abort the in-flight stream and leave its user bubble answer-less
+      // (U2). The answer-card chips are also disabled while streaming; this is
+      // the single-choke-point backstop covering every follow-up path.
+      if (status === "thinking") return;
       requestStartRef.current = Date.now();
       inFlightMessageRef.current = message;
       const userTurnId = makeId();
@@ -268,7 +275,7 @@ export default function Home() {
       };
       send(body);
     },
-    [send, sessionId, championsMode],
+    [send, sessionId, championsMode, status],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.

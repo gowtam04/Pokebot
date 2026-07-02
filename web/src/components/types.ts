@@ -93,6 +93,14 @@ export interface AnswerCardProps {
   answer: OakAnswer;
   /** Send a follow-up turn when the user clicks a suggestion / candidate. */
   onFollowUp?: OnFollowUp;
+  /**
+   * True while a turn is streaming — disables the follow-up affordances
+   * (suggestion chips, question options, "Show all N") so a mid-stream click
+   * can't abort/orphan the in-flight turn. The viewer-opening controls (candidate
+   * rows, "Open/Compare in viewer") stay enabled: they don't POST a turn. Default
+   * false (chips live). Absent at the admin call sites (read-only, no follow-up).
+   */
+  disabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +152,12 @@ export interface CandidateTableProps {
    * truncated table is never a dead-end.
    */
   onShowAll?: () => void;
+  /**
+   * Disabled while a turn is streaming — gates ONLY the "Show all N" follow-up
+   * button (the sole `onShowAll` path). Rows stay clickable: they open the
+   * artifact viewer, not a follow-up turn. Default false.
+   */
+  disabled?: boolean;
 }
 
 /** `citations[]` — the PokeAPI data relied on. Collapsible "Sources" list. */
@@ -223,6 +237,8 @@ export interface SuggestionChipsProps {
   suggestions: string[];
   status: AnswerStatus;
   onSelect: (suggestion: string) => void;
+  /** Disabled while a turn is streaming so a chip click can't orphan it (default false). */
+  disabled?: boolean;
 }
 
 /**
@@ -234,6 +250,8 @@ export interface SuggestionChipsProps {
 export interface QuestionOptionsProps {
   options: QuestionOption[];
   onSelect: (label: string) => void;
+  /** Disabled while a turn is streaming so an option click can't orphan it (default false). */
+  disabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +393,12 @@ export interface UseOakChatResult {
   activity: ToolActivityEvent[];
   /** Set only on transport faults; null otherwise. */
   transportError: ErrorEvent | null;
-  /** POST a new user turn (same session_id). No-op while a turn is streaming. */
+  /**
+   * POST a new user turn (same session_id). If a turn is already in flight it is
+   * ABORTED and replaced — the hook does not no-op. Callers that must not
+   * interrupt an in-flight turn gate the call site (the composer is disabled and
+   * `handleSend` returns early while `status === "thinking"`).
+   */
   send: (message: string) => void;
 }
 

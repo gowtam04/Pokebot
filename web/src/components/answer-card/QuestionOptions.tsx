@@ -19,6 +19,7 @@ import type { QuestionOptionsProps } from "@/components/types";
 export default function QuestionOptions({
   options,
   onSelect,
+  disabled = false,
 }: QuestionOptionsProps) {
   if (options.length === 0) return null;
 
@@ -30,6 +31,7 @@ export default function QuestionOptions({
           type="button"
           className="question-options__option"
           onClick={() => onSelect(option.label)}
+          disabled={disabled}
           data-testid={`question-option-${i}`}
         >
           <span className="question-options__label">{option.label}</span>
