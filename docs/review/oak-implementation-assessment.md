@@ -138,7 +138,17 @@ but never deletes keys for IPs that don't return.
 - **Fix:** bound both with an LRU cap + idle TTL sweep. **Blast radius:** contained to the two store
   modules.
 
-#### C2 — `estimate_damage` omits in-game per-step flooring. **P2. CONFIRMED (disclosed).**
+#### C2 — `estimate_damage` omits in-game per-step flooring. **P2. RESOLVED.**
+
+> **Resolved:** `estimate-damage.ts` now floors after *each* multiplier in in-game
+> order (roll → STAB → type → other) via an `applyModifiers` helper —
+> `floor(floor(floor(floor(base*roll)*1.5)*type)*other)` — instead of one product
+> then a single floor. The canonical STAB ×2 hit now reports `240..284` (was the
+> overstated `242..285`); the no-modifier and immune cases are unchanged. Guarded
+> by new per-step oracle cases in `web/test/tools-formulas.oracle.test.ts`
+> (STAB ×2 → 240..284, STAB ×4 → 480..568). Output shape / field names unchanged.
+> The `tools.md` T10 implementer note was reconciled to describe per-step
+> flooring (it already matched `design.md`'s stated "per-step flooring" intent).
 
 `web/src/agent/formulas/estimate-damage.ts:106-115` computes `modified = base * STAB * type * other`
 then `min = floor(modified*0.85)`, `max = floor(modified*1.0)`. The real Gen-9 formula floors after
@@ -434,7 +444,7 @@ Fine for one honest user, fragile for one dishonest one.
 |----|----------|--------|----------|
 | S1 | P1 | RESOLVED · DEPLOYED | `server/client-ip.ts` (was `app/api/chat/route.ts:124-133`, `app/api/auth/_lib/http.ts:58-67`) |
 | C1 | P2 | CONFIRMED | `server/session-store.ts`, `server/rate-limit.ts` |
-| C2 | P2 | CONFIRMED | `agent/formulas/estimate-damage.ts:106-115` |
+| C2 | P2 | RESOLVED | `agent/formulas/estimate-damage.ts` (per-step flooring) |
 | U1 | P2 | CONFIRMED † | `app/api/teams/import/route.ts:50-60,91-93`, `server/teams/import-export.ts:276-279` |
 | T1 | P2 | CONFIRMED | `eval/deterministic.ts`, `enrich-answer.integration.test.ts:133-135` |
 | T2 | P2 | CONFIRMED † | `data/pkmn/gen-provider.ts` (no real-behavior test) |

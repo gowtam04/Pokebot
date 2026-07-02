@@ -2,8 +2,8 @@
  * T10 — `estimate_damage` pure formula (D5).
  *
  * Implements the standard single-hit Pokémon damage formula with per-step
- * flooring on the base, then applies the STAB / type / other multipliers and the
- * 0.85–1.0 random roll to report the min–max damage range.
+ * flooring — on the base AND after each of the roll / STAB / type / other
+ * multipliers, in in-game order — to report the min–max damage range.
  *
  * Pure function: no I/O, no side effects, deterministic. Never throws — invalid
  * inputs are returned as a structured `{ error: "invalid_input", detail }`
@@ -11,8 +11,10 @@
  *
  * Base (per design.md / tools.md):
  *   base = floor(floor(floor((2*Level/5 + 2) * Power * A / D) / 50) + 2)
- * then `× STAB(1.5) × type_effectiveness × other_modifier × roll`,
- * roll ∈ [0.85, 1.0]. min uses 0.85, max uses 1.0.
+ * then per-step flooring in game order: `floor(floor(floor(floor(base × roll)
+ * × STAB(1.5)) × type_effectiveness) × other_modifier)`, roll ∈ [0.85, 1.0].
+ * min uses 0.85, max uses 1.0. Flooring after each step (not one product) keeps
+ * the range from being overstated by the fractions lost at every step (D5).
  */
 
 /** Parameters for {@link estimateDamage} (design.md § Formula functions). */
@@ -56,6 +58,27 @@ const MAX_ROLL = 1.0;
 
 function invalid(detail: string): EstimateDamageError {
   return { error: "invalid_input", detail };
+}
+
+/**
+ * Apply the roll and the STAB / type / other multipliers to the base damage,
+ * flooring after EACH step in in-game order (roll → STAB → type → other). This
+ * mirrors the real Gen-9 formula, which truncates fractional HP at every step —
+ * a single product then one floor overstates the result (D5). Floor is
+ * monotonic and every multiplier is >= 0, so the 0.85 roll never exceeds 1.0.
+ */
+function applyModifiers(
+  base: number,
+  roll: number,
+  stabMultiplier: number,
+  typeEffectiveness: number,
+  otherModifier: number,
+): number {
+  let d = Math.floor(base * roll);
+  d = Math.floor(d * stabMultiplier);
+  d = Math.floor(d * typeEffectiveness);
+  d = Math.floor(d * otherModifier);
+  return d;
 }
 
 /**
@@ -107,17 +130,29 @@ export function estimateDamage(p: EstimateDamageParams): EstimateDamageOutput {
   const inner = Math.floor((levelFactor * power * attack_stat) / defense_stat);
   const base = Math.floor(Math.floor(inner / 50) + 2);
 
-  // --- Apply multipliers, then the 0.85–1.0 roll --------------------------
+  // --- Per-step flooring: roll → STAB → type → other ----------------------
+  // The in-game formula floors after EACH modifier, so a single product then
+  // one floor would overstate the range by the fractions lost at every step.
   const stabMultiplier = stab ? STAB_MULTIPLIER : 1;
-  const modified = base * stabMultiplier * typeEffectiveness * otherModifier;
-
-  const min_damage = Math.floor(modified * MIN_ROLL);
-  const max_damage = Math.floor(modified * MAX_ROLL);
+  const min_damage = applyModifiers(
+    base,
+    MIN_ROLL,
+    stabMultiplier,
+    typeEffectiveness,
+    otherModifier,
+  );
+  const max_damage = applyModifiers(
+    base,
+    MAX_ROLL,
+    stabMultiplier,
+    typeEffectiveness,
+    otherModifier,
+  );
 
   const breakdown =
     `base = floor(floor(floor((2*${level}/5+2)*${power}*${attack_stat}/${defense_stat})/50)+2) = ${base}; ` +
-    `* STAB ${stabMultiplier} * type ${typeEffectiveness} * other ${otherModifier} ` +
-    `* roll[${MIN_ROLL}..${MAX_ROLL}] = ${min_damage}..${max_damage}`;
+    `then per-step floor: * roll[${MIN_ROLL}..${MAX_ROLL}] * STAB ${stabMultiplier} ` +
+    `* type ${typeEffectiveness} * other ${otherModifier} = ${min_damage}..${max_damage}`;
 
   return {
     min_damage,

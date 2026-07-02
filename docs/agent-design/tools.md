@@ -602,10 +602,10 @@ an estimate.
 
 ```json
 {
-  "min_damage": 142,
-  "max_damage": 168,
+  "min_damage": 240,
+  "max_damage": 284,
   "is_estimate": true,
-  "breakdown": "base = floor(floor(floor((2*50/5+2)*120*169/95)/50)+2) = X; * STAB 1.5 * type 2.0 * roll[0.85..1.0]",
+  "breakdown": "base = floor(floor(floor((2*50/5+2)*120*169/95)/50)+2) = 95; then per-step floor: * roll[0.85..1.0] * STAB 1.5 * type 2 * other 1 = 240..284",
   "inputs_echo": {
     "level": 50,
     "power": 120,
@@ -623,8 +623,11 @@ an estimate.
 
 > Formula (for the implementer):
 > `base = floor(floor(floor((2*Level/5 + 2) * Power * A / D) / 50) + 2)`
-> then `× STAB(1.5) × type_effectiveness × other_modifier × roll`, roll ∈
-> [0.85, 1.0]. Report `min` (0.85) and `max` (1.0).
+> then **floor after each step in in-game order** — roll → STAB → type → other:
+> `floor(floor(floor(floor(base × roll) × STAB(1.5)) × type_effectiveness) ×
+> other_modifier)`, roll ∈ [0.85, 1.0]. Report `min` (0.85) and `max` (1.0).
+> Per-step flooring (not one product then one floor) matches `design.md`'s
+> "per-step flooring" and keeps the range from being overstated.
 
 ---
 

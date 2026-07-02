@@ -174,6 +174,55 @@ describe("estimate_damage oracle (T10)", () => {
     expect(r.min_damage).toBeGreaterThan(0);
   });
 
+  it("floors PER STEP (roll -> STAB -> type): canonical STAB x2 hit -> min 240, max 284", () => {
+    ensureLoaded();
+    // base = floor(floor(floor((2*50/5+2)*120*169/95)/50)+2):
+    //   (2*50/5+2)=22; floor(22*120*169/95)=floor(4696.42)=4696;
+    //   floor(4696/50)=93; 93+2=95.
+    // Per-step floor (the in-game order):
+    //   min = floor(floor(floor(95*0.85)*1.5)*2)
+    //       = floor(floor(80*1.5)*2) = floor(120*2) = 240
+    //   max = floor(floor(floor(95*1.0)*1.5)*2)
+    //       = floor(floor(142*... )) -> floor(95*1.5)=142; 142*2=284
+    // A single product then one floor (the old code) would overstate this as
+    //   242..285 (floor(95*3*0.85)=242, floor(95*3)=285).
+    const out = estimateDamage({
+      level: 50,
+      power: 120,
+      attack_stat: 169,
+      defense_stat: 95,
+      stab: true,
+      type_effectiveness: 2,
+    });
+    expect(out).toMatchObject({
+      is_estimate: true,
+      min_damage: 240,
+      max_damage: 284,
+    });
+  });
+
+  it("per-step flooring diverges more at STAB x4: base 95 -> min 480, max 568", () => {
+    ensureLoaded();
+    // Same base 95 as above, type_effectiveness 4:
+    //   min = floor(floor(floor(95*0.85)*1.5)*4) = floor(floor(80*1.5)*4)
+    //       = floor(120*4) = 480
+    //   max = floor(floor(floor(95*1.0)*1.5)*4) = floor(142*4) = 568
+    // Old one-shot code: floor(95*6*0.85)=484, floor(95*6)=570.
+    const out = estimateDamage({
+      level: 50,
+      power: 120,
+      attack_stat: 169,
+      defense_stat: 95,
+      stab: true,
+      type_effectiveness: 4,
+    });
+    expect(out).toMatchObject({
+      is_estimate: true,
+      min_damage: 480,
+      max_damage: 568,
+    });
+  });
+
   it("unmodified hit (power 80, A 100, D 100, no STAB, neutral): base 37 -> min 31, max 37", () => {
     ensureLoaded();
     // (2*50/5+2)=22; 22*80*100/100=1760; floor(1760/50)=35; 35+2=37
