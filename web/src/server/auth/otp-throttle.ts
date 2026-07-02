@@ -18,12 +18,17 @@
  * A separate **per-IP verify cap (20 / 10 min)** bounds online brute force of
  * codes across the IP.
  *
- * Like `src/server/rate-limit.ts`, state is a process-local `Map` of fixed
+ * Like `src/server/rate-limit.ts`, state is a process-local store of fixed
  * windows; a restart resets all counters (acceptable for a single-instance hobby
- * deploy — AD-5). `now` is injectable for deterministic tests, and
- * `_resetForTests()` wipes all state between cases. There is no I/O and no
- * async: call these synchronously at the top of the route handler.
+ * deploy — AD-5). Each store is a {@link BoundedStore} (LRU cap + idle TTL) so
+ * keys for emails/IPs that never return are evicted rather than accumulating
+ * forever (assessment C1 — unbounded in-memory stores; these per-IP maps are
+ * also reachable via spoofable client IPs). `now` is injectable for deterministic
+ * tests, and `_resetForTests()` wipes all state between cases. There is no I/O
+ * and no async: call these synchronously at the top of the route handler.
  */
+
+import { BoundedStore } from "@/server/bounded-store";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -70,14 +75,40 @@ interface WindowState {
   windowStart: number;
 }
 
+/**
+ * Bounds for the throttle stores (assessment C1). Keys are emails / client IPs;
+ * the per-IP stores are reachable via spoofable client IPs, so an unbounded map
+ * is an OOM vector. Each entry is tiny (~200 B) so 20 000/store ≈ ~4 MB — the cap
+ * is a memory backstop, not a real-traffic constraint. Each TTL is `>=` its
+ * store's window so a key is never idle-evicted mid-window (which would reset a
+ * counter and leak allowance).
+ */
+const OTP_MAX_ENTRIES = 20_000;
+/** Idle TTL for the request-side stores (>= COOLDOWN_MS and >= HOUR_MS). */
+const REQUEST_TTL_MS = 2 * HOUR_MS; // 2 hours
+/** Idle TTL for the verify store (>= VERIFY_WINDOW_MS). */
+const VERIFY_TTL_MS = 2 * VERIFY_WINDOW_MS; // 20 minutes
+
 /** email → timestamp of its most recent accepted request (cooldown gate). */
-const emailLastRequest = new Map<string, number>();
+const emailLastRequest = new BoundedStore<number>({
+  maxEntries: OTP_MAX_ENTRIES,
+  ttlMs: REQUEST_TTL_MS,
+});
 /** email → hourly request counter. */
-const emailHourly = new Map<string, WindowState>();
+const emailHourly = new BoundedStore<WindowState>({
+  maxEntries: OTP_MAX_ENTRIES,
+  ttlMs: REQUEST_TTL_MS,
+});
 /** ip → hourly request counter. */
-const ipHourly = new Map<string, WindowState>();
+const ipHourly = new BoundedStore<WindowState>({
+  maxEntries: OTP_MAX_ENTRIES,
+  ttlMs: REQUEST_TTL_MS,
+});
 /** ip → verify-attempt counter. */
-const ipVerify = new Map<string, WindowState>();
+const ipVerify = new BoundedStore<WindowState>({
+  maxEntries: OTP_MAX_ENTRIES,
+  ttlMs: VERIFY_TTL_MS,
+});
 
 // ---------------------------------------------------------------------------
 // Pure gate evaluators (non-mutating)
@@ -108,17 +139,19 @@ function evalWindow(
 
 /**
  * Commit one accepted hit to a fixed-window counter (mirrors
- * `rate-limit.ts`): start a new window or increment the open one.
+ * `rate-limit.ts`): start a new window or increment the open one. The in-place
+ * `state.count += 1` relies on the store returning the SAME value object from
+ * `get` (BoundedStore preserves reference identity).
  */
 function commitWindow(
-  map: Map<string, WindowState>,
+  store: BoundedStore<WindowState>,
   key: string,
   now: number,
   windowMs: number,
 ): void {
-  const state = map.get(key);
+  const state = store.get(key, now);
   if (state === undefined || now - state.windowStart >= windowMs) {
-    map.set(key, { count: 1, windowStart: now });
+    store.set(key, { count: 1, windowStart: now }, now);
   } else {
     state.count += 1;
   }
@@ -142,7 +175,7 @@ export function checkRequestThrottle(
   now: number = Date.now(),
 ): ThrottleResult {
   // 1. Resend cooldown (per email). Exclusive boundary at COOLDOWN_MS.
-  const lastAt = emailLastRequest.get(email);
+  const lastAt = emailLastRequest.get(email, now);
   if (lastAt !== undefined) {
     const elapsed = now - lastAt;
     if (elapsed < COOLDOWN_MS) {
@@ -152,7 +185,7 @@ export function checkRequestThrottle(
 
   // 2. Per-email hourly cap.
   const emailCap = evalWindow(
-    emailHourly.get(email),
+    emailHourly.get(email, now),
     now,
     HOUR_MS,
     EMAIL_HOURLY_CAP,
@@ -162,13 +195,13 @@ export function checkRequestThrottle(
   }
 
   // 3. Per-IP hourly cap.
-  const ipCap = evalWindow(ipHourly.get(ip), now, HOUR_MS, IP_HOURLY_CAP);
+  const ipCap = evalWindow(ipHourly.get(ip, now), now, HOUR_MS, IP_HOURLY_CAP);
   if (!ipCap.allowed) {
     return ipCap;
   }
 
   // All gates clear → record the accepted request across all three counters.
-  emailLastRequest.set(email, now);
+  emailLastRequest.set(email, now, now);
   commitWindow(emailHourly, email, now, HOUR_MS);
   commitWindow(ipHourly, ip, now, HOUR_MS);
   return { allowed: true, retryAfterMs: 0 };
@@ -184,7 +217,12 @@ export function checkVerifyThrottle(
   ip: string,
   now: number = Date.now(),
 ): ThrottleResult {
-  const cap = evalWindow(ipVerify.get(ip), now, VERIFY_WINDOW_MS, IP_VERIFY_CAP);
+  const cap = evalWindow(
+    ipVerify.get(ip, now),
+    now,
+    VERIFY_WINDOW_MS,
+    IP_VERIFY_CAP,
+  );
   if (!cap.allowed) {
     return cap;
   }
@@ -207,3 +245,8 @@ export function _resetForTests(): void {
   ipHourly.clear();
   ipVerify.clear();
 }
+
+// Exported for tests: the store bounds (assessment C1).
+export const _OTP_MAX_ENTRIES = OTP_MAX_ENTRIES;
+export const _REQUEST_TTL_MS = REQUEST_TTL_MS;
+export const _VERIFY_TTL_MS = VERIFY_TTL_MS;

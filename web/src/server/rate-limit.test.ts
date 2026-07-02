@@ -47,6 +47,8 @@ import {
   checkRateLimit,
   DEFAULT_CONFIG,
   GUEST_CONFIG,
+  RL_MAX_ENTRIES,
+  RL_TTL_MS,
   SIGNED_IN_CONFIG,
   type RateLimitConfig,
 } from "@/server/rate-limit";
@@ -80,6 +82,62 @@ function check(
 
 beforeEach(() => _resetStoreForTests());
 afterEach(() => _resetStoreForTests());
+
+// ---------------------------------------------------------------------------
+// Bounded store: LRU cap + idle TTL (assessment C1). The window store no longer
+// grows without bound. These assert behaviorally (the internal size isn't
+// exposed); the LRU/TTL mechanics themselves are unit-tested in
+// bounded-store.test.ts.
+// ---------------------------------------------------------------------------
+
+describe("bounded store (C1)", () => {
+  it("LRU-evicts a stale key once the store exceeds its cap, resetting its window", () => {
+    // Drive k0 to its per-window cap so it is currently rate-limited.
+    for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
+      expect(check("k0", SHORT_MSG, 0).allowed).toBe(true);
+    }
+    expect(check("k0", SHORT_MSG, 0).allowed).toBe(false); // at cap → rejected
+
+    // Insert RL_MAX_ENTRIES distinct fresh keys (all at the same instant, so the
+    // least-recently-used entry is k0). This pushes the store one over its cap
+    // and evicts k0.
+    for (let i = 0; i < RL_MAX_ENTRIES; i++) {
+      check(`bulk-${i}`, SHORT_MSG, 0);
+    }
+
+    // k0 was evicted → its counter is gone → a fresh window (allowed again),
+    // proving the store is bounded rather than retaining k0 forever.
+    expect(check("k0", SHORT_MSG, 0).allowed).toBe(true);
+  });
+
+  it("does not throw when far more than the cap of distinct keys are seen", () => {
+    expect(() => {
+      for (let i = 0; i < RL_MAX_ENTRIES + 500; i++) {
+        check(`k-${i}`, SHORT_MSG, 0);
+      }
+    }).not.toThrow();
+  });
+
+  it("a key idle past the window/TTL starts a fresh window", () => {
+    for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
+      check("k0", SHORT_MSG, 0);
+    }
+    expect(check("k0", SHORT_MSG, 0).allowed).toBe(false); // at cap within window
+    // After RL_TTL_MS of inactivity the key is idle-evicted; the next call sees
+    // no prior state → fresh window.
+    expect(check("k0", SHORT_MSG, RL_TTL_MS).allowed).toBe(true);
+  });
+
+  it("keeps a rejected key resident mid-window (not evicted between attempts)", () => {
+    for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
+      check("k0", SHORT_MSG, 0);
+    }
+    // Repeated attempts still inside the 10s window keep returning rate_limited —
+    // the entry is refreshed on each read, never dropped mid-window.
+    expect(check("k0", SHORT_MSG, 1_000).allowed).toBe(false);
+    expect(check("k0", SHORT_MSG, 5_000).allowed).toBe(false);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Input-length cap

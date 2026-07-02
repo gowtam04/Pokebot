@@ -19,6 +19,8 @@
  * of the request handler before any awaits.
  */
 
+import { BoundedStore } from "@/server/bounded-store";
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -100,8 +102,28 @@ interface WindowState {
   windowStart: number;
 }
 
-/** Module-level store.  Use _resetStoreForTests() to clear between test cases. */
-const store = new Map<string, WindowState>();
+/**
+ * Bounds for the window store (assessment C1 — unbounded in-memory stores).
+ * Keys are client-supplied (`ip:<addr>` / `acct:<id>`), so without a cap a
+ * client minting fresh keys would grow the store without bound → OOM.
+ *
+ * `RL_TTL_MS` MUST be `>=` the longest configured window (`windowMs`, 60_000)
+ * so a key is never idle-evicted mid-window (which would reset its counter and
+ * leak allowance). Each entry is tiny (~200 B), so 20 000 entries ≈ ~4 MB — the
+ * cap is a memory backstop under abuse, not a real-traffic constraint.
+ */
+export const RL_MAX_ENTRIES = 20_000;
+export const RL_TTL_MS = 10 * 60_000; // 10 minutes (>= the 60_000ms window)
+
+/**
+ * Module-level store.  Use _resetStoreForTests() to clear between test cases.
+ * A {@link BoundedStore} (LRU cap + idle TTL) rather than a bare Map so keys for
+ * clients that never return are evicted instead of accumulating forever.
+ */
+const store = new BoundedStore<WindowState>({
+  maxEntries: RL_MAX_ENTRIES,
+  ttlMs: RL_TTL_MS,
+});
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -143,11 +165,11 @@ export function checkRateLimit(
   // ------------------------------------------------------------------
   // 2. Per-key fixed-window counter
   // ------------------------------------------------------------------
-  const state = store.get(key);
+  const state = store.get(key, now);
 
   // No prior state, or the window has expired → fresh window.
   if (state === undefined || now - state.windowStart >= config.windowMs) {
-    store.set(key, { count: 1, windowStart: now });
+    store.set(key, { count: 1, windowStart: now }, now);
     return { allowed: true };
   }
 
