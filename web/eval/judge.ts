@@ -469,14 +469,16 @@ async function callJudge(
   );
 
   if (!toolUseBlock) {
-    // Defensive fallback: judge did not use the tool. Treat all dimensions as
-    // partial (score=1) so a stray model response doesn't kill a whole eval run.
+    // Fail closed: the judge did not produce a judgment. Treat all dimensions as
+    // FAIL (score=0) so a broken or misconfigured judge (refuses, returns text,
+    // trips the tool schema, …) surfaces as a red case instead of a silent GREEN.
+    // The old fail-open default (score=1) let an unusable judge pass every case.
     const fallbackReason =
-      "judge did not call submit_judgment — all dimensions treated as partial pass";
+      "judge did not call submit_judgment — treated as FAIL (indeterminate judgment)";
     return RUBRIC_DIMENSIONS.map((dim) => ({
       dimension: dim,
-      pass: true,
-      score: 1 as const,
+      pass: false,
+      score: 0 as const,
       reason: fallbackReason,
     }));
   }

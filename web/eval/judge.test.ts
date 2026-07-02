@@ -777,7 +777,7 @@ describe("score clamping", () => {
 // ─── Judge fallback when tool not called ─────────────────────────────────────
 
 describe("judge fallback", () => {
-  it("returns partial-pass scores when judge does not use the tool", async () => {
+  it("fails closed when judge does not use the tool", async () => {
     const noToolClient: JudgeClientLike = {
       messages: {
         create: vi.fn().mockResolvedValue({
@@ -799,12 +799,17 @@ describe("judge fallback", () => {
       noToolClient,
       mockRunOak(BASE_ANSWER),
     );
-    // All scores should default to 1 (partial pass)
-    expect(result.scores.every((s) => s.score === 1 && s.pass === true)).toBe(
+    // Fail closed: a judge that never calls submit_judgment scores every
+    // dimension 0/fail (was the old fail-open default of 1/partial-pass).
+    expect(result.scores.every((s) => s.score === 0 && s.pass === false)).toBe(
       true,
     );
-    // overallPass — the structural check for status passes (no expected status),
-    // and all scores are 1 (partial pass), so overall should pass.
-    expect(result.overallPass).toBe(true);
+    // The diagnostic reason is pinned so a broken judge is legible in the report.
+    expect(
+      result.scores.every((s) => s.reason.includes("did not call submit_judgment")),
+    ).toBe(true);
+    // overallPass — even though the structural check passes (no expected status),
+    // the failed rubric scores must drag the case to FAIL, not a silent GREEN.
+    expect(result.overallPass).toBe(false);
   });
 });
