@@ -5,9 +5,12 @@
  * activeSessionCount. No external I/O — pure in-memory Map.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HISTORY_TOKEN_BUDGET,
+  SESSION_MAX_ENTRIES,
+  SESSION_TTL_MS,
+  _resetStoreForTests,
   activeSessionCount,
   appendTurn,
   clearSession,
@@ -376,5 +379,80 @@ describe("activeSessionCount", () => {
     trim(SESSION_A, 10); // trims all messages but keeps the session key
     // The store entry still exists (empty array), so count is unchanged.
     expect(activeSessionCount()).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bounded store: LRU cap + idle TTL (assessment C1). These operate on the
+// GLOBAL store, so fully reset it around each case (unlike the per-id cleanup
+// the other suites use) to get a known baseline.
+// ---------------------------------------------------------------------------
+
+describe("bounded store (C1)", () => {
+  beforeEach(() => _resetStoreForTests());
+  afterEach(() => _resetStoreForTests());
+
+  it("caps resident sessions at SESSION_MAX_ENTRIES and evicts the least-recently-used", () => {
+    const overflow = 50;
+    // Increasing `now` keeps LRU order deterministic; all within one TTL so the
+    // cap (not the TTL) is the evictor.
+    for (let i = 0; i < SESSION_MAX_ENTRIES + overflow; i++) {
+      appendTurn(`s${i}`, msg("user", `turn ${i}`), i + 1);
+    }
+
+    expect(activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
+    // The oldest (never re-touched) sessions were evicted...
+    expect(getHistory("s0", SESSION_MAX_ENTRIES + overflow + 1)).toEqual([]);
+    expect(getHistory(`s${overflow - 1}`, SESSION_MAX_ENTRIES + overflow + 1)).toEqual([]);
+    // ...and the most recent survive.
+    const newest = `s${SESSION_MAX_ENTRIES + overflow - 1}`;
+    expect(getHistory(newest, SESSION_MAX_ENTRIES + overflow + 1)).toHaveLength(1);
+  });
+
+  it("expires a session after SESSION_TTL_MS of inactivity", () => {
+    appendTurn(SESSION_A, msg("user", "hi"), 0);
+    // Exactly TTL elapsed → expired (>= semantics).
+    expect(getHistory(SESSION_A, SESSION_TTL_MS)).toEqual([]);
+    expect(activeSessionCount()).toBe(0);
+  });
+
+  it("keeps a session just under the idle TTL", () => {
+    appendTurn(SESSION_A, msg("user", "hi"), 0);
+    expect(getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
+  });
+
+  it("a read refreshes the idle timer (active conversation stays resident)", () => {
+    appendTurn(SESSION_A, msg("user", "hi"), 0);
+    // Read just before expiry refreshes lastAccess...
+    expect(getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
+    // ...so a read one tick later (well within a fresh TTL window) still hits.
+    expect(getHistory(SESSION_A, SESSION_TTL_MS)).toHaveLength(1);
+  });
+
+  it("an actively-touched session survives cap eviction while an idle one is evicted", () => {
+    const HOT = "hot-session";
+    appendTurn(HOT, msg("user", "keep me"), 0);
+    // Fill exactly to the cap with fresh sessions, touching HOT right before each
+    // new session so it never becomes the least-recently-used.
+    for (let i = 1; i <= SESSION_MAX_ENTRIES; i++) {
+      getHistory(HOT, i * 2 - 1); // refresh HOT
+      appendTurn(`s${i}`, msg("user", `turn ${i}`), i * 2); // new session → 1 over cap
+    }
+
+    // HOT survived; the oldest never-re-touched session (s1) was evicted.
+    expect(getHistory(HOT, SESSION_MAX_ENTRIES * 2 + 1)).toHaveLength(1);
+    expect(getHistory("s1", SESSION_MAX_ENTRIES * 2 + 1)).toEqual([]);
+    expect(activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
+  });
+
+  it("preserves the live history array reference across reordering", () => {
+    appendTurn(SESSION_A, msg("user", "one"), 1);
+    const live = getHistory(SESSION_A, 2); // capture the live array
+    appendTurn(SESSION_B, msg("user", "other"), 3); // touch another session (reorders)
+    appendTurn(SESSION_A, msg("assistant", "two"), 4); // get reorders A, then pushes
+
+    // Same underlying array reference; the new turn is visible on the captured one.
+    expect(getHistory(SESSION_A, 5)).toBe(live);
+    expect(live).toHaveLength(2);
   });
 });

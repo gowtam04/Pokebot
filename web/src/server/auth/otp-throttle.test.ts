@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  _OTP_MAX_ENTRIES,
   _resetForTests,
   checkRequestThrottle,
   checkVerifyThrottle,
@@ -258,5 +259,44 @@ describe("pool independence and reset", () => {
   it("defaults now to Date.now() when omitted", () => {
     const r = checkRequestThrottle("default-clock@example.com", "10.2.2.2");
     expect(r.allowed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bounded stores: LRU cap + idle TTL (assessment C1). The four throttle maps no
+// longer grow without bound. The LRU/TTL mechanics are unit-tested in
+// bounded-store.test.ts; here we assert the throttle-level consequence.
+// ---------------------------------------------------------------------------
+
+describe("bounded stores (C1)", () => {
+  it("LRU-evicts an idle email so its throttle state does not persist forever", () => {
+    // Victim requests once at t=0 → now under a 60s resend cooldown.
+    expect(
+      checkRequestThrottle("victim@example.com", "victim-ip", 0).allowed,
+    ).toBe(true);
+
+    // Push the request-side stores one over their cap with DISTINCT emails+IPs
+    // (distinct so neither the per-email nor the per-IP cap binds), all at t=0 so
+    // the victim — inserted first and never re-touched — is least-recently-used.
+    for (let i = 0; i < _OTP_MAX_ENTRIES; i++) {
+      checkRequestThrottle(`bulk${i}@example.com`, `bulk-ip-${i}`, 0);
+    }
+
+    // The victim's cooldown/counter entries were evicted, so a request still
+    // inside the original 60s cooldown is allowed again — proving the store is
+    // bounded rather than retaining the victim forever. (Without eviction this
+    // would be refused with a positive retryAfterMs.)
+    expect(
+      checkRequestThrottle("victim@example.com", "victim-ip", 1_000).allowed,
+    ).toBe(true);
+  });
+
+  it("does not throw when far more than the cap of distinct emails/IPs are seen", () => {
+    expect(() => {
+      for (let i = 0; i < _OTP_MAX_ENTRIES + 500; i++) {
+        checkRequestThrottle(`e${i}@example.com`, `ip-${i}`, 0);
+        checkVerifyThrottle(`v-ip-${i}`, 0);
+      }
+    }).not.toThrow();
   });
 });

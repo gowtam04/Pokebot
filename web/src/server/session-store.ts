@@ -4,14 +4,19 @@
  *
  * Holds the running ChatMessage[] for each active session keyed by session_id.
  * Entries are discarded when the server process exits (D9 — no persistence,
- * no cross-session memory). The `trim` function removes the oldest turns when
- * the estimated token count approaches the context budget, preserving the most
- * recent context so the agent always has the freshest conversation.
+ * no cross-session memory), when a session idles past {@link SESSION_TTL_MS}, or
+ * when the store exceeds {@link SESSION_MAX_ENTRIES} and the session is the
+ * least-recently-used (assessment C1 — the store is bounded so a client rotating
+ * `session_id` can't grow it without bound). The `trim` function removes the
+ * oldest turns when the estimated token count approaches the context budget,
+ * preserving the most recent context so the agent always has the freshest
+ * conversation.
  *
- * Depends on nothing (design.md Component Design table).
+ * Depends on {@link BoundedStore} (design.md Component Design table).
  */
 
 import type { ChatMessage } from "@/agent/types";
+import { BoundedStore } from "@/server/bounded-store";
 
 // ---------------------------------------------------------------------------
 // Context-budget constants
@@ -36,25 +41,52 @@ export const CHARS_PER_TOKEN = 4;
 export const DEFAULT_HISTORY_TOKEN_BUDGET = 100_000;
 
 // ---------------------------------------------------------------------------
+// Bounded-store limits (assessment C1 — unbounded in-memory stores)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hard cap on resident guest sessions. Guests are keyed by client-supplied
+ * `session_id`, so without a cap a client rotating that id would grow the store
+ * without bound → OOM on the small deploy machine.
+ *
+ * Memory ceiling ≈ SESSION_MAX_ENTRIES × DEFAULT_HISTORY_TOKEN_BUDGET (100k) ×
+ * CHARS_PER_TOKEN (4) × ~2 bytes/char (JS strings are UTF-16) ≈ ~200 MB worst
+ * case at 250 — a defensible fraction of the 512 MB machine. Keep this in mind
+ * if DEFAULT_HISTORY_TOKEN_BUDGET changes.
+ */
+export const SESSION_MAX_ENTRIES = 250;
+
+/**
+ * Idle time-to-live for a session. A guest whose session sees no activity for
+ * this long starts a fresh conversation on their next turn (previously only a
+ * process restart cleared guest history). The idle TTL is the primary reaper
+ * for abandoned sessions; the cap is the hard backstop under abuse.
+ */
+export const SESSION_TTL_MS = 2 * 60 * 60_000; // 2 hours
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
 /**
- * In-memory store. One Map per server process (D9), memoized on `globalThis`
- * (the same pattern as the Postgres pool in `@/data/db`) so Next's dev
- * hot-reload / route re-evaluation reuses the SAME Map instead of silently
+ * In-memory store. One {@link BoundedStore} per server process (D9), memoized on
+ * `globalThis` (the same pattern as the Postgres pool in `@/data/db`) so Next's
+ * dev hot-reload / route re-evaluation reuses the SAME store instead of silently
  * wiping every guest conversation on a recompile. (`globalThis` is per-process,
  * so this survives module re-evaluation, NOT a full process restart — durable
  * guest history would be a separate change.) Not exported; reach it via the
  * public API functions, or `_resetStoreForTests` in tests.
  */
 const globalForSessionStore = globalThis as typeof globalThis & {
-  __oakSessionStore?: Map<string, ChatMessage[]>;
+  __oakSessionStore?: BoundedStore<ChatMessage[]>;
 };
 
-function getStore(): Map<string, ChatMessage[]> {
+function getStore(): BoundedStore<ChatMessage[]> {
   if (!globalForSessionStore.__oakSessionStore) {
-    globalForSessionStore.__oakSessionStore = new Map();
+    globalForSessionStore.__oakSessionStore = new BoundedStore<ChatMessage[]>({
+      maxEntries: SESSION_MAX_ENTRIES,
+      ttlMs: SESSION_TTL_MS,
+    });
   }
   return globalForSessionStore.__oakSessionStore;
 }
@@ -65,27 +97,38 @@ function getStore(): Map<string, ChatMessage[]> {
 
 /**
  * Returns the message history for a session. Returns an empty array (not
- * `undefined`) for an unknown `sessionId` — the caller treats an empty history
- * as a fresh conversation (DS-5 failure behavior).
+ * `undefined`) for an unknown or idle-expired `sessionId` — the caller treats an
+ * empty history as a fresh conversation (DS-5 failure behavior).
  *
  * The returned array is the live internal array; do not mutate it directly —
- * use `appendTurn` so future `getHistory` calls stay consistent.
+ * use `appendTurn` so future `getHistory` calls stay consistent. Reading also
+ * refreshes the session's idle timer (keeps an active conversation resident).
+ *
+ * `now` is injectable for deterministic tests; defaults to `Date.now()`.
  */
-export function getHistory(sessionId: string): ChatMessage[] {
-  return getStore().get(sessionId) ?? [];
+export function getHistory(sessionId: string, now: number = Date.now()): ChatMessage[] {
+  return getStore().get(sessionId, now) ?? [];
 }
 
 /**
  * Appends one turn to the session history. Creates the session entry on first
- * use. Does NOT auto-trim; call `trim` before passing history to `runOak`
- * when you want to enforce the context budget.
+ * use (which is when a session can be evicted for the cap/TTL). Does NOT
+ * auto-trim; call `trim` before passing history to `runOak` when you want to
+ * enforce the context budget.
+ *
+ * `now` is injectable for deterministic tests; defaults to `Date.now()`.
  */
-export function appendTurn(sessionId: string, message: ChatMessage): void {
+export function appendTurn(
+  sessionId: string,
+  message: ChatMessage,
+  now: number = Date.now(),
+): void {
   const store = getStore();
-  let history = store.get(sessionId);
+  // `get` returns the SAME live array (and refreshes recency); create on miss.
+  let history = store.get(sessionId, now);
   if (!history) {
     history = [];
-    store.set(sessionId, history);
+    store.set(sessionId, history, now);
   }
   history.push(message);
 }
@@ -153,8 +196,9 @@ export function trimMessages(
 export function trim(
   sessionId: string,
   budgetTokens: number = DEFAULT_HISTORY_TOKEN_BUDGET,
+  now: number = Date.now(),
 ): void {
-  const history = getStore().get(sessionId);
+  const history = getStore().get(sessionId, now);
   if (!history || history.length === 0) return;
 
   // trimMessages only ever drops from the front, so the number kept equals the
@@ -176,8 +220,10 @@ export function clearSession(sessionId: string): void {
 }
 
 /**
- * Returns the number of active sessions currently held in memory. Useful for
- * diagnostics and tests.
+ * Returns the number of resident sessions currently held in memory. Useful for
+ * diagnostics and tests. Note this reflects *resident, non-evicted* sessions:
+ * the count can drop as idle sessions are swept or the LRU cap evicts the
+ * least-recently-used session.
  */
 export function activeSessionCount(): number {
   return getStore().size;
