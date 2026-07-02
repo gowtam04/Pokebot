@@ -45,13 +45,11 @@ export default function ChampionsToggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
     >
-      {/* The Pokémon Champions logo. Currently a placeholder SVG — swap in the
-          official artwork by replacing web/public/champions-logo.svg (or drop a
-          champions-logo.png and update this src). */}
+      {/* The official Pokémon Champions logo (web/public/champions-logo.png). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         className="champions-toggle__logo"
-        src="/champions-logo.svg"
+        src="/champions-logo.png"
         alt=""
         aria-hidden="true"
         draggable={false}
