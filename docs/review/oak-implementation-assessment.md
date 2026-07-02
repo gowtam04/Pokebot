@@ -210,7 +210,19 @@ negative level fails `safeParse` → the fallback path returns `members: []` as 
 - *Note:* the reviewer initially suspected a ">6 members → silent empty team" vector and **disproved
   it** — `parseShowdown` caps at `MAX_SETS=6` before mapping, so the member-count path is safe.
 
-#### U2 — Follow-up chips on an earlier answer while streaming orphan the in-flight user turn. **P3. CONFIRMED †.**
+#### U2 — Follow-up chips on an earlier answer while streaming orphan the in-flight user turn. **P3. RESOLVED.**
+
+> **Resolved:** the answer-card follow-up affordances are now status-gated. A
+> `disabled` flag threads from `ChatThread` (`status === "streaming"`) through
+> `AnswerCard` into the three follow-up leaves (`SuggestionChips`,
+> `QuestionOptions`, and `CandidateTable`'s "Show all N"), which disable those
+> buttons while a turn streams; `AnswerCard`'s `followUp` alias is also made inert
+> when disabled. `handleSend` gained a `status === "thinking"` early-return as a
+> single-choke-point backstop covering every follow-up path. Viewer-opening
+> controls (candidate rows, "Open/Compare in viewer") stay enabled — they don't
+> POST a turn. Covered by a new `AnswerCard.test.tsx` (per-affordance disabled
+> gate) plus streaming/idle cases in `ChatThread.test.tsx`; the stale
+> `UseOakChatResult.send` "no-op while streaming" docstring was corrected.
 
 The composer is disabled while streaming (`page.tsx:533`), but committed assistant turns always
 render and their suggestion/candidate chips call `onFollowUp → handleSend` (`ChatThread.tsx:199`),
@@ -456,7 +468,7 @@ Fine for one honest user, fragile for one dishonest one.
 | C4 | P3 | CONFIRMED | `agent/enrich-answer.ts:144,167` |
 | C5 | P3 | PLAUSIBLE † | `server/champions-usage/usage-client.ts:183-197` |
 | C6 | P3 | CONFIRMED † | `lib/sse/sse-client.ts:112-153` |
-| U2 | P3 | CONFIRMED † | `components/chat/ChatThread.tsx:199`, `app/page.tsx:240-272` |
+| U2 | P3 | RESOLVED | `components/chat/ChatThread.tsx`, `components/answer-card/AnswerCard.tsx`, `app/page.tsx` |
 | U3 | P3 | CONFIRMED † | `lib/hooks/use-conversations.ts:97-100`, `use-teams.ts:107-110` |
 | U4 | P3 | PLAUSIBLE † | `lib/hooks/use-conversations.ts:58-84` |
 | D1 | P3 | CONFIRMED | `ingest/run.ts:228-238` |
