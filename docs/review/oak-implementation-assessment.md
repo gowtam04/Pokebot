@@ -326,7 +326,16 @@ boundary; a small smoke test asserting a few known slug/legality/Mega resolution
 (`src/ingest/run.ts`'s DELETE-all + chunked-INSERT swap is likewise untested — the builders are
 covered, the swap isn't.)
 
-#### T3 — The LLM judge fails **open**. **P2. CONFIRMED †.**
+#### T3 — The LLM judge fails **open**. **P2. RESOLVED †.**
+
+> **Resolved:** `callJudge`'s no-tool-call fallback (`eval/judge.ts`) now **fails
+> closed** — when the judge doesn't call `submit_judgment` it scores all 5 dimensions
+> `score:0 / pass:false` (was `score:1 / pass:true`), so `overallPass` goes false and a
+> broken/misconfigured judge surfaces as a red case + non-zero release-gate exit instead
+> of a silent GREEN. The `reason` still names the missing tool call, so `run.ts` prints it
+> per dimension. `judge.test.ts`'s "judge fallback" case was rewritten to assert the
+> fail-closed outcome (all `score:0/pass:false`, `overallPass:false`, reason pinned).
+> `RubricScore`/`JudgeResult` types and the aggregation path are unchanged.
 
 `eval/judge.ts:471-482`: if the judge model doesn't call `submit_judgment`, all 5 dimensions default
 to `score:1 / pass:true` → a broken or misconfigured judge yields false GREENs silently. Live-only
@@ -460,7 +469,7 @@ Fine for one honest user, fragile for one dishonest one.
 | U1 | P2 | CONFIRMED † | `app/api/teams/import/route.ts:50-60,91-93`, `server/teams/import-export.ts:276-279` |
 | T1 | P2 | CONFIRMED | `eval/deterministic.ts`, `enrich-answer.integration.test.ts:133-135` |
 | T2 | P2 | CONFIRMED † | `data/pkmn/gen-provider.ts` (no real-behavior test) |
-| T3 | P2 | CONFIRMED † | `eval/judge.ts:471-482` |
+| T3 | P2 | RESOLVED † | `eval/judge.ts` (fail-closed no-tool-call fallback) |
 | S2 | P3 | CONFIRMED | `app/api/chat/route.ts:175-178` |
 | S3 | P3 | CONFIRMED † | `server/session-store.ts:74-91` |
 | S4 | info | CONFIRMED † | `app/api/auth/verify/route.ts:61-67` |
